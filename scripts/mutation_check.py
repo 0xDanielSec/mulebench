@@ -1,11 +1,11 @@
-"""Mutation check for INV-1, INV-2, INV-3 and the audit hash chain (AUDIT).
+"""Mutation check for INV-1, INV-2, INV-3, the audit hash chain (AUDIT) and ledger rules.
 
 Each table targets one module. For every mutant, the project is copied to a
 temporary directory, one condition is broken in the copy of the module, and the
 tests for that module run there. A mutant is "killed"
 when at least one test fails. The working tree is never modified.
 
-Usage: uv run python scripts/mutation_check.py [INV-1] [INV-2] [INV-3] [AUDIT]
+Usage: uv run python scripts/mutation_check.py [INV-1] [INV-2] [INV-3] [AUDIT] [LEDGER]
 With no arguments every table runs. Exit code is 0 only if every mutant of
 every selected table is killed.
 """
@@ -335,6 +335,14 @@ AUDIT_MUTANTS: list[Mutant] = [
     ),
 ]
 
+LEDGER_MUTANTS: list[Mutant] = [
+    (
+        "authorization reuse: explicit check (UNIQUE index is only a backstop)",
+        "raise AuthorizationAlreadyUsed(authorization_id)\n        if source.status",
+        "pass\n        if source.status",
+    ),
+]
+
 TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
     "INV-1": (
         Path("src/mulebench/invariants/authorization.py"),
@@ -355,6 +363,11 @@ TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
         Path("src/mulebench/ledger/ledger.py"),
         "tests/ledger/test_audit_chain.py",
         AUDIT_MUTANTS,
+    ),
+    "LEDGER": (
+        Path("src/mulebench/ledger/ledger.py"),
+        "tests/ledger/test_authorizations.py",
+        LEDGER_MUTANTS,
     ),
 }
 

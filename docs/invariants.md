@@ -149,13 +149,18 @@ are left out of the grouping entirely.
 ## Mutation check
 
 `scripts/mutation_check.py` holds one mutant table per module: INV-1, INV-2,
-INV-3, and AUDIT (`Ledger.verify_audit_chain`, tested by
-`tests/ledger/test_audit_chain.py`). It copies the project to a temporary
+INV-3, AUDIT (`Ledger.verify_audit_chain`, tested by
+`tests/ledger/test_audit_chain.py`) and LEDGER (ledger rules, tested by
+`tests/ledger/test_authorizations.py`). The LEDGER mutant removes the explicit
+authorization-reuse check. The UNIQUE index still blocks the reused transfer,
+so the difference is only observable through error precedence: without the
+check, a reuse that also exceeds the funds or the daily limit (or comes from a
+frozen account) raises that error instead of `AuthorizationAlreadyUsed`. It copies the project to a temporary
 directory, breaks one condition at a time in the copy of the module, and runs
 that module's tests against it. It never edits the working tree. Every mutant
 must be killed.
 
 ```bash
-uv run python scripts/mutation_check.py              # all four tables
+uv run python scripts/mutation_check.py              # all five tables
 uv run python scripts/mutation_check.py INV-2 AUDIT  # selected tables
 ```

@@ -140,3 +140,20 @@ def test_inbound_description_capped_at_140(ledger: Ledger) -> None:
         )
     assert ledger.audit_entries()[-1].action == "pix_in_rejected"
     assert ledger.get_balance("acc_alice") == 500_001
+
+
+@pytest.mark.parametrize(
+    "amount", [600_000, 299_500], ids=["masks-InsufficientFunds", "masks-DailyLimitExceeded"]
+)
+def test_reuse_is_reported_before_funds_and_limit(ledger: Ledger, amount: int) -> None:
+    # The explicit reuse check runs before the funds and limit checks. Without
+    # it the UNIQUE index still blocks the insert, but only after those checks,
+    # so the caller would see the error named in the test id instead.
+    auth_id = grant(ledger, amount=1_000_000)
+    pay_with(ledger, auth_id, key="k1")
+    before = ledger.get_balance("acc_alice")
+    with pytest.raises(AuthorizationAlreadyUsed):
+        pay_with(ledger, auth_id, key="k2", amount=amount)
+    assert ledger.get_balance("acc_alice") == before
+    entry = ledger.audit_entries()[-1]
+    assert (entry.action, entry.outcome) == ("transfer_rejected", "rejected")
