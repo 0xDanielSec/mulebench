@@ -70,3 +70,13 @@ executed at most once per run. With the flag false, tool output is never scanned
 
 Denied or failed calls are recorded and the plan continues. The run stops when
 the plan is empty or after `max_steps` calls.
+
+## Known limitations
+
+- **The agent/ledger boundary is enforced by convention plus an import guard,
+  not by hard isolation.** `ToolClient` keeps the `ToolContext` in a private
+  attribute, but Python cannot stop code from reaching through it. The real
+  enforcement is the import-guard test, which fails if `honeyledger.agents`
+  imports anything from `honeyledger` other than itself and
+  `honeyledger.tools.client`. Reference agents follow this rule; third-party
+  agents plugged into the harness must too.
