@@ -80,3 +80,27 @@ def test_python_module_paths_are_not_domains(pc: ModuleType) -> None:
 
 def test_forbidden_terms_case_insensitive(pc: ModuleType) -> None:
     assert kinds(pc, "Project ACME rollout", terms=("acme",)) == [("term", "acme")]
+
+
+# Fake keys assembled at runtime so this file never contains a key-shaped string.
+FAKE_SECRETS = {
+    "anthropic": "sk-" + "ant-" + "api03-" + "A" * 40,
+    "generic-sk": "sk-" + "B" * 40,
+    "aws-access-key": "AKIA" + "C" * 16,
+    "github-token": "ghp" + "_" + "D" * 36,
+    "google-api-key": "AIza" + "E" * 35,
+    "slack-token": "xoxb" + "-" + "1" * 12,
+    "private-key": "-----BEGIN " + "RSA PRIVATE KEY-----",
+}
+
+
+@pytest.mark.parametrize(("name", "secret"), sorted(FAKE_SECRETS.items()))
+def test_api_key_shaped_strings_flagged_and_masked(pc: ModuleType, name: str, secret: str) -> None:
+    found = [(f.kind, f.value) for f in pc.scan_text(f"key = '{secret}'", "x", policy(pc))]
+    assert (f"secret:{name}", secret[:6] + "...") in found
+    assert all(secret not in value for _, value in found)
+
+
+def test_ordinary_identifiers_are_not_secrets(pc: ModuleType) -> None:
+    text = "sk-short task-ant-x AKIA123 sig_0123456789abcdef msg_0123456789abcdef"
+    assert [f for f in pc.scan_text(text, "x", policy(pc)) if f.kind.startswith("secret")] == []

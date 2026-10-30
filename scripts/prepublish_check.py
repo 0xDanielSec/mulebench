@@ -11,7 +11,9 @@ for:
 3. forbidden terms you supply, case-insensitive:
    - env var MB_FORBIDDEN_TERMS="term one,term two", and/or
    - an untracked file `.prepublish-terms` (one term per line, `#` comments).
-     This file is in .gitignore so the terms never get committed.
+     This file is in .gitignore so the terms never get committed;
+4. API-key-shaped strings (Anthropic, generic sk-, AWS, GitHub, Google, Slack,
+   private key blocks). Secrets are printed masked.
 
 Extra allowed domains: env var MB_ALLOWED_DOMAINS="<domain>,<domain>".
 
@@ -57,11 +59,24 @@ EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@((?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,})")
 URL_HOST = re.compile(r"[a-z][a-z0-9+.-]*://([A-Za-z0-9.-]+)", re.IGNORECASE)
 BARE_DOMAIN = re.compile(rf"\b((?:[a-z0-9-]+\.)+(?:{_TLDS}))\b", re.IGNORECASE)
 TOML_TABLE = re.compile(r"^\s*\[\[?[A-Za-z0-9_.-]+\]\]?\s*$")
+SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("anthropic", re.compile(r"sk-ant-[a-z]+\d*-[A-Za-z0-9_-]{20,}")),
+    ("generic-sk", re.compile(r"\bsk-[A-Za-z0-9_-]{32,}")),
+    ("aws-access-key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
+    ("github-token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}")),
+    ("google-api-key", re.compile(r"\bAIza[0-9A-Za-z_-]{35}")),
+    ("slack-token", re.compile(r"\bxox[abposr]-[A-Za-z0-9-]{10,}")),
+    ("private-key", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
+)
+
+
+def mask(secret: str) -> str:
+    return secret[:6] + "..."
 
 
 @dataclass(frozen=True, order=True)
 class Finding:
-    kind: str  # domain | email | term
+    kind: str  # domain | email | term | secret:<type>
     value: str
     where: str  # "<file>:<line>" or "<commit> <file>" or "<commit> metadata"
 
@@ -104,6 +119,9 @@ def scan_text(text: str, where: str, policy: Policy) -> list[Finding]:
             domain = m.group(1).lower().rstrip(".")
             if "." in domain and not policy.domain_allowed(domain):
                 found.add(Finding("domain", domain, where))
+    for name, pattern in SECRET_PATTERNS:
+        for m in pattern.finditer(text):
+            found.add(Finding(f"secret:{name}", mask(m.group(0)), where))
     lowered = text.lower()
     for term in policy.terms:
         if term.lower() in lowered:
