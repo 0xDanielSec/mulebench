@@ -37,4 +37,6 @@ jobs:
         run: uv run mypy
 
       - name: Pytest
+        env:
+          HYPOTHESIS_PROFILE: ci # derandomized: fixed seed
         run: uv run pytest

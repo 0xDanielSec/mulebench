@@ -1,0 +1,40 @@
+name: Property exploration
+
+# Weekly run of the Hypothesis property tests with random seeds and more
+# examples (profile "explore"). The regular CI uses the derandomized "ci"
+# profile. A failure prints a `@reproduce_failure(...)` blob in the log;
+# paste it onto the failing test to replay it locally.
+
+on:
+  schedule:
+    - cron: "17 4 * * 1" # Mondays 04:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  explore:
+    name: Hypothesis explore
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      HYPOTHESIS_PROFILE: explore
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e92bafb6253dcd438e0484186d7669ea7a8ca1cc # v6.4.3
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Property tests (random seeds)
+        # print_blob=True is set by the profile; -rA and --tb=long keep the
+        # falsifying example and the reproduction blob in the log.
+        run: >-
+          uv run pytest tests/ledger/test_properties.py
+          -rA --tb=long --hypothesis-show-statistics --hypothesis-verbosity=normal

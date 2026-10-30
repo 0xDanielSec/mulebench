@@ -1,12 +1,38 @@
 from __future__ import annotations
 
 import itertools
+import os
 from collections.abc import Callable, Iterator
 from datetime import datetime
 
 import pytest
+from hypothesis import HealthCheck, Verbosity, settings
 
 from mulebench.ledger import SAO_PAULO, Account, Customer, FixedClock, Ledger
+
+# Hypothesis profiles. "ci" (default everywhere) is derandomized: a fixed seed,
+# so local runs and CI see the same examples. "explore" uses random seeds and
+# more examples (scheduled workflow). Both print the reproduction blob.
+settings.register_profile(
+    "ci",
+    derandomize=True,
+    database=None,
+    max_examples=200,
+    deadline=None,
+    print_blob=True,
+    suppress_health_check=[HealthCheck.too_slow],
+)
+settings.register_profile(
+    "explore",
+    derandomize=False,
+    database=None,
+    max_examples=2000,
+    deadline=None,
+    print_blob=True,
+    verbosity=Verbosity.normal,
+    suppress_health_check=[HealthCheck.too_slow],
+)
+settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ci"))
 
 # 2026-01-15 10:00 local (13:00 UTC).
 T0 = datetime(2026, 1, 15, 10, 0, tzinfo=SAO_PAULO)
