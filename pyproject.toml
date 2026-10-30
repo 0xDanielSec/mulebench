@@ -11,6 +11,9 @@ dependencies = [
     "tzdata>=2024.1",
 ]
 
+[project.scripts]
+honeyledger = "honeyledger.cli:main"
+
 [dependency-groups]
 dev = [
     "mypy>=1.10",

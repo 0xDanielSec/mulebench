@@ -171,8 +171,8 @@ class HumanConfirmation:
             args=args.model_dump(mode="json"),
         )
         if self.confirmer.confirm(request):
-            return GuardDecision.allow(self.name)
-        return GuardDecision.deny(self.name, "confirmation_denied", "human did not confirm")
+            return GuardDecision.allow(self.name, "customer confirmed")
+        return GuardDecision.deny(self.name, "confirmation_denied", "customer declined")
 
 
 # ---------------------------------------------------------------- presets

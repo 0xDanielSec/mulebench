@@ -63,6 +63,14 @@ class ScriptedAgent:
         self.obeys_tool_output_instructions = obeys_tool_output_instructions
         self.max_steps = max_steps
 
+    @property
+    def params(self) -> dict[str, object]:
+        """Configuration recorded in reports."""
+        return {
+            "obeys_tool_output_instructions": self.obeys_tool_output_instructions,
+            "max_steps": self.max_steps,
+        }
+
     def run(self, task: AgentTask, tools: ToolClient) -> AgentRun:
         note = parse_session_note(task.session_note)
         queue: deque[_Call] = deque(self._plan(task.request, note))

@@ -25,8 +25,8 @@ class GuardDecision(_Model):
     public_code: str | None = None
 
     @classmethod
-    def allow(cls, guard: str) -> GuardDecision:
-        return cls(guard=guard, allowed=True)
+    def allow(cls, guard: str, reason: str | None = None) -> GuardDecision:
+        return cls(guard=guard, allowed=True, reason=reason)
 
     @classmethod
     def deny(

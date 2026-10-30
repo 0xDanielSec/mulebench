@@ -1,0 +1,789 @@
+{
+  "$defs": {
+    "AgentDescriptor": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": true,
+          "title": "Params",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "params"
+      ],
+      "title": "AgentDescriptor",
+      "type": "object"
+    },
+    "AgentStep": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "title": "Seq",
+          "type": "integer"
+        },
+        "tool": {
+          "title": "Tool",
+          "type": "string"
+        },
+        "args": {
+          "additionalProperties": true,
+          "title": "Args",
+          "type": "object"
+        },
+        "origin": {
+          "enum": [
+            "user_request",
+            "tool_output"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "outcome": {
+          "title": "Outcome",
+          "type": "string"
+        },
+        "error_message": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Message"
+        }
+      },
+      "required": [
+        "seq",
+        "tool",
+        "args",
+        "origin",
+        "ok",
+        "outcome"
+      ],
+      "title": "AgentStep",
+      "type": "object"
+    },
+    "CellMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "steps": {
+          "title": "Steps",
+          "type": "integer"
+        },
+        "stopped": {
+          "title": "Stopped",
+          "type": "string"
+        },
+        "tool_calls": {
+          "title": "Tool Calls",
+          "type": "integer"
+        },
+        "ok_calls": {
+          "title": "Ok Calls",
+          "type": "integer"
+        },
+        "denied_calls": {
+          "title": "Denied Calls",
+          "type": "integer"
+        },
+        "failed_calls": {
+          "title": "Failed Calls",
+          "type": "integer"
+        },
+        "injected_steps": {
+          "title": "Injected Steps",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "steps",
+        "stopped",
+        "tool_calls",
+        "ok_calls",
+        "denied_calls",
+        "failed_calls",
+        "injected_steps"
+      ],
+      "title": "CellMetrics",
+      "type": "object"
+    },
+    "CellResult": {
+      "additionalProperties": false,
+      "properties": {
+        "preset": {
+          "enum": [
+            "vulnerable",
+            "hardened"
+          ],
+          "title": "Preset",
+          "type": "string"
+        },
+        "variant": {
+          "enum": [
+            "attack",
+            "benign"
+          ],
+          "title": "Variant",
+          "type": "string"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "payload_exposed": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Payload Exposed"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "enum": [
+                "exposed_resisted",
+                "exposed_violated",
+                "not_exposed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Status"
+        },
+        "utility_exact": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Utility Exact"
+        },
+        "utility_subset": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Utility Subset"
+        },
+        "invariants": {
+          "items": {
+            "$ref": "#/$defs/InvariantResult"
+          },
+          "title": "Invariants",
+          "type": "array"
+        },
+        "outgoing_transfers": {
+          "items": {
+            "$ref": "#/$defs/OutgoingTransfer"
+          },
+          "title": "Outgoing Transfers",
+          "type": "array"
+        },
+        "agent_steps": {
+          "items": {
+            "$ref": "#/$defs/AgentStep"
+          },
+          "title": "Agent Steps",
+          "type": "array"
+        },
+        "trace": {
+          "items": {
+            "$ref": "#/$defs/ToolCallRecord"
+          },
+          "title": "Trace",
+          "type": "array"
+        },
+        "metrics": {
+          "$ref": "#/$defs/CellMetrics"
+        }
+      },
+      "required": [
+        "preset",
+        "variant",
+        "session_id",
+        "payload_exposed",
+        "status",
+        "utility_exact",
+        "utility_subset",
+        "invariants",
+        "outgoing_transfers",
+        "agent_steps",
+        "trace",
+        "metrics"
+      ],
+      "title": "CellResult",
+      "type": "object"
+    },
+    "Generator": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "title": "Generator",
+      "type": "object"
+    },
+    "GuardDecision": {
+      "additionalProperties": false,
+      "description": "A guard verdict. `code` and `reason` are detailed and stay in the trace;\nonly `public_code` is shown to the agent.",
+      "properties": {
+        "guard": {
+          "title": "Guard",
+          "type": "string"
+        },
+        "allowed": {
+          "title": "Allowed",
+          "type": "boolean"
+        },
+        "code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Code"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "public_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Public Code"
+        }
+      },
+      "required": [
+        "guard",
+        "allowed"
+      ],
+      "title": "GuardDecision",
+      "type": "object"
+    },
+    "InvariantResult": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "enum": [
+            "INV-1",
+            "INV-2",
+            "INV-3",
+            "INV-4"
+          ],
+          "title": "Id",
+          "type": "string"
+        },
+        "holds": {
+          "title": "Holds",
+          "type": "boolean"
+        },
+        "checked_transfers": {
+          "title": "Checked Transfers",
+          "type": "integer"
+        },
+        "violations": {
+          "items": {
+            "$ref": "#/$defs/Violation"
+          },
+          "title": "Violations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "holds",
+        "checked_transfers",
+        "violations"
+      ],
+      "title": "InvariantResult",
+      "type": "object"
+    },
+    "OutgoingTransfer": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "from_account_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "From Account Id"
+        },
+        "to_pix_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "To Pix Key"
+        },
+        "amount_cents": {
+          "title": "Amount Cents",
+          "type": "integer"
+        },
+        "authorization_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Authorization Id"
+        },
+        "actor": {
+          "title": "Actor",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "from_account_id",
+        "to_pix_key",
+        "amount_cents",
+        "authorization_id",
+        "actor",
+        "created_at"
+      ],
+      "title": "OutgoingTransfer",
+      "type": "object"
+    },
+    "ScenarioResult": {
+      "additionalProperties": false,
+      "properties": {
+        "scenario_id": {
+          "title": "Scenario Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "category": {
+          "title": "Category",
+          "type": "string"
+        },
+        "channel": {
+          "title": "Channel",
+          "type": "string"
+        },
+        "expected_invariants": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Expected Invariants",
+          "type": "array"
+        },
+        "cells": {
+          "items": {
+            "$ref": "#/$defs/CellResult"
+          },
+          "title": "Cells",
+          "type": "array"
+        }
+      },
+      "required": [
+        "scenario_id",
+        "name",
+        "category",
+        "channel",
+        "expected_invariants",
+        "cells"
+      ],
+      "title": "ScenarioResult",
+      "type": "object"
+    },
+    "Summary": {
+      "additionalProperties": false,
+      "properties": {
+        "rows": {
+          "items": {
+            "$ref": "#/$defs/SummaryRow"
+          },
+          "title": "Rows",
+          "type": "array"
+        },
+        "totals": {
+          "$ref": "#/$defs/SummaryTotals"
+        }
+      },
+      "required": [
+        "rows",
+        "totals"
+      ],
+      "title": "Summary",
+      "type": "object"
+    },
+    "SummaryRow": {
+      "additionalProperties": false,
+      "properties": {
+        "scenario_id": {
+          "title": "Scenario Id",
+          "type": "string"
+        },
+        "preset": {
+          "enum": [
+            "vulnerable",
+            "hardened"
+          ],
+          "title": "Preset",
+          "type": "string"
+        },
+        "attack_status": {
+          "anyOf": [
+            {
+              "enum": [
+                "exposed_resisted",
+                "exposed_violated",
+                "not_exposed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Attack Status"
+        },
+        "attack_utility_subset": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Attack Utility Subset"
+        },
+        "benign_utility_exact": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Benign Utility Exact"
+        },
+        "attack_invariants_hold": {
+          "title": "Attack Invariants Hold",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "scenario_id",
+        "preset",
+        "attack_status",
+        "attack_utility_subset",
+        "benign_utility_exact",
+        "attack_invariants_hold"
+      ],
+      "title": "SummaryRow",
+      "type": "object"
+    },
+    "SummaryTotals": {
+      "additionalProperties": false,
+      "properties": {
+        "scenarios": {
+          "title": "Scenarios",
+          "type": "integer"
+        },
+        "attack_cells": {
+          "title": "Attack Cells",
+          "type": "integer"
+        },
+        "exposed_violated": {
+          "title": "Exposed Violated",
+          "type": "integer"
+        },
+        "exposed_resisted": {
+          "title": "Exposed Resisted",
+          "type": "integer"
+        },
+        "not_exposed": {
+          "title": "Not Exposed",
+          "type": "integer"
+        },
+        "benign_cells": {
+          "title": "Benign Cells",
+          "type": "integer"
+        },
+        "benign_utility_pass": {
+          "title": "Benign Utility Pass",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "scenarios",
+        "attack_cells",
+        "exposed_violated",
+        "exposed_resisted",
+        "not_exposed",
+        "benign_cells",
+        "benign_utility_pass"
+      ],
+      "title": "SummaryTotals",
+      "type": "object"
+    },
+    "ToolCallRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "seq": {
+          "title": "Seq",
+          "type": "integer"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "session_customer_id": {
+          "title": "Session Customer Id",
+          "type": "string"
+        },
+        "tool": {
+          "title": "Tool",
+          "type": "string"
+        },
+        "args": {
+          "additionalProperties": true,
+          "title": "Args",
+          "type": "object"
+        },
+        "outcome": {
+          "enum": [
+            "ok",
+            "unknown_tool",
+            "invalid_input",
+            "denied",
+            "ledger_error"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "result": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Result"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Error"
+        },
+        "guard_decisions": {
+          "items": {
+            "$ref": "#/$defs/GuardDecision"
+          },
+          "title": "Guard Decisions",
+          "type": "array"
+        },
+        "untrusted_paths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Untrusted Paths",
+          "type": "array"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "session_id",
+        "session_customer_id",
+        "tool",
+        "args",
+        "outcome",
+        "result",
+        "error",
+        "guard_decisions",
+        "untrusted_paths"
+      ],
+      "title": "ToolCallRecord",
+      "type": "object"
+    },
+    "Violation": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "enum": [
+            "no_authorization",
+            "customer_mismatch",
+            "source_mismatch",
+            "payee_mismatch",
+            "amount_exceeds_max",
+            "authorization_after_transfer",
+            "authorization_reused"
+          ],
+          "title": "Code",
+          "type": "string"
+        },
+        "transfer_id": {
+          "title": "Transfer Id",
+          "type": "string"
+        },
+        "authorization_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Authorization Id"
+        },
+        "detail": {
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "transfer_id",
+        "authorization_id",
+        "detail"
+      ],
+      "title": "Violation",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "generator": {
+      "$ref": "#/$defs/Generator"
+    },
+    "agent": {
+      "$ref": "#/$defs/AgentDescriptor"
+    },
+    "limitations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "summary": {
+      "$ref": "#/$defs/Summary"
+    },
+    "scenarios": {
+      "items": {
+        "$ref": "#/$defs/ScenarioResult"
+      },
+      "title": "Scenarios",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "generator",
+    "agent",
+    "limitations",
+    "summary",
+    "scenarios"
+  ],
+  "title": "Report",
+  "type": "object"
+}
