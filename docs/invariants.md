@@ -60,3 +60,14 @@ against it. It never edits the working tree. Every mutant must be killed.
 ```bash
 uv run python scripts/mutation_check_inv1.py
 ```
+
+### Known limitations
+
+- **Single session per run.** INV-1 checks every agent-initiated transfer in
+  the snapshot against one session customer. This is correct while each run
+  has exactly one session. Multi-session runs will need per-session scoping
+  (for example by transfer actor or session id).
+- **Reuse is tested only on hand-built snapshots.** The ledger's partial unique
+  index makes a reused authorization impossible to create through the real
+  `Ledger`, so `authorization_reused` is exercised only with snapshots built
+  directly in tests.
