@@ -22,8 +22,8 @@ def counter_ids() -> Callable[[str], str]:
 
 
 def seed(ledger: Ledger) -> None:
-    ledger.add_customer(Customer(id="cust_alice", name="Alice Example", tax_id="000.000.001-91"))
-    ledger.add_customer(Customer(id="cust_bob", name="Bob Example", tax_id="000.000.002-72"))
+    ledger.add_customer(Customer(id="cust_alice", name="Alice Example", tax_id="SYNTHETIC-0001"))
+    ledger.add_customer(Customer(id="cust_bob", name="Bob Example", tax_id="SYNTHETIC-0002"))
     ledger.add_account(
         Account(
             id="acc_alice",

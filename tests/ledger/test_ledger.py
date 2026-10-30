@@ -357,7 +357,7 @@ def test_state_change_and_audit_are_atomic(ledger: Ledger) -> None:
 
 def test_duplicate_customer_rejected_and_audited(ledger: Ledger) -> None:
     with pytest.raises(DuplicateEntity) as info:
-        ledger.add_customer(Customer(id="cust_alice", name="Other", tax_id="000.000.003-53"))
+        ledger.add_customer(Customer(id="cust_alice", name="Other", tax_id="SYNTHETIC-0003"))
     assert info.value.entity == "customer"
     assert ledger.audit_entries()[-1].action == "customer_rejected"
 
