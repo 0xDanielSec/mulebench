@@ -19,6 +19,18 @@ class LedgerError(Exception):
         return {"ok": False, "error": type(self).__name__, **self.details()}
 
 
+class AuditSchemaOutdated(LedgerError):
+    """The database's audit_log has no hash-chain columns (created by an older
+    version). Ledgers are created fresh; there is no migration."""
+
+    def __init__(self, path: str) -> None:
+        super().__init__(f"audit_log in {path!r} has no hash chain; create a new ledger")
+        self.path = path
+
+    def details(self) -> dict[str, object]:
+        return {"path": self.path}
+
+
 class InvalidAmount(LedgerError):
     def __init__(self, amount: object) -> None:
         super().__init__(f"amount must be a positive int of cents, got {amount!r}")

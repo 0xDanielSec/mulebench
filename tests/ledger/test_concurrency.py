@@ -26,6 +26,9 @@ def _setup_db(tmp_path: Path, clock: FixedClock) -> str:
 
 def _race(db: str, clock: FixedClock, call: Callable[[Ledger, int], None]) -> list[str]:
     """Run `call` in WORKERS threads, each with its own connection, released together."""
+    pre = Ledger(db, clock=clock)
+    rows_before = pre.verify_audit_chain().rows_checked
+    pre.close()
     barrier = threading.Barrier(WORKERS)
     outcomes: list[str] = []
     lock = threading.Lock()
@@ -50,6 +53,12 @@ def _race(db: str, clock: FixedClock, call: Callable[[Ledger, int], None]) -> li
         t.start()
     for t in threads:
         t.join()
+    # Concurrent writers must never fork or break the audit hash chain.
+    check = Ledger(db, clock=clock)
+    report = check.verify_audit_chain()
+    check.close()
+    assert report.ok, report.problems
+    assert report.rows_checked == rows_before + WORKERS  # one row per call, ok or rejected
     return outcomes
 
 

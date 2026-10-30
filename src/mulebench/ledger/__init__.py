@@ -18,6 +18,7 @@ from mulebench.ledger.clock import (
 )
 from mulebench.ledger.errors import (
     AccountFrozen,
+    AuditSchemaOutdated,
     AuthorizationAlreadyUsed,
     DailyLimitExceeded,
     DescriptionTooLong,
@@ -32,9 +33,11 @@ from mulebench.ledger.errors import (
     UnknownCustomer,
     UnknownTransfer,
 )
-from mulebench.ledger.ledger import MAX_DESCRIPTION_CHARS, Ledger, uuid_ids
+from mulebench.ledger.ledger import GENESIS_HASH, MAX_DESCRIPTION_CHARS, Ledger, uuid_ids
 from mulebench.ledger.models import (
     Account,
+    AuditChainProblem,
+    AuditChainReport,
     AuditEntry,
     Authorization,
     Customer,
@@ -44,11 +47,15 @@ from mulebench.ledger.models import (
 )
 
 __all__ = [
+    "GENESIS_HASH",
     "MAX_DESCRIPTION_CHARS",
     "SAO_PAULO",
     "Account",
     "AccountFrozen",
+    "AuditChainProblem",
+    "AuditChainReport",
     "AuditEntry",
+    "AuditSchemaOutdated",
     "Authorization",
     "AuthorizationAlreadyUsed",
     "Clock",

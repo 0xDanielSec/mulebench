@@ -69,6 +69,29 @@ class AuditEntry(_Frozen):
     args: dict[str, object]
     result: dict[str, object]
     outcome: AuditOutcome
+    prev_hash: str
+    hash: str
+
+
+AuditChainCode = Literal[
+    "malformed_row", "seq_gap", "prev_hash_mismatch", "hash_mismatch", "head_mismatch"
+]
+
+
+class AuditChainProblem(_Frozen):
+    seq: int | None  # None for head_mismatch on an empty log
+    code: AuditChainCode
+    detail: str
+
+
+class AuditChainReport(_Frozen):
+    """Result of `Ledger.verify_audit_chain`. `ok` is True exactly when there
+    are no problems."""
+
+    ok: bool
+    rows_checked: int
+    head_hash: str
+    problems: tuple[AuditChainProblem, ...]
 
 
 class Authorization(_Frozen):

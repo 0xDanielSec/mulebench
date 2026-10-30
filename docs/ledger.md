@@ -69,8 +69,53 @@ error. Later invariants (for example structuring detection) need failed attempts
 
 The audit log is append-only. The API exposes only `audit_entries()` for reading.
 SQLite triggers abort any `UPDATE` or `DELETE` on `audit_log`. Each row records
-`ts`, `actor`, `action`, `args` (canonical JSON), `result` (canonical JSON) and
-`outcome`.
+`ts`, `actor`, `action`, `args` (canonical JSON), `result` (canonical JSON),
+`outcome`, `prev_hash` and `hash`.
+
+### Hash chain (tamper evidence)
+
+```text
+hash = sha256(prev_hash + "\n" + canonical_json({seq, ts, actor, action,
+                                                 args_json, result_json, outcome}))
+```
+
+Canonical JSON is `json.dumps(sort_keys=True, separators=(",", ":"),
+ensure_ascii=False)`, UTF-8. The first row's `prev_hash` is `GENESIS_HASH`
+(64 zeros). `seq` is part of the hashed content, so moving a row's content to
+another position changes its hash. The head is read and the row appended inside
+the operation's `BEGIN IMMEDIATE` transaction, so concurrent writers cannot fork
+the chain.
+
+`Ledger.verify_audit_chain(expected_head=None)` recomputes the chain and returns
+an `AuditChainReport(ok, rows_checked, head_hash, problems)`. It never raises on
+tampered data. Each `AuditChainProblem(seq, code, detail)` has one of these codes:
+
+| Code | Meaning |
+|---|---|
+| `malformed_row` | `prev_hash` or `hash` is not 64 lowercase hex characters |
+| `seq_gap` | a sequence number is missing (row deleted) or out of place |
+| `prev_hash_mismatch` | the link to the previous row's stored hash is broken |
+| `hash_mismatch` | the row's content no longer matches its hash |
+| `head_mismatch` | the last hash differs from `expected_head` (an anchor kept outside the database) |
+
+**What it protects against:** edits, deletions and reorders of audit rows made
+around the append-only triggers (for example with raw SQL on a copy of the file)
+by someone who does not also recompute the chain. Rehashing a single row breaks
+the next row's link. With an external head anchor, it also detects truncation of
+the newest rows and a full rewrite.
+
+**What it does NOT protect against:**
+
+- A writer who recomputes the whole chain. There is no secret key (no HMAC or
+  signature), so only an external anchor (`expected_head`) reveals a rewrite.
+- Truncation of the newest rows, unless `expected_head` is given.
+- Tampering with the state tables (`accounts`, `transfers`, ...). They are not
+  hashed. The property tests check that audit rows match state changes, but
+  that is a test-time check, not runtime evidence.
+- Compromise of the SQLite file, the process or the host.
+
+There is no migration: opening a database whose `audit_log` lacks the hash
+columns raises `AuditSchemaOutdated`. Ledgers are created fresh per run.
 
 ## Time and the daily limit window
 

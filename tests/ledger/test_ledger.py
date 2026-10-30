@@ -335,7 +335,7 @@ def test_audit_log_is_append_only_at_db_level(tmp_path: Path, clock: FixedClock)
 
 def test_ledger_api_has_no_audit_mutation_path() -> None:
     public = {name for name in dir(Ledger) if not name.startswith("_")}
-    assert {n for n in public if "audit" in n} == {"audit_entries"}
+    assert {n for n in public if "audit" in n} == {"audit_entries", "verify_audit_chain"}
 
 
 def test_state_change_and_audit_are_atomic(ledger: Ledger) -> None:

@@ -1,11 +1,11 @@
-"""Mutation check for INV-1, INV-2 and INV-3.
+"""Mutation check for INV-1, INV-2, INV-3 and the audit hash chain (AUDIT).
 
-Each invariant has a table of mutants. For every mutant, the project is copied
-to a temporary directory, one condition is broken in the copy of the
-invariant's module, and that invariant's tests run there. A mutant is "killed"
+Each table targets one module. For every mutant, the project is copied to a
+temporary directory, one condition is broken in the copy of the module, and the
+tests for that module run there. A mutant is "killed"
 when at least one test fails. The working tree is never modified.
 
-Usage: uv run python scripts/mutation_check.py [INV-1] [INV-2] [INV-3]
+Usage: uv run python scripts/mutation_check.py [INV-1] [INV-2] [INV-3] [AUDIT]
 With no arguments every table runs. Exit code is 0 only if every mutant of
 every selected table is killed.
 """
@@ -282,6 +282,59 @@ INV3_MUTANTS: list[Mutant] = [
     ),
 ]
 
+AUDIT_MUTANTS: list[Mutant] = [
+    (
+        "append: link to previous head",
+        '(head["seq"] + 1, head["hash"])',
+        '(head["seq"] + 1, GENESIS_HASH)',
+    ),
+    (
+        "hash covers seq (reorder detection)",
+        '_HASHED_FIELDS = ("seq", "ts",',
+        '_HASHED_FIELDS = ("ts",',
+    ),
+    (
+        "verify: starts from genesis",
+        "prev_seq, prev_hash = 0, GENESIS_HASH",
+        'prev_seq, prev_hash = 0, ""',
+    ),
+    (
+        "verify: malformed_row",
+        "            if not (\n                isinstance(stored_prev, str)",
+        "            if False and not (\n                isinstance(stored_prev, str)",
+    ),
+    (
+        "verify: seq_gap",
+        "if seq != prev_seq + 1:",
+        "if False:",
+    ),
+    (
+        "verify: prev_hash_mismatch",
+        "if stored_prev != prev_hash:",
+        "if False:",
+    ),
+    (
+        "verify: hash_mismatch",
+        "if _row_hash(stored_prev, r) != stored:",
+        "if False:",
+    ),
+    (
+        "verify: chain continues from the STORED hash",
+        "            prev_seq, prev_hash = seq, stored\n",
+        "            prev_seq, prev_hash = seq, _row_hash(stored_prev, r)\n",
+    ),
+    (
+        "verify: head_mismatch",
+        "if expected_head is not None and expected_head != prev_hash:",
+        "if False:",
+    ),
+    (
+        "verify: ok iff no problems",
+        "ok=not problems,",
+        "ok=True,",
+    ),
+]
+
 TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
     "INV-1": (
         Path("src/mulebench/invariants/authorization.py"),
@@ -297,6 +350,11 @@ TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
         Path("src/mulebench/invariants/limits.py"),
         "tests/invariants/test_limits.py",
         INV3_MUTANTS,
+    ),
+    "AUDIT": (
+        Path("src/mulebench/ledger/ledger.py"),
+        "tests/ledger/test_audit_chain.py",
+        AUDIT_MUTANTS,
     ),
 }
 

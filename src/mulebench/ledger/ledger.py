@@ -8,7 +8,10 @@ Design notes
   back, then a separate transaction appends a `rejected` audit row, so later
   invariants can see failed attempts.
 * The audit log is append-only: the API has no update or delete path, and
-  SQLite triggers abort any UPDATE or DELETE on `audit_log`.
+  SQLite triggers abort any UPDATE or DELETE on `audit_log`. Rows are also
+  hash-chained (`prev_hash`, `hash`), so edits made around the triggers are
+  detectable with `verify_audit_chain()`. See docs/ledger.md for what this
+  does and does not protect.
 * Time comes from an injectable `Clock`. Daily limits use the local calendar
   day in America/Sao_Paulo (see `mulebench.ledger.clock`).
 * The ledger is deliberately POLICY-FREE about authorization and ownership.
@@ -28,10 +31,12 @@ Design notes
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import sqlite3
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from datetime import UTC, datetime, tzinfo
 from importlib.resources import files
@@ -40,6 +45,7 @@ from mulebench.ledger.clock import SAO_PAULO, Clock, FlatDailyLimit, LimitPolicy
 from mulebench.ledger.clock import local_day_bounds_utc as _day_bounds
 from mulebench.ledger.errors import (
     AccountFrozen,
+    AuditSchemaOutdated,
     AuthorizationAlreadyUsed,
     DailyLimitExceeded,
     DescriptionTooLong,
@@ -56,6 +62,8 @@ from mulebench.ledger.errors import (
 )
 from mulebench.ledger.models import (
     Account,
+    AuditChainProblem,
+    AuditChainReport,
     AuditEntry,
     Authorization,
     Customer,
@@ -68,6 +76,10 @@ from mulebench.ledger.models import (
 MAX_AMOUNT_CENTS = 2**62
 # Pix free-text field limit.
 MAX_DESCRIPTION_CHARS = 140
+
+# prev_hash of the first audit row.
+GENESIS_HASH = "0" * 64
+_HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
 IdFactory = Callable[[str], str]
 
@@ -102,6 +114,10 @@ class Ledger:
             self._conn.execute("PRAGMA journal_mode = WAL").fetchone()
         schema = files("mulebench.ledger").joinpath("schema.sql").read_text(encoding="utf-8")
         self._conn.executescript(schema)
+        columns = {r["name"] for r in self._conn.execute("PRAGMA table_info(audit_log)")}
+        if not {"prev_hash", "hash"} <= columns:
+            self._conn.close()
+            raise AuditSchemaOutdated(path)
 
     def close(self) -> None:
         self._conn.close()
@@ -339,9 +355,53 @@ class Ledger:
                 args=json.loads(r["args_json"]),
                 result=json.loads(r["result_json"]),
                 outcome=r["outcome"],
+                prev_hash=r["prev_hash"],
+                hash=r["hash"],
             )
             for r in rows
         ]
+
+    def verify_audit_chain(self, expected_head: str | None = None) -> AuditChainReport:
+        """Recompute the audit hash chain. Never raises on tampered data.
+
+        Pass `expected_head` (a head hash kept outside the database) to also
+        detect truncation of the newest rows.
+        """
+        rows = self._conn.execute("SELECT * FROM audit_log ORDER BY seq").fetchall()
+        problems: list[AuditChainProblem] = []
+
+        def problem(seq: int | None, code: str, detail: str) -> None:
+            problems.append(
+                AuditChainProblem.model_validate({"seq": seq, "code": code, "detail": detail})
+            )
+
+        prev_seq, prev_hash = 0, GENESIS_HASH
+        for r in rows:
+            seq, stored_prev, stored = r["seq"], r["prev_hash"], r["hash"]
+            if not (
+                isinstance(stored_prev, str)
+                and isinstance(stored, str)
+                and _HEX64.match(stored_prev)
+                and _HEX64.match(stored)
+            ):
+                problem(seq, "malformed_row", "prev_hash/hash is not 64 lowercase hex chars")
+                prev_seq, prev_hash = seq, str(stored)
+                continue
+            if seq != prev_seq + 1:
+                problem(seq, "seq_gap", f"expected seq {prev_seq + 1}, found {seq}")
+            if stored_prev != prev_hash:
+                problem(seq, "prev_hash_mismatch", "prev_hash does not match the previous row")
+            if _row_hash(stored_prev, r) != stored:
+                problem(seq, "hash_mismatch", "row content does not match its hash")
+            prev_seq, prev_hash = seq, stored
+        if expected_head is not None and expected_head != prev_hash:
+            problem(prev_seq or None, "head_mismatch", "head hash differs from the expected head")
+        return AuditChainReport(
+            ok=not problems,
+            rows_checked=len(rows),
+            head_hash=prev_hash,
+            problems=tuple(problems),
+        )
 
     # -------------------------------------------------------------- mutations
 
@@ -551,10 +611,26 @@ class Ledger:
         result: dict[str, object],
         outcome: str,
     ) -> None:
+        # Runs inside the caller's BEGIN IMMEDIATE transaction, so reading the
+        # head and appending are serialized: the chain cannot fork.
+        head = self._conn.execute(
+            "SELECT seq, hash FROM audit_log ORDER BY seq DESC LIMIT 1"
+        ).fetchone()
+        seq, prev_hash = (1, GENESIS_HASH) if head is None else (head["seq"] + 1, head["hash"])
+        row: dict[str, object] = {
+            "seq": seq,
+            "ts": self._now_str(),
+            "actor": actor,
+            "action": action,
+            "args_json": _canonical(args),
+            "result_json": _canonical(result),
+            "outcome": outcome,
+        }
         self._conn.execute(
-            "INSERT INTO audit_log (ts, actor, action, args_json, result_json, outcome)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
-            (self._now_str(), actor, action, _canonical(args), _canonical(result), outcome),
+            "INSERT INTO audit_log (seq, ts, actor, action, args_json, result_json, outcome,"
+            " prev_hash, hash) VALUES (:seq, :ts, :actor, :action, :args_json, :result_json,"
+            " :outcome, :prev_hash, :hash)",
+            {**row, "prev_hash": prev_hash, "hash": _row_hash(prev_hash, row)},
         )
 
     def _audit_rejected(
@@ -603,6 +679,16 @@ def _ts(at: datetime) -> str:
 
 def _canonical(data: dict[str, object]) -> str:
     return json.dumps(data, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+_HASHED_FIELDS = ("seq", "ts", "actor", "action", "args_json", "result_json", "outcome")
+
+
+def _row_hash(prev_hash: str, row: Mapping[str, object] | sqlite3.Row) -> str:
+    """sha256(prev_hash + newline + canonical JSON of the row content fields).
+    `seq` is hashed, so moving content to another position changes the hash."""
+    content = _canonical({k: row[k] for k in _HASHED_FIELDS})
+    return hashlib.sha256(f"{prev_hash}\n{content}".encode()).hexdigest()
 
 
 def _account_from_row(row: sqlite3.Row) -> Account:

@@ -67,7 +67,10 @@ CREATE TABLE IF NOT EXISTS audit_log (
   action      TEXT NOT NULL,
   args_json   TEXT NOT NULL,
   result_json TEXT NOT NULL,
-  outcome     TEXT NOT NULL CHECK (outcome IN ('ok', 'rejected'))
+  outcome     TEXT NOT NULL CHECK (outcome IN ('ok', 'rejected')),
+  -- Hash chain (tamper evidence): hash = sha256(prev_hash || canonical row).
+  prev_hash   TEXT NOT NULL CHECK (length(prev_hash) = 64),
+  hash        TEXT NOT NULL CHECK (length(hash) = 64)
 );
 
 CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit_log
