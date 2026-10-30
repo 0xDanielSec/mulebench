@@ -16,7 +16,8 @@ Design notes
   source account, or whether an authorization exists. That enforcement lives
   in the tools layer, so a tool set can be vulnerable or hardened, and the
   invariants judge the outcome from ledger state. The ledger enforces only
-  accounting facts: funds, limits, frozen accounts, idempotency.
+  accounting facts: funds, limits, frozen accounts, idempotency, duplicates.
+* A frozen account cannot send money but can still receive it.
 * `description`, `counterparty_name` and dispute `reason` are stored verbatim
   and are UNTRUSTED. They are the indirect-injection channels.
 """
@@ -36,6 +37,7 @@ from honeyledger.ledger.clock import local_day_bounds_utc as _day_bounds
 from honeyledger.ledger.errors import (
     AccountFrozen,
     DailyLimitExceeded,
+    DuplicateEntity,
     IdempotencyConflict,
     InsufficientFunds,
     InvalidAmount,
@@ -90,29 +92,46 @@ class Ledger:
 
     def add_customer(self, customer: Customer, *, actor: str = "seed") -> None:
         args = customer.model_dump()
-        with self._tx():
-            self._conn.execute(
-                "INSERT INTO customers (id, name, tax_id) VALUES (?, ?, ?)",
-                (customer.id, customer.name, customer.tax_id),
-            )
-            self._audit(actor, "customer_added", args, {"ok": True}, "ok")
+        try:
+            with self._tx():
+                if self._exists("SELECT 1 FROM customers WHERE id = ?", customer.id):
+                    raise DuplicateEntity("customer", customer.id)
+                self._conn.execute(
+                    "INSERT INTO customers (id, name, tax_id) VALUES (?, ?, ?)",
+                    (customer.id, customer.name, customer.tax_id),
+                )
+                self._audit(actor, "customer_added", args, {"ok": True}, "ok")
+        except LedgerError as exc:
+            self._audit_rejected(actor, "customer_rejected", args, exc)
+            raise
 
     def add_account(self, account: Account, *, actor: str = "seed") -> None:
+        """Create an account. A frozen account cannot send but can still receive."""
         args = account.model_dump()
-        with self._tx():
-            self._conn.execute(
-                "INSERT INTO accounts (id, customer_id, pix_key, balance_cents,"
-                " daily_limit_cents, status) VALUES (?, ?, ?, ?, ?, ?)",
-                (
-                    account.id,
-                    account.customer_id,
-                    account.pix_key,
-                    account.balance_cents,
-                    account.daily_limit_cents,
-                    account.status,
-                ),
-            )
-            self._audit(actor, "account_added", args, {"ok": True}, "ok")
+        try:
+            with self._tx():
+                if self._exists("SELECT 1 FROM accounts WHERE id = ?", account.id):
+                    raise DuplicateEntity("account", account.id)
+                if account.pix_key is not None and self._exists(
+                    "SELECT 1 FROM accounts WHERE pix_key = ?", account.pix_key
+                ):
+                    raise DuplicateEntity("pix_key", account.pix_key)
+                self._conn.execute(
+                    "INSERT INTO accounts (id, customer_id, pix_key, balance_cents,"
+                    " daily_limit_cents, status) VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        account.id,
+                        account.customer_id,
+                        account.pix_key,
+                        account.balance_cents,
+                        account.daily_limit_cents,
+                        account.status,
+                    ),
+                )
+                self._audit(actor, "account_added", args, {"ok": True}, "ok")
+        except LedgerError as exc:
+            self._audit_rejected(actor, "account_rejected", args, exc)
+            raise
 
     def record_incoming_pix(
         self,
@@ -416,6 +435,9 @@ class Ledger:
     ) -> None:
         with self._tx():
             self._audit(actor, action, args, exc.to_result(), "rejected")
+
+    def _exists(self, sql: str, param: str) -> bool:
+        return self._conn.execute(sql, (param,)).fetchone() is not None
 
     def _account_row(self, account_id: str) -> sqlite3.Row:
         row: sqlite3.Row | None = self._conn.execute(

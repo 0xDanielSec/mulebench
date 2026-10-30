@@ -23,11 +23,15 @@ The ledger enforces only accounting facts:
 | Transfer exists (disputes)    | `UnknownTransfer`     |
 | Source and destination differ | `SelfTransfer`        |
 | Source is not frozen          | `AccountFrozen`       |
+| Customer/account/pix key new  | `DuplicateEntity`     |
 | Balance covers the amount     | `InsufficientFunds`   |
 | Daily limit not exceeded      | `DailyLimitExceeded`  |
 | Idempotency key reused safely | `IdempotencyConflict` |
 
 All of them subclass `LedgerError`.
+
+A frozen account cannot send money, but it can still **receive** money
+(incoming Pix and internal transfers). Only the source account's status is checked.
 
 ## Money
 

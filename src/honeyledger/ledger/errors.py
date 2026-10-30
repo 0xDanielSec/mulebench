@@ -118,3 +118,13 @@ class IdempotencyConflict(LedgerError):
             "idempotency_key": self.idempotency_key,
             "existing_transfer_id": self.existing_transfer_id,
         }
+
+
+class DuplicateEntity(LedgerError):
+    def __init__(self, entity: str, ref: str) -> None:
+        super().__init__(f"{entity} already exists: {ref!r}")
+        self.entity = entity
+        self.ref = ref
+
+    def details(self) -> dict[str, object]:
+        return {"entity": self.entity, "ref": self.ref}

@@ -19,6 +19,7 @@ from honeyledger.ledger.clock import (
 from honeyledger.ledger.errors import (
     AccountFrozen,
     DailyLimitExceeded,
+    DuplicateEntity,
     IdempotencyConflict,
     InsufficientFunds,
     InvalidAmount,
@@ -39,6 +40,7 @@ __all__ = [
     "Customer",
     "DailyLimitExceeded",
     "Dispute",
+    "DuplicateEntity",
     "FixedClock",
     "FlatDailyLimit",
     "IdempotencyConflict",

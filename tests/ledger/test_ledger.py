@@ -11,7 +11,9 @@ from honeyledger.ledger import (
     SAO_PAULO,
     Account,
     AccountFrozen,
+    Customer,
     DailyLimitExceeded,
+    DuplicateEntity,
     FixedClock,
     IdempotencyConflict,
     InsufficientFunds,
@@ -348,3 +350,56 @@ def test_state_change_and_audit_are_atomic(ledger: Ledger) -> None:
     assert ledger.get_balance("acc_alice") == 500_000
     assert ledger.list_transfers("acc_alice") == []
     assert len(ledger.audit_entries()) == before
+
+
+# --------------------------------------------------------------- duplicates
+
+
+def test_duplicate_customer_rejected_and_audited(ledger: Ledger) -> None:
+    with pytest.raises(DuplicateEntity) as info:
+        ledger.add_customer(Customer(id="cust_alice", name="Other", tax_id="000.000.003-53"))
+    assert info.value.entity == "customer"
+    assert ledger.audit_entries()[-1].action == "customer_rejected"
+
+
+@pytest.mark.parametrize(
+    ("account_id", "pix_key", "entity"),
+    [("acc_alice", "new@example.test", "account"), ("acc_new", "alice@example.test", "pix_key")],
+)
+def test_duplicate_account_or_pix_key_rejected(
+    ledger: Ledger, account_id: str, pix_key: str, entity: str
+) -> None:
+    with pytest.raises(DuplicateEntity) as info:
+        ledger.add_account(
+            Account(
+                id=account_id,
+                customer_id="cust_bob",
+                pix_key=pix_key,
+                balance_cents=0,
+                daily_limit_cents=0,
+            )
+        )
+    assert info.value.entity == entity
+    assert ledger.audit_entries()[-1].outcome == "rejected"
+
+
+def test_frozen_account_can_still_receive(ledger: Ledger) -> None:
+    ledger.add_account(
+        Account(
+            id="acc_cold",
+            customer_id="cust_bob",
+            pix_key="cold@example.test",
+            balance_cents=0,
+            daily_limit_cents=0,
+            status="frozen",
+        )
+    )
+    pay(ledger, 700, to="cold@example.test")
+    ledger.record_incoming_pix(
+        to_account_id="acc_cold",
+        amount_cents=300,
+        counterparty_name="Shop Example",
+        counterparty_key="shop@example.test",
+        description="in",
+    )
+    assert ledger.get_balance("acc_cold") == 1_000
