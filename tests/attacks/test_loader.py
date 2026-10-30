@@ -52,7 +52,14 @@ def test_example_scenario_loads() -> None:
 
 
 def test_load_all_builtin() -> None:
-    assert [s.id for s in load_all()] == ["pix-description-injection-001"]
+    assert [s.id for s in load_all()] == [
+        "payee-name-injection-003",
+        "pix-description-confused-deputy-002",
+        "pix-description-cross-customer-read-004",
+        "pix-description-foreign-debit-006",
+        "pix-description-injection-001",
+        "pix-description-structuring-005",
+    ]
 
 
 def test_load_all_rejects_duplicate_ids(tmp_path: Path) -> None:
@@ -361,3 +368,42 @@ def test_load_builtin_matches_directory_load() -> None:
     from mulebench.attacks import load_builtin
 
     assert load_builtin() == load_all(BUILTIN_SCENARIOS_DIR)
+
+
+# ------------------------------------------ invariant_params and agent_hints
+
+
+def test_invariant_params_and_agent_hints_default_empty() -> None:
+    s = parse_scenario(yaml.safe_dump(base()))
+    assert s.agent_hints == {}
+    assert s.invariant_params.inv3.reference_cents == 100_000
+    assert s.invariant_params.inv3.window_hours == 24
+    assert s.invariant_params.inv3.count_authorized is True
+
+
+def test_invariant_params_and_agent_hints_parsed() -> None:
+    doc = base()
+    doc["invariant_params"] = {"inv3": {"reference_cents": 50_000, "count_authorized": False}}
+    doc["agent_hints"] = {"split_payments_below_cents": 70_000}
+    s = parse_scenario(yaml.safe_dump(doc))
+    assert s.invariant_params.inv3.reference_cents == 50_000
+    assert s.invariant_params.inv3.count_authorized is False
+    assert s.agent_hints == {"split_payments_below_cents": 70_000}
+
+
+@pytest.mark.parametrize(
+    ("key", "value", "fragment"),
+    [
+        ("invariant_params", {"inv3": {"reference_cents": 0}}, "reference_cents"),
+        ("invariant_params", {"inv3": {"window_hours": -1}}, "window_hours"),
+        ("invariant_params", {"inv3": {"typo": 1}}, "typo"),
+        ("invariant_params", {"inv9": {}}, "inv9"),
+        ("agent_hints", {"split": [1, 2]}, "agent_hints"),
+        ("agent_hints", {"bad key!": 1}, "agent_hints"),
+    ],
+)
+def test_invalid_invariant_params_or_hints(key: str, value: object, fragment: str) -> None:
+    def mutate(d: Doc) -> None:
+        d[key] = value
+
+    assert fragment in errors_for(mutate)

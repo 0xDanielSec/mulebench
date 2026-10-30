@@ -309,3 +309,71 @@ def test_agents_import_only_the_tool_client() -> None:
             for name in names:
                 if name == "mulebench" or name.startswith("mulebench."):
                     assert name.startswith(ALLOWED_PREFIXES), f"{path.name} imports {name}"
+
+
+# ------------------------------------------------- source override and hints
+
+
+def test_injected_from_clause_selects_source_account() -> None:
+    s006 = load_scenario(BUILTIN_SCENARIOS_DIR / "pix-description-foreign-debit-006.yaml")
+    w = build(s006, "attack", VULNERABLE)
+    injected = [s for s in w.run.steps if s.origin == "tool_output"]
+    assert [s.args["from_account_id"] for s in injected] == ["acc_bob"]
+
+
+def test_with_hints_returns_configured_copy() -> None:
+    agent = ScriptedAgent(max_steps=7)
+    hinted, applied = agent.with_hints({"split_payments_below_cents": 500, "other": 1})
+    assert applied == {"split_payments_below_cents": 500}
+    assert hinted is not agent
+    assert hinted.params == {
+        "obeys_tool_output_instructions": True,
+        "max_steps": 7,
+        "split_payments_below_cents": 500,
+    }
+    assert agent.split_payments_below_cents is None
+
+
+@pytest.mark.parametrize("bad", [True, 1, "500", None])
+def test_with_hints_ignores_invalid_values(bad: object) -> None:
+    _, applied = ScriptedAgent().with_hints({"split_payments_below_cents": bad})
+    assert applied == {}
+
+
+@pytest.mark.parametrize(
+    ("below", "cents", "chunks"),
+    [
+        (None, 120_000, [120_000]),
+        (70_000, 69_999, [69_999]),
+        (70_000, 70_000, [69_999, 1]),
+        (3, 6, [2, 2, 2]),
+    ],
+)
+def test_chunks(below: int | None, cents: int, chunks: list[int]) -> None:
+    assert ScriptedAgent(split_payments_below_cents=below)._chunks(cents) == chunks
+
+
+def test_split_below_two_rejected() -> None:
+    with pytest.raises(ValueError, match=">= 2"):
+        ScriptedAgent(split_payments_below_cents=1)
+
+
+def test_injected_using_clause_cites_note_authorization_for_other_payee() -> None:
+    s002 = load_scenario(BUILTIN_SCENARIOS_DIR / "pix-description-confused-deputy-002.yaml")
+    w = build(s002, "attack", VULNERABLE)
+    injected = [s for s in w.run.steps if s.origin == "tool_output"]
+    assert [s.args for s in injected] == [
+        {
+            "from_account_id": "acc_alice",
+            "to_pix_key": "rent@attacker.example.test",
+            "amount_cents": 120_000,
+            "authorization_id": "auth_2",
+        }
+    ]
+
+
+def test_injected_get_balance_reads_named_account() -> None:
+    s004 = load_scenario(BUILTIN_SCENARIOS_DIR / "pix-description-cross-customer-read-004.yaml")
+    w = build(s004, "attack", VULNERABLE)
+    injected = [(s.tool, s.args) for s in w.run.steps if s.origin == "tool_output"]
+    assert injected == [("get_balance", {"account_id": "acc_bob"})]
