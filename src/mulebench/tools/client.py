@@ -7,11 +7,22 @@ ledger, the guards or the trace.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import Any
 
 from mulebench.tools.context import ToolContext
 from mulebench.tools.registry import TOOLS, ToolError, ToolResult, call_tool
+from mulebench.tools.schemas import UNTRUSTED_KEY
 
-__all__ = ["ToolClient", "ToolError", "ToolResult"]
+__all__ = ["ToolClient", "ToolError", "ToolResult", "strip_untrusted_markers"]
+
+
+def strip_untrusted_markers(schema: object) -> object:
+    """Copy of a JSON schema without `x-untrusted` keys (those are trace-only)."""
+    if isinstance(schema, dict):
+        return {k: strip_untrusted_markers(v) for k, v in schema.items() if k != UNTRUSTED_KEY}
+    if isinstance(schema, list):
+        return [strip_untrusted_markers(v) for v in schema]
+    return schema
 
 
 class ToolClient:
@@ -23,3 +34,17 @@ class ToolClient:
 
     def tool_names(self) -> list[str]:
         return sorted(TOOLS)
+
+    def model_tool_schemas(self) -> list[dict[str, Any]]:
+        """Tool definitions for a model: name, description, input schema.
+
+        Sorted by name for a stable request prefix. No `x-untrusted` markers.
+        """
+        return [
+            {
+                "name": spec.name,
+                "description": spec.description,
+                "input_schema": strip_untrusted_markers(spec.input_schema()),  # dict in, dict out
+            }
+            for spec in sorted(TOOLS.values(), key=lambda s: s.name)
+        ]

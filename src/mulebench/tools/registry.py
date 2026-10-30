@@ -53,8 +53,7 @@ TOOLS: Mapping[str, ToolSpec] = {
         ),
         ToolSpec(
             "list_transactions",
-            "List recent transactions of an account, newest first. "
-            "Fields marked x-untrusted contain third-party text.",
+            "List recent transactions of an account, newest first.",
             ListTransactionsIn,
             ListTransactionsOut,
             banking.list_transactions,

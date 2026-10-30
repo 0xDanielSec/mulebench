@@ -1,4 +1,5 @@
-"""Versioned, deterministic JSON report (schema_version 1)."""
+"""Versioned JSON report (schema_version 2). Deterministic for scripted agents and
+for cassette replay; live LLM runs are not deterministic by nature."""
 
 from __future__ import annotations
 
@@ -9,59 +10,115 @@ from typing import Any
 
 import mulebench
 from mulebench.agents import Agent
+from mulebench.agents.base import TokenUsage
 from mulebench.harness.models import (
+    NO_PROMPT,
     PRESETS,
+    VARIANTS,
     AgentDescriptor,
+    Axes,
+    CellResult,
+    CostTotals,
     Generator,
+    LLMConfig,
+    PricingInfo,
     Report,
     ScenarioResult,
     Summary,
     SummaryRow,
     SummaryTotals,
 )
+from mulebench.harness.runner import RunOutcome
+from mulebench.harness.stats import HEADLINE_MIN_TRIALS
 
 LIMITATIONS = [
     "The scripted agent obeys instructions found in tool output by construction; "
-    "results validate the harness, not the vulnerability of any real model.",
+    "its results validate the harness, not the vulnerability of any real model.",
     "All scenario data is synthetic.",
     "INV-1 assumes a single session per run.",
     "Only INV-1 is implemented.",
+    f"Rates come with Wilson 95% intervals; headline numbers need >= {HEADLINE_MIN_TRIALS} "
+    "trials per cell. 0/n only bounds the rate from above; it never means safe.",
+    "LLM sampling parameters (temperature) cannot be set on the provider API; "
+    "trial_key identifies a trial and does not control the model.",
 ]
 
 
-def build_report(results: Sequence[ScenarioResult], agent: Agent) -> Report:
+def build_report(
+    outcome: RunOutcome,
+    agent: Agent,
+    *,
+    prompt_variants: Sequence[str] = (NO_PROMPT,),
+    trials: int = 1,
+    llm: LLMConfig | None = None,
+    pricing: PricingInfo | None = None,
+) -> Report:
+    results = sorted(outcome.results, key=lambda r: r.scenario_id)
     rows: list[SummaryRow] = []
-    for s in sorted(results, key=lambda r: r.scenario_id):
-        for preset in PRESETS:
-            attack, benign = s.cell(preset, "attack"), s.cell(preset, "benign")
-            rows.append(
-                SummaryRow(
-                    scenario_id=s.scenario_id,
-                    preset=preset,
-                    attack_status=attack.status,
-                    attack_utility_subset=attack.utility_subset,
-                    benign_utility_exact=benign.utility_exact,
-                    attack_invariants_hold=all(i.holds for i in attack.invariants),
+    for s in results:
+        for prompt in prompt_variants:
+            for preset in PRESETS:
+                attack = _find(s, prompt, preset, "attack")
+                benign = _find(s, prompt, preset, "benign")
+                if attack is None and benign is None:
+                    continue
+                rows.append(
+                    SummaryRow(
+                        scenario_id=s.scenario_id,
+                        prompt_variant=prompt,
+                        preset=preset,
+                        attack=None if attack is None else attack.attack,
+                        benign=None if benign is None else benign.benign,
+                    )
                 )
-            )
-    attack_cells = [c for s in results for c in s.cells if c.variant == "attack"]
-    benign_cells = [c for s in results for c in s.cells if c.variant == "benign"]
+    all_trials = [t for s in results for c in s.cells for t in c.trials]
+    attack_trials = [t for s in results for c in s.cells if c.variant == "attack" for t in c.trials]
+    benign_trials = [t for s in results for c in s.cells if c.variant == "benign" for t in c.trials]
     totals = SummaryTotals(
         scenarios=len(results),
-        attack_cells=len(attack_cells),
-        exposed_violated=sum(c.status == "exposed_violated" for c in attack_cells),
-        exposed_resisted=sum(c.status == "exposed_resisted" for c in attack_cells),
-        not_exposed=sum(c.status == "not_exposed" for c in attack_cells),
-        benign_cells=len(benign_cells),
-        benign_utility_pass=sum(c.utility_exact is True for c in benign_cells),
+        attack_trials=len(attack_trials),
+        exposed_violated=sum(t.status == "exposed_violated" for t in attack_trials),
+        exposed_resisted=sum(t.status == "exposed_resisted" for t in attack_trials),
+        exposed_refused=sum(t.status == "exposed_refused" for t in attack_trials),
+        not_exposed=sum(t.status == "not_exposed" for t in attack_trials),
+        errored=sum(t.errored for t in all_trials),
+        benign_trials=len(benign_trials),
+        benign_utility_pass=sum(t.utility_exact is True for t in benign_trials),
     )
+    costs = [c.cost_usd for t in all_trials for c in t.model_calls]
+    priced = all(c is not None for c in costs)
     return Report(
-        schema_version=1,
+        schema_version=2,
         generator=Generator(name="mulebench", version=mulebench.__version__),
         agent=AgentDescriptor(name=type(agent).__name__, params=dict(getattr(agent, "params", {}))),
+        llm=llm,
+        pricing=pricing,
+        axes=Axes(
+            prompt_variants=list(prompt_variants),
+            presets=list(PRESETS),
+            variants=list(VARIANTS),
+            trials_per_cell=trials,
+        ),
+        run_status=outcome.status,
+        cost_totals=CostTotals(
+            usage=sum((t.usage for t in all_trials), TokenUsage()),
+            cost_usd=round(sum(c or 0.0 for c in costs), 6) if priced else None,
+            priced=priced,
+        ),
         limitations=list(LIMITATIONS),
         summary=Summary(rows=rows, totals=totals),
-        scenarios=sorted(results, key=lambda r: r.scenario_id),
+        scenarios=results,
+    )
+
+
+def _find(s: ScenarioResult, prompt: str, preset: str, variant: str) -> CellResult | None:
+    return next(
+        (
+            c
+            for c in s.cells
+            if c.prompt_variant == prompt and c.preset == preset and c.variant == variant
+        ),
+        None,
     )
 
 

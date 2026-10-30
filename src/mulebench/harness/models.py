@@ -1,4 +1,8 @@
-"""Result and report models. Serialized as the versioned JSON report."""
+"""Result and report models (report schema v2).
+
+Matrix: prompt_variant x preset x variant x N trials. Scripted agents ignore the
+prompt, so their prompt axis is the single value "none".
+"""
 
 from __future__ import annotations
 
@@ -8,15 +12,19 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from mulebench.agents import AgentStep
+from mulebench.agents.base import ModelCallRecord, SessionNoteChannel, TokenUsage
+from mulebench.harness.stats import Rate
 from mulebench.invariants import InvariantResult
 from mulebench.tools import ToolCallRecord
 
 Preset = Literal["vulnerable", "hardened"]
 Variant = Literal["attack", "benign"]
-AttackStatus = Literal["exposed_resisted", "exposed_violated", "not_exposed"]
+AttackStatus = Literal["exposed_resisted", "exposed_violated", "exposed_refused", "not_exposed"]
+RunStatus = Literal["complete", "aborted_budget"]
 
 PRESETS: tuple[Preset, ...] = ("vulnerable", "hardened")
 VARIANTS: tuple[Variant, ...] = ("attack", "benign")
+NO_PROMPT = "none"
 
 
 class _Model(BaseModel):
@@ -44,19 +52,51 @@ class CellMetrics(_Model):
     injected_steps: int
 
 
-class CellResult(_Model):
-    preset: Preset
-    variant: Variant
+class TrialResult(_Model):
+    trial: int
+    trial_key: str  # identifies the trial and keys cassettes; does not control the model
     session_id: str
-    payload_exposed: bool | None  # attack runs only
-    status: AttackStatus | None  # attack runs only
-    utility_exact: bool | None  # benign runs only
-    utility_subset: bool | None  # attack runs only
+    errored: bool
+    error: str | None
+    payload_exposed: bool | None  # attack only
+    status: AttackStatus | None  # attack only; None when errored
+    utility_exact: bool | None  # benign only
+    utility_subset: bool | None  # attack only
+    session_note_channel: SessionNoteChannel | None
+    temperature: None = None  # the provider API accepts no sampling parameters
+    model_calls: list[ModelCallRecord]
+    usage: TokenUsage
+    cost_usd: float | None
     invariants: list[InvariantResult]
     outgoing_transfers: list[OutgoingTransfer]
     agent_steps: list[AgentStep]
     trace: list[ToolCallRecord]
     metrics: CellMetrics
+
+
+class AttackAggregates(_Model):
+    trials: int
+    errored: int
+    not_exposed: int
+    exposure: Rate  # exposed / non-errored trials
+    attack_success: Rate  # exposed_violated / exposed trials
+    refusal: Rate  # exposed_refused / exposed trials
+    utility_subset: Rate  # over non-errored trials
+
+
+class BenignAggregates(_Model):
+    trials: int
+    errored: int
+    utility_exact: Rate  # over non-errored trials
+
+
+class CellResult(_Model):
+    prompt_variant: str
+    preset: Preset
+    variant: Variant
+    trials: list[TrialResult]
+    attack: AttackAggregates | None
+    benign: BenignAggregates | None
 
 
 class ScenarioResult(_Model):
@@ -67,8 +107,12 @@ class ScenarioResult(_Model):
     expected_invariants: list[str]
     cells: list[CellResult]
 
-    def cell(self, preset: Preset, variant: Variant) -> CellResult:
-        return next(c for c in self.cells if c.preset == preset and c.variant == variant)
+    def cell(self, preset: Preset, variant: Variant, prompt_variant: str = NO_PROMPT) -> CellResult:
+        return next(
+            c
+            for c in self.cells
+            if c.preset == preset and c.variant == variant and c.prompt_variant == prompt_variant
+        )
 
 
 class Generator(_Model):
@@ -81,22 +125,51 @@ class AgentDescriptor(_Model):
     params: dict[str, object]
 
 
+class LLMConfig(_Model):
+    provider: str
+    model: str
+    effort: str
+    max_tokens: int
+    refusal_fallbacks: Literal["off"]
+    prompt_sha256: dict[str, str]
+
+
+class PricingInfo(_Model):
+    as_of: str
+    note: str
+    per_mtok: dict[str, dict[str, float | bool]]
+
+
+class Axes(_Model):
+    prompt_variants: list[str]
+    presets: list[Preset]
+    variants: list[Variant]
+    trials_per_cell: int
+
+
+class CostTotals(_Model):
+    usage: TokenUsage
+    cost_usd: float | None
+    priced: bool  # False if any call used a model without a known price
+
+
 class SummaryRow(_Model):
     scenario_id: str
+    prompt_variant: str
     preset: Preset
-    attack_status: AttackStatus | None
-    attack_utility_subset: bool | None
-    benign_utility_exact: bool | None
-    attack_invariants_hold: bool
+    attack: AttackAggregates | None
+    benign: BenignAggregates | None
 
 
 class SummaryTotals(_Model):
     scenarios: int
-    attack_cells: int
+    attack_trials: int
     exposed_violated: int
     exposed_resisted: int
+    exposed_refused: int
     not_exposed: int
-    benign_cells: int
+    errored: int
+    benign_trials: int
     benign_utility_pass: int
 
 
@@ -106,9 +179,14 @@ class Summary(_Model):
 
 
 class Report(_Model):
-    schema_version: Literal[1]
+    schema_version: Literal[2]
     generator: Generator
     agent: AgentDescriptor
+    llm: LLMConfig | None = None
+    pricing: PricingInfo | None
+    axes: Axes
+    run_status: RunStatus
+    cost_totals: CostTotals
     limitations: list[str]
     summary: Summary
     scenarios: list[ScenarioResult]
