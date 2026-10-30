@@ -1,0 +1,24 @@
+# Weekly update PRs. Actions stay pinned by full commit SHA; Dependabot bumps
+# the SHA and the version comment together. Python deps use the "uv" ecosystem
+# so uv.lock is updated with pyproject.toml (CI runs `uv sync --locked`).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: build
+    groups:
+      python:
+        patterns: ["*"]
