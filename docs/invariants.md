@@ -148,13 +148,14 @@ are left out of the grouping entirely.
 
 ## Mutation check
 
-`scripts/mutation_check.py` holds one mutant table per invariant (INV-1, INV-2,
-INV-3). It copies the project to a temporary directory, breaks one rule
-condition at a time in the copy of the invariant's module, and runs that
-invariant's tests against it. It never edits the working tree. Every mutant
+`scripts/mutation_check.py` holds one mutant table per module: INV-1, INV-2,
+INV-3, and AUDIT (`Ledger.verify_audit_chain`, tested by
+`tests/ledger/test_audit_chain.py`). It copies the project to a temporary
+directory, breaks one condition at a time in the copy of the module, and runs
+that module's tests against it. It never edits the working tree. Every mutant
 must be killed.
 
 ```bash
-uv run python scripts/mutation_check.py              # all three tables
-uv run python scripts/mutation_check.py INV-2        # one table
+uv run python scripts/mutation_check.py              # all four tables
+uv run python scripts/mutation_check.py INV-2 AUDIT  # selected tables
 ```

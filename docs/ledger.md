@@ -61,7 +61,22 @@ Money is always integer cents (`INTEGER` columns with `typeof()` checks). Floats
 ## Atomicity and audit log
 
 Every state change runs inside one `BEGIN IMMEDIATE` transaction, and its audit
-row is written in that same transaction. If anything fails, both roll back.
+row is written in that same transaction. If anything fails, both roll back,
+including a failure raised by `COMMIT` itself (the transaction is rolled back
+whenever one is still open, so the connection stays usable).
+
+`tests/ledger/test_crash_consistency.py` injects faults between the state
+change and the audit write, at every SQL statement of a transfer
+(`Exception` and `KeyboardInterrupt`), in the rejected-audit path, and kills a
+child process inside a transaction on a file database. Each time, nothing
+partial is committed and the hash chain still verifies.
+
+`tests/ledger/test_properties.py` (Hypothesis) checks money conservation,
+non-negative balances, the daily limit, idempotency, one transfer per
+authorization and audit-versus-state consistency against an independent model.
+The default `ci` profile is derandomized (fixed seed); the weekly
+`explore` workflow (`HYPOTHESIS_PROFILE=explore`) uses random seeds and prints
+the reproduction blob on failure.
 
 A rejected operation (any `LedgerError`) rolls back first. Then a separate
 transaction appends an audit row with `outcome = 'rejected'` and the structured

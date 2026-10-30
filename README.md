@@ -63,6 +63,13 @@ ledger, guards, trace and invariants), not the vulnerability of any real model.
 The same agent is run against `VULNERABLE` and hardened tool guards to show
 before/after.
 
+## Design documents
+
+- `docs/threat-model.md`: assets, trust boundaries, assumptions, invariant to
+  threat mapping.
+- `docs/adr/`: decisions (invariants over LLM judges, cassettes, policy-free
+  ledger, fail-closed invariants).
+
 ## Roadmap
 
 - Invariant 4: human confirmation for high-risk actions (INV-1 to INV-3 are
