@@ -18,6 +18,10 @@ Design notes
   invariants judge the outcome from ledger state. The ledger enforces only
   accounting facts: funds, limits, frozen accounts, idempotency, duplicates.
 * A frozen account cannot send money but can still receive it.
+* Authorizations are stored, never evaluated. The only rule the ledger keeps
+  about them is an integrity constraint: one authorization backs at most one
+  transfer (partial UNIQUE index). Whether a transfer NEEDS an authorization,
+  and whether it matches, is tools-layer policy.
 * `description`, `counterparty_name` and dispute `reason` are stored verbatim
   and are UNTRUSTED. They are the indirect-injection channels.
 """
@@ -36,7 +40,9 @@ from honeyledger.ledger.clock import SAO_PAULO, Clock, FlatDailyLimit, LimitPoli
 from honeyledger.ledger.clock import local_day_bounds_utc as _day_bounds
 from honeyledger.ledger.errors import (
     AccountFrozen,
+    AuthorizationAlreadyUsed,
     DailyLimitExceeded,
+    DescriptionTooLong,
     DuplicateEntity,
     IdempotencyConflict,
     InsufficientFunds,
@@ -44,12 +50,23 @@ from honeyledger.ledger.errors import (
     LedgerError,
     SelfTransfer,
     UnknownAccount,
+    UnknownAuthorization,
+    UnknownCustomer,
     UnknownTransfer,
 )
-from honeyledger.ledger.models import Account, AuditEntry, Customer, Dispute, Transfer
+from honeyledger.ledger.models import (
+    Account,
+    AuditEntry,
+    Authorization,
+    Customer,
+    Dispute,
+    Transfer,
+)
 
 # Well inside SQLite's signed 64-bit INTEGER range.
 MAX_AMOUNT_CENTS = 2**62
+# Pix free-text field limit.
+MAX_DESCRIPTION_CHARS = 140
 
 IdFactory = Callable[[str], str]
 
@@ -87,6 +104,10 @@ class Ledger:
 
     def close(self) -> None:
         self._conn.close()
+
+    @property
+    def clock(self) -> Clock:
+        return self._clock
 
     # ------------------------------------------------------------------ setup
 
@@ -145,7 +166,8 @@ class Ledger:
     ) -> Transfer:
         """Credit an account from an external Pix sender.
 
-        `description` and `counterparty_name` are stored verbatim (UNTRUSTED).
+        `description` (max 140 chars, like Pix) and `counterparty_name` are
+        stored verbatim (UNTRUSTED).
         """
         args: dict[str, object] = {
             "to_account_id": to_account_id,
@@ -156,6 +178,8 @@ class Ledger:
         }
         try:
             _check_amount(amount_cents)
+            if len(description) > MAX_DESCRIPTION_CHARS:
+                raise DescriptionTooLong(len(description), MAX_DESCRIPTION_CHARS)
             with self._tx():
                 self._account_row(to_account_id)
                 transfer_id = self._new_id("tx")
@@ -188,7 +212,82 @@ class Ledger:
             self._audit_rejected(actor, "pix_in_rejected", args, exc)
             raise
 
+    def add_authorization(
+        self,
+        *,
+        customer_id: str,
+        from_account_id: str,
+        payee_pix_key: str,
+        max_amount_cents: int,
+        actor: str = "customer_channel",
+    ) -> Authorization:
+        """Store an explicit customer authorization.
+
+        Called by the harness only, simulating the customer channel. No tool
+        exposes this. The ledger does not check that the customer owns the
+        account (see module doc).
+        """
+        args: dict[str, object] = {
+            "customer_id": customer_id,
+            "from_account_id": from_account_id,
+            "payee_pix_key": payee_pix_key,
+            "max_amount_cents": _jsonable_amount(max_amount_cents),
+        }
+        try:
+            _check_amount(max_amount_cents)
+            with self._tx():
+                if not self._exists("SELECT 1 FROM customers WHERE id = ?", customer_id):
+                    raise UnknownCustomer(customer_id)
+                self._account_row(from_account_id)
+                auth_id = self._new_id("auth")
+                self._conn.execute(
+                    "INSERT INTO authorizations (id, customer_id, from_account_id,"
+                    " payee_pix_key, max_amount_cents, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    (
+                        auth_id,
+                        customer_id,
+                        from_account_id,
+                        payee_pix_key,
+                        max_amount_cents,
+                        self._now_str(),
+                    ),
+                )
+                self._audit(
+                    actor,
+                    "authorization_added",
+                    args,
+                    {"ok": True, "authorization_id": auth_id},
+                    "ok",
+                )
+                return self.get_authorization(auth_id)
+        except LedgerError as exc:
+            self._audit_rejected(actor, "authorization_rejected", args, exc)
+            raise
+
     # ------------------------------------------------------------------ reads
+
+    def get_authorization(self, authorization_id: str) -> Authorization:
+        row = self._conn.execute(
+            "SELECT * FROM authorizations WHERE id = ?", (authorization_id,)
+        ).fetchone()
+        if row is None:
+            raise UnknownAuthorization(authorization_id)
+        return Authorization(
+            id=row["id"],
+            customer_id=row["customer_id"],
+            from_account_id=row["from_account_id"],
+            payee_pix_key=row["payee_pix_key"],
+            max_amount_cents=row["max_amount_cents"],
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
+
+    def authorization_used(self, authorization_id: str) -> bool:
+        """True if a transfer already references this authorization."""
+        self.get_authorization(authorization_id)
+        return self._exists("SELECT 1 FROM transfers WHERE authorization_id = ?", authorization_id)
+
+    def get_transfer(self, transfer_id: str) -> Transfer:
+        return self._transfer_by_id(transfer_id)
 
     def get_account(self, account_id: str) -> Account:
         return _account_from_row(self._account_row(account_id))
@@ -354,6 +453,10 @@ class Ledger:
                 raise IdempotencyConflict(idempotency_key, prior.id)
             return prior, True
 
+        if authorization_id is not None:
+            self.get_authorization(authorization_id)
+            if self._exists("SELECT 1 FROM transfers WHERE authorization_id = ?", authorization_id):
+                raise AuthorizationAlreadyUsed(authorization_id)
         if source.status == "frozen":
             raise AccountFrozen(source.id)
         if source.balance_cents < amount_cents:
@@ -375,25 +478,32 @@ class Ledger:
                 "UPDATE accounts SET balance_cents = balance_cents + ? WHERE id = ?",
                 (amount_cents, to_account_id),
             )
-        self._conn.execute(
-            "INSERT INTO transfers (id, kind, from_account_id, to_account_id,"
-            " counterparty_key, counterparty_name, amount_cents, description,"
-            " idempotency_key, authorization_id, actor, created_at)"
-            " VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)",
-            (
-                transfer_id,
-                kind,
-                source.id,
-                to_account_id,
-                to_pix_key,
-                amount_cents,
-                description,
-                idempotency_key,
-                authorization_id,
-                actor,
-                _ts(now),
-            ),
-        )
+        try:
+            self._conn.execute(
+                "INSERT INTO transfers (id, kind, from_account_id, to_account_id,"
+                " counterparty_key, counterparty_name, amount_cents, description,"
+                " idempotency_key, authorization_id, actor, created_at)"
+                " VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)",
+                (
+                    transfer_id,
+                    kind,
+                    source.id,
+                    to_account_id,
+                    to_pix_key,
+                    amount_cents,
+                    description,
+                    idempotency_key,
+                    authorization_id,
+                    actor,
+                    _ts(now),
+                ),
+            )
+        except sqlite3.IntegrityError as exc:
+            # Backstop for the partial UNIQUE index; the explicit check above
+            # normally fires first because writers are serialized.
+            if authorization_id is not None and "authorization_id" in str(exc):
+                raise AuthorizationAlreadyUsed(authorization_id) from exc
+            raise
         return self._transfer_by_id(transfer_id), False
 
     def _spent_today(self, account_id: str, now: datetime) -> int:

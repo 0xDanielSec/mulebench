@@ -128,3 +128,42 @@ class DuplicateEntity(LedgerError):
 
     def details(self) -> dict[str, object]:
         return {"entity": self.entity, "ref": self.ref}
+
+
+class UnknownCustomer(LedgerError):
+    def __init__(self, customer_id: str) -> None:
+        super().__init__(f"unknown customer: {customer_id!r}")
+        self.customer_id = customer_id
+
+    def details(self) -> dict[str, object]:
+        return {"customer_id": self.customer_id}
+
+
+class UnknownAuthorization(LedgerError):
+    def __init__(self, authorization_id: str) -> None:
+        super().__init__(f"unknown authorization: {authorization_id!r}")
+        self.authorization_id = authorization_id
+
+    def details(self) -> dict[str, object]:
+        return {"authorization_id": self.authorization_id}
+
+
+class AuthorizationAlreadyUsed(LedgerError):
+    """Integrity constraint: an authorization backs at most one transfer."""
+
+    def __init__(self, authorization_id: str) -> None:
+        super().__init__(f"authorization already used: {authorization_id!r}")
+        self.authorization_id = authorization_id
+
+    def details(self) -> dict[str, object]:
+        return {"authorization_id": self.authorization_id}
+
+
+class DescriptionTooLong(LedgerError):
+    def __init__(self, length: int, max_length: int) -> None:
+        super().__init__(f"description has {length} chars, max is {max_length}")
+        self.length = length
+        self.max_length = max_length
+
+    def details(self) -> dict[str, object]:
+        return {"length": self.length, "max_length": self.max_length}

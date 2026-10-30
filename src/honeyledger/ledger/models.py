@@ -69,3 +69,14 @@ class AuditEntry(_Frozen):
     args: dict[str, object]
     result: dict[str, object]
     outcome: AuditOutcome
+
+
+class Authorization(_Frozen):
+    """Explicit customer consent for one transfer, granted via the customer channel."""
+
+    id: str
+    customer_id: str
+    from_account_id: str
+    payee_pix_key: str
+    max_amount_cents: int = Field(gt=0)
+    created_at: datetime

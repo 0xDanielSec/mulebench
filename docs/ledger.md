@@ -27,11 +27,31 @@ The ledger enforces only accounting facts:
 | Balance covers the amount     | `InsufficientFunds`   |
 | Daily limit not exceeded      | `DailyLimitExceeded`  |
 | Idempotency key reused safely | `IdempotencyConflict` |
+| Authorization id exists       | `UnknownAuthorization` |
+| Authorization not yet used    | `AuthorizationAlreadyUsed` |
+| Customer exists (grant)       | `UnknownCustomer`     |
+| Inbound description <= 140    | `DescriptionTooLong`  |
 
 All of them subclass `LedgerError`.
 
 A frozen account cannot send money, but it can still **receive** money
 (incoming Pix and internal transfers). Only the source account's status is checked.
+
+## Authorizations
+
+Authorizations are explicit customer grants for one transfer. Only the
+harness adds them, through `Ledger.add_authorization`, which simulates the
+customer channel. No tool can create one.
+
+The ledger enforces exactly one rule about them, as an **integrity
+constraint**: an authorization backs at most one transfer. A partial
+`UNIQUE` index on `transfers(authorization_id) WHERE authorization_id IS NOT
+NULL` makes this race-safe. A second use raises `AuthorizationAlreadyUsed`.
+
+The ledger still does **not** enforce ownership or authorization policy. It
+does not check whether a transfer needs an authorization, or whether the
+cited authorization matches the customer, account, payee or amount. Guards
+in the tools layer do that.
 
 ## Money
 

@@ -115,3 +115,33 @@ def test_concurrent_same_idempotency_key_moves_money_once(
     assert actions.count("transfer") == 1
     assert actions.count("transfer_replayed") == WORKERS - 1
     check.close()
+
+
+def test_concurrent_use_of_one_authorization_moves_money_once(
+    tmp_path: Path, clock: FixedClock
+) -> None:
+    db = _setup_db(tmp_path, clock)
+    setup = Ledger(db, clock=clock)
+    auth_id = setup.add_authorization(
+        customer_id="cust_alice",
+        from_account_id="acc_alice",
+        payee_pix_key="ext@example.test",
+        max_amount_cents=1_000,
+    ).id
+    setup.close()
+
+    def call(led: Ledger, i: int) -> None:
+        led.transfer_pix(
+            actor="cust_alice",
+            from_account_id="acc_alice",
+            to_pix_key="ext@example.test",
+            amount_cents=1_000,
+            idempotency_key=f"auth-{i}",
+            authorization_id=auth_id,
+        )
+
+    outcomes = _race(db, clock, call)
+    assert sorted(outcomes) == ["AuthorizationAlreadyUsed"] * (WORKERS - 1) + ["ok"]
+    check = Ledger(db, clock=clock)
+    assert check.get_balance("acc_alice") == 499_000
+    check.close()

@@ -18,7 +18,9 @@ from honeyledger.ledger.clock import (
 )
 from honeyledger.ledger.errors import (
     AccountFrozen,
+    AuthorizationAlreadyUsed,
     DailyLimitExceeded,
+    DescriptionTooLong,
     DuplicateEntity,
     IdempotencyConflict,
     InsufficientFunds,
@@ -26,19 +28,32 @@ from honeyledger.ledger.errors import (
     LedgerError,
     SelfTransfer,
     UnknownAccount,
+    UnknownAuthorization,
+    UnknownCustomer,
     UnknownTransfer,
 )
-from honeyledger.ledger.ledger import Ledger, uuid_ids
-from honeyledger.ledger.models import Account, AuditEntry, Customer, Dispute, Transfer
+from honeyledger.ledger.ledger import MAX_DESCRIPTION_CHARS, Ledger, uuid_ids
+from honeyledger.ledger.models import (
+    Account,
+    AuditEntry,
+    Authorization,
+    Customer,
+    Dispute,
+    Transfer,
+)
 
 __all__ = [
+    "MAX_DESCRIPTION_CHARS",
     "SAO_PAULO",
     "Account",
     "AccountFrozen",
     "AuditEntry",
+    "Authorization",
+    "AuthorizationAlreadyUsed",
     "Clock",
     "Customer",
     "DailyLimitExceeded",
+    "DescriptionTooLong",
     "Dispute",
     "DuplicateEntity",
     "FixedClock",
@@ -53,6 +68,8 @@ __all__ = [
     "SystemClock",
     "Transfer",
     "UnknownAccount",
+    "UnknownAuthorization",
+    "UnknownCustomer",
     "UnknownTransfer",
     "local_day_bounds_utc",
     "uuid_ids",

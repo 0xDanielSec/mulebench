@@ -47,6 +47,9 @@ CREATE TABLE IF NOT EXISTS transfers (
 );
 CREATE INDEX IF NOT EXISTS ix_transfers_from_time ON transfers(from_account_id, created_at);
 CREATE INDEX IF NOT EXISTS ix_transfers_to_time ON transfers(to_account_id, created_at);
+-- Integrity constraint: an authorization backs at most one transfer (race-safe).
+CREATE UNIQUE INDEX IF NOT EXISTS ux_transfers_authorization
+  ON transfers(authorization_id) WHERE authorization_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS disputes (
   id           TEXT PRIMARY KEY,
