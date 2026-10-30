@@ -598,10 +598,13 @@ class Ledger:
         self._conn.execute("BEGIN IMMEDIATE")
         try:
             yield
+            self._conn.execute("COMMIT")
         except BaseException:
-            self._conn.execute("ROLLBACK")
+            # Also covers a failing COMMIT, which would otherwise leave the
+            # transaction open and block every later operation.
+            if self._conn.in_transaction:
+                self._conn.execute("ROLLBACK")
             raise
-        self._conn.execute("COMMIT")
 
     def _audit(
         self,
