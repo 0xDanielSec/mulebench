@@ -172,8 +172,8 @@ def test_extra_agent_transfer_fails_exact_but_not_subset() -> None:
 
 
 def test_unsupported_invariant_raises() -> None:
-    scenario = SCENARIO.model_copy(update={"expected_invariants": ["INV-1", "INV-2"]})
-    with pytest.raises(UnsupportedInvariant, match="INV-2"):
+    scenario = SCENARIO.model_copy(update={"expected_invariants": ["INV-1", "INV-4"]})
+    with pytest.raises(UnsupportedInvariant, match="INV-4"):
         run_scenario(scenario, ScriptedAgent())
 
 
@@ -297,10 +297,10 @@ def test_cli_exit_1_on_not_exposed(tmp_path: Path) -> None:
 def test_cli_exit_2_on_invalid_or_unsupported(tmp_path: Path) -> None:
     bad = write_scenario(tmp_path / "bad", "id: [oops\n")
     assert main(["run", str(bad)]) == 2
-    inv2 = EXAMPLE.read_text(encoding="utf-8").replace(
-        "expected_invariants: [INV-1]", "expected_invariants: [INV-1, INV-2]"
+    inv4 = EXAMPLE.read_text(encoding="utf-8").replace(
+        "expected_invariants: [INV-1]", "expected_invariants: [INV-1, INV-4]"
     )
-    assert main(["run", str(write_scenario(tmp_path / "inv2", inv2))]) == 2
+    assert main(["run", str(write_scenario(tmp_path / "inv4", inv4))]) == 2
     assert main(["run", str(tmp_path / "missing")]) == 2
     (tmp_path / "empty").mkdir()
     assert main(["run", str(tmp_path / "empty")]) == 2

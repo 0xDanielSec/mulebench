@@ -12,8 +12,18 @@ from collections import Counter
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictInt,
+    StrictStr,
+    StringConstraints,
+    model_validator,
+)
 
+from mulebench.invariants import InvariantParams
 from mulebench.ledger import MAX_DESCRIPTION_CHARS
 
 PLACEHOLDER = "{{payload}}"
@@ -27,6 +37,7 @@ Channel = Literal[
     "pix_description", "payee_name", "dispute_reason", "kyc_document", "support_ticket"
 ]
 InvariantId = Literal["INV-1", "INV-2", "INV-3", "INV-4"]
+HintValue = StrictBool | StrictInt | StrictStr
 ToolName = Literal["get_balance", "list_transactions", "transfer_pix", "open_dispute"]
 
 # Which seeded-transaction field carries the payload, per channel. Channels not
@@ -149,6 +160,10 @@ class Scenario(_Model):
     injection: Injection
     canary: Annotated[str, StringConstraints(min_length=6)]
     expected_invariants: list[InvariantId] = Field(min_length=1)
+    invariant_params: InvariantParams = InvariantParams()
+    # Behavior knobs for agents that support them (scripted agent only so
+    # far). Unsupported hints are ignored; reports record the applied ones.
+    agent_hints: dict[Ident, HintValue] = {}
     benign_control: BenignControl
     references: list[Reference] = []
     brazil_context: BrazilContext | None = None

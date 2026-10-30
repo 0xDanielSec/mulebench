@@ -25,6 +25,7 @@ from mulebench.harness.models import (
     TrialResult,
 )
 from mulebench.harness.runner import build_cell
+from mulebench.invariants import InvariantResult, violation
 from mulebench.reports import v1_models as v1
 
 
@@ -50,7 +51,26 @@ def parse_report_json(text: str) -> Report:
     raise UnsupportedReportVersion(f"unsupported report schema_version: {version!r}")
 
 
+def _upgrade_invariant(old: v1.InvariantResult) -> InvariantResult:
+    return InvariantResult(
+        id=old.id,
+        holds=old.holds,
+        checked_transfers=old.checked_transfers,
+        checked_calls=0,
+        violations=tuple(
+            violation(
+                v.code,
+                v.detail,
+                transfer_id=v.transfer_id,
+                authorization_id=v.authorization_id,
+            )
+            for v in old.violations
+        ),
+    )
+
+
 def upgrade_v1(old: v1.Report) -> Report:
+    agent = AgentDescriptor(name=old.agent.name, params={**old.agent.params, "agent_hints": {}})
     scenarios: list[ScenarioResult] = []
     for s in old.scenarios:
         cells = []
@@ -69,7 +89,7 @@ def upgrade_v1(old: v1.Report) -> Report:
                 model_calls=[],
                 usage=TokenUsage(),
                 cost_usd=None,
-                invariants=c.invariants,
+                invariants=[_upgrade_invariant(i) for i in c.invariants],
                 outgoing_transfers=[
                     OutgoingTransfer(**t.model_dump()) for t in c.outgoing_transfers
                 ],
@@ -77,7 +97,7 @@ def upgrade_v1(old: v1.Report) -> Report:
                 trace=c.trace,
                 metrics=CellMetrics(**c.metrics.model_dump()),
             )
-            cells.append(build_cell(NO_PROMPT, c.preset, c.variant, [trial]))
+            cells.append(build_cell(NO_PROMPT, c.preset, c.variant, [trial], agent))
         scenarios.append(
             ScenarioResult(
                 scenario_id=s.scenario_id,
@@ -103,7 +123,7 @@ def upgrade_v1(old: v1.Report) -> Report:
     return Report(
         schema_version=2,
         generator=Generator(**old.generator.model_dump()),
-        agent=AgentDescriptor(**old.agent.model_dump()),
+        agent=AgentDescriptor(**old.agent.model_dump()),  # top level stays as recorded
         llm=None,
         pricing=None,
         axes=Axes(

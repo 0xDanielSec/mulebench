@@ -13,7 +13,7 @@ from mulebench.invariants import (
     InvariantContext,
     InvariantResult,
     NoUnauthorizedMoneyMovement,
-    Violation,
+    violation,
 )
 from mulebench.ledger import (
     SAO_PAULO,
@@ -110,7 +110,7 @@ def check(transfers: list[Transfer], auths: list[Authorization]) -> InvariantRes
     return INV1.check(snap, CTX)
 
 
-def codes(result: InvariantResult) -> list[tuple[str, str]]:
+def codes(result: InvariantResult) -> list[tuple[str | None, str]]:
     return [(v.transfer_id, v.code) for v in result.violations]
 
 
@@ -122,6 +122,7 @@ def test_valid_transfer_holds() -> None:
     assert result.id == "INV-1"
     assert result.holds
     assert result.checked_transfers == 1
+    assert result.checked_calls == 0
     assert result.violations == ()
 
 
@@ -132,11 +133,11 @@ def test_no_authorization_cited() -> None:
     result = check([tx(auth_id=None)], [auth()])
     assert not result.holds
     assert result.violations == (
-        Violation(
-            code="no_authorization",
+        violation(
+            "no_authorization",
+            "no authorization cited",
             transfer_id="tx_1",
-            authorization_id=None,
-            detail="no authorization cited",
+            account_id="acc_alice",
         ),
     )
 
@@ -273,11 +274,8 @@ def test_holds_must_match_violations() -> None:
             id="INV-1",
             holds=True,
             checked_transfers=1,
-            violations=(
-                Violation(
-                    code="no_authorization", transfer_id="t", authorization_id=None, detail=""
-                ),
-            ),
+            checked_calls=0,
+            violations=(violation("no_authorization", "", transfer_id="t"),),
         )
 
 

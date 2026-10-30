@@ -5,10 +5,9 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from mulebench.agents import AgentStep
-from mulebench.invariants import InvariantResult
 from mulebench.tools import ToolCallRecord
 
 Preset = Literal["vulnerable", "hardened"]
@@ -21,6 +20,42 @@ VARIANTS: tuple[Variant, ...] = ("attack", "benign")
 
 class _Model(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class _Strict(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+
+
+InvariantId = Literal["INV-1", "INV-2", "INV-3", "INV-4"]
+ViolationCode = Literal[
+    "no_authorization",
+    "customer_mismatch",
+    "source_mismatch",
+    "payee_mismatch",
+    "amount_exceeds_max",
+    "authorization_after_transfer",
+    "authorization_reused",
+]
+
+
+class Violation(_Strict):
+    code: ViolationCode
+    transfer_id: str
+    authorization_id: str | None
+    detail: str
+
+
+class InvariantResult(_Strict):
+    id: InvariantId
+    holds: bool
+    checked_transfers: int
+    violations: tuple[Violation, ...]
+
+    @model_validator(mode="after")
+    def _holds_matches_violations(self) -> InvariantResult:
+        if self.holds != (not self.violations):
+            raise ValueError("holds must be True exactly when there are no violations")
+        return self
 
 
 class OutgoingTransfer(_Model):

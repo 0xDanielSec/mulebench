@@ -17,6 +17,7 @@ from mulebench.harness.models import (
     NO_PROMPT,
     PRESETS,
     VARIANTS,
+    AgentDescriptor,
     AttackAggregates,
     AttackStatus,
     BenignAggregates,
@@ -32,16 +33,23 @@ from mulebench.harness.models import (
 from mulebench.harness.seed import seed_cell
 from mulebench.harness.stats import wilson
 from mulebench.invariants import (
+    CallEvidence,
+    CustomerIsolation,
     Invariant,
     InvariantContext,
     InvariantResult,
+    LimitsRespected,
     NoUnauthorizedMoneyMovement,
 )
 from mulebench.ledger import FixedClock, LedgerSnapshot
 from mulebench.tools import VULNERABLE, Guard, ToolCallRecord, ToolContext, hardened
 from mulebench.tools.client import ToolClient, ToolResult
 
-INVARIANTS: Mapping[str, Invariant] = {"INV-1": NoUnauthorizedMoneyMovement()}
+INVARIANTS: Mapping[str, Invariant] = {
+    "INV-1": NoUnauthorizedMoneyMovement(),
+    "INV-2": CustomerIsolation(),
+    "INV-3": LimitsRespected(),
+}
 TOOL_CALL_STEP = timedelta(seconds=1)
 OUTGOING_KINDS = frozenset({"pix_out", "internal"})
 
@@ -100,6 +108,7 @@ def run_all(
     outcome = RunOutcome(results=[])
     for s in ordered:
         cells: list[CellResult] = []
+        cell_agent, descriptor = apply_hints(agent, s.agent_hints)
         try:
             for prompt in prompt_variants:
                 for preset in PRESETS:
@@ -107,10 +116,10 @@ def run_all(
                         done: list[TrialResult] = []
                         try:
                             for t in range(trials):
-                                done.append(run_trial(s, prompt, preset, variant, t, agent))
+                                done.append(run_trial(s, prompt, preset, variant, t, cell_agent))
                         finally:
                             if done:
-                                cells.append(build_cell(prompt, preset, variant, done))
+                                cells.append(build_cell(prompt, preset, variant, done, descriptor))
         except RunAborted as exc:
             outcome.status, outcome.abort_reason = "aborted_budget", str(exc)
         if cells:
@@ -131,6 +140,22 @@ def run_scenario(
     if outcome.status != "complete":
         raise RunAborted(outcome.abort_reason or "aborted")
     return outcome.results[0]
+
+
+def describe_agent(agent: object, applied_hints: Mapping[str, object]) -> AgentDescriptor:
+    params = dict(getattr(agent, "params", {}))
+    params["agent_hints"] = dict(applied_hints)
+    return AgentDescriptor(name=type(agent).__name__, params=params)
+
+
+def apply_hints(agent: Agent, hints: Mapping[str, object]) -> tuple[Agent, AgentDescriptor]:
+    """Configure `agent` with scenario hints if it supports them. The descriptor
+    records the hints actually applied (empty when none were)."""
+    with_hints = getattr(agent, "with_hints", None)
+    if with_hints is None or not hints:
+        return agent, describe_agent(agent, {})
+    configured, applied = with_hints(hints)
+    return configured, describe_agent(configured, applied)
 
 
 def _check_invariants(scenario: Scenario) -> None:
@@ -181,7 +206,11 @@ def run_trial(
         trace = list(ctx.trace.records())
     finally:
         ledger.close()
-    inv_ctx = InvariantContext(session_customer_id=customer)
+    inv_ctx = InvariantContext(
+        session_customer_id=customer,
+        calls=call_evidence(trace),
+        params=scenario.invariant_params,
+    )
     invariants = [INVARIANTS[i].check(snapshot, inv_ctx) for i in scenario.expected_invariants]
 
     attack = variant == "attack"
@@ -233,8 +262,20 @@ def run_trial(
     )
 
 
+def call_evidence(trace: Sequence[ToolCallRecord]) -> tuple[CallEvidence, ...]:
+    """Trace records as invariant evidence (invariants never import tools)."""
+    return tuple(
+        CallEvidence(seq=r.seq, tool=r.tool, outcome=r.outcome, args=r.args, result=r.result)
+        for r in trace
+    )
+
+
 def build_cell(
-    prompt_variant: str, preset: Preset, variant: Variant, trials: list[TrialResult]
+    prompt_variant: str,
+    preset: Preset,
+    variant: Variant,
+    trials: list[TrialResult],
+    agent: AgentDescriptor,
 ) -> CellResult:
     ok = [t for t in trials if not t.errored]
     errored = len(trials) - len(ok)
@@ -255,6 +296,7 @@ def build_cell(
             prompt_variant=prompt_variant,
             preset=preset,
             variant=variant,
+            agent=agent,
             trials=trials,
             attack=attack,
             benign=None,
@@ -268,6 +310,7 @@ def build_cell(
         prompt_variant=prompt_variant,
         preset=preset,
         variant=variant,
+        agent=agent,
         trials=trials,
         attack=None,
         benign=benign,

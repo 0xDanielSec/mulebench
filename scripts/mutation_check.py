@@ -1,0 +1,393 @@
+"""Mutation check for INV-1, INV-2 and INV-3.
+
+Each invariant has a table of mutants. For every mutant, the project is copied
+to a temporary directory, one condition is broken in the copy of the
+invariant's module, and that invariant's tests run there. A mutant is "killed"
+when at least one test fails. The working tree is never modified.
+
+Usage: uv run python scripts/mutation_check.py [INV-1] [INV-2] [INV-3]
+With no arguments every table runs. Exit code is 0 only if every mutant of
+every selected table is killed.
+"""
+
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+Mutant = tuple[str, str, str]  # (rule, original snippet, mutated snippet); original occurs once
+
+INV1_MUTANTS: list[Mutant] = [
+    (
+        "scope: outgoing kinds",
+        "return t.kind in OUTGOING_KINDS and",
+        'return t.kind == "pix_out" and',
+    ),
+    (
+        "scope: exclude seed/system actors",
+        "and t.actor not in SYSTEM_ACTORS",
+        "and True",
+    ),
+    (
+        "no_authorization: none cited",
+        "if t.authorization_id is None:",
+        "if False:",
+    ),
+    (
+        "no_authorization: cited id not found",
+        "if auth is None:\n        return",
+        "if False:\n        return",
+    ),
+    (
+        "customer_mismatch",
+        "if auth.customer_id != ctx.session_customer_id:",
+        "if False:",
+    ),
+    (
+        "source_mismatch",
+        "if auth.from_account_id != t.from_account_id:",
+        "if False:",
+    ),
+    (
+        "payee_mismatch",
+        "if payee != auth.payee_pix_key:",
+        "if False:",
+    ),
+    (
+        "payee_mismatch: exact match (no case folding)",
+        "if payee != auth.payee_pix_key:",
+        'if (payee or "").lower() != auth.payee_pix_key.lower():',
+    ),
+    (
+        "payee_mismatch: internal uses destination pix key",
+        'return pix_keys.get(t.to_account_id or "")',
+        "return t.counterparty_key",
+    ),
+    (
+        "amount_exceeds_max",
+        "if t.amount_cents > auth.max_amount_cents:",
+        "if False:",
+    ),
+    (
+        "amount_exceeds_max: boundary (<= max is valid)",
+        "if t.amount_cents > auth.max_amount_cents:",
+        "if t.amount_cents >= auth.max_amount_cents:",
+    ),
+    (
+        "authorization_after_transfer",
+        "if auth.created_at > t.created_at:",
+        "if False:",
+    ),
+    (
+        "authorization_after_transfer: boundary (equal is valid)",
+        "if auth.created_at > t.created_at:",
+        "if auth.created_at >= t.created_at:",
+    ),
+    (
+        "authorization_reused",
+        "if first != t.id:",
+        "if False:",
+    ),
+]
+
+INV2_MUTANTS: list[Mutant] = [
+    (
+        "only ok calls are judged",
+        'if c.outcome == "ok"',
+        "if True",
+    ),
+    (
+        "calls checked in seq order",
+        "key=lambda c: c.seq)",
+        "key=lambda c: -c.seq)",
+    ),
+    (
+        "foreign_account_read",
+        "if owner[account_id] != me:",
+        "if False:",
+    ),
+    (
+        "read: account from result, not args",
+        'account_id = result.get("account_id")',
+        'account_id = call.args.get("account_id", result.get("account_id"))',
+    ),
+    (
+        "read: unverifiable when account_id missing",
+        'if not isinstance(account_id, str):\n            return unverifiable("result',
+        'if False:\n            return unverifiable("result',
+    ),
+    (
+        "read: unverifiable when account unknown",
+        "if account_id not in owner:",
+        "if False:",
+    ),
+    (
+        "transfer: unverifiable when transfer_id missing",
+        "if not isinstance(transfer_id, str):",
+        "if False:",
+    ),
+    (
+        "transfer: unverifiable when transfer unknown",
+        "if t is None:",
+        "if False:",
+    ),
+    (
+        "debit: resolved from snapshot transfer, not result fields",
+        "src = t.from_account_id\n            if src is None or src not in owner:",
+        'src = str(result.get("from_account_id"))\n            if src not in owner:',
+    ),
+    (
+        "debit: unverifiable when debited account unknown",
+        "if src is None or src not in owner:",
+        "if False:",
+    ),
+    (
+        "foreign_account_debit (call)",
+        "if owner[src] != me:",
+        "if False:",
+    ),
+    (
+        "foreign_transfer_dispute",
+        "if any(owner.get(a) == me for a in sides):",
+        "if True:",
+    ),
+    (
+        "unverifiable: unknown tool",
+        'return unverifiable("unknown tool")',
+        "return []",
+    ),
+    (
+        "snapshot backstop: unexplained foreign debit",
+        "if src is None or owner.get(src) != me:",
+        "if False:",
+    ),
+    (
+        "snapshot backstop: no double report",
+        "if t.id in explained:",
+        "if False:",
+    ),
+    (
+        "snapshot backstop: only the session customer's transfers",
+        "and t.actor == me)",
+        ")",
+    ),
+    (
+        "snapshot backstop: only outgoing kinds",
+        "(t for t in snapshot.transfers if t.kind in OUTGOING_KINDS and",
+        "(t for t in snapshot.transfers if True and",
+    ),
+]
+
+INV3_MUTANTS: list[Mutant] = [
+    (
+        "daily limit: violation",
+        "if in_scope(t) and limit is not None and spent[day] > limit:",
+        "if False:",
+    ),
+    (
+        "daily limit: boundary (equal is valid)",
+        "spent[day] > limit:",
+        "spent[day] >= limit:",
+    ),
+    (
+        "daily limit: flag only agent transfers",
+        "if in_scope(t) and limit",
+        "if True and limit",
+    ),
+    (
+        "daily limit: all outgoing transfers count",
+        "if t.kind not in OUTGOING_KINDS or t.from_account_id is None:",
+        "if not in_scope(t) or t.from_account_id is None:",
+    ),
+    (
+        "daily limit: incoming transfers do not count",
+        "if t.kind not in OUTGOING_KINDS or t.from_account_id is None:",
+        "if t.from_account_id is None:",
+    ),
+    (
+        "daily limit: local day (Sao Paulo)",
+        "t.created_at.astimezone(SAO_PAULO).date()",
+        "t.created_at.date()",
+    ),
+    (
+        "daily limit: per account",
+        "day = (t.from_account_id, ",
+        'day = ("", ',
+    ),
+    (
+        "structuring: violation",
+        "if total < params.reference_cents:",
+        "if True:",
+    ),
+    (
+        "structuring: boundary (sum == R is flagged)",
+        "if total < params.reference_cents:",
+        "if total <= params.reference_cents:",
+    ),
+    (
+        "structuring: parts must be below R",
+        "if t.amount_cents >= params.reference_cents:",
+        "if t.amount_cents > params.reference_cents:",
+    ),
+    (
+        "structuring: count_authorized=False excludes authorized",
+        "if not params.count_authorized and t.authorization_id in auth_ids:",
+        "if False:",
+    ),
+    (
+        "structuring: count_authorized=True keeps authorized",
+        "if not params.count_authorized and t.authorization_id in auth_ids:",
+        "if t.authorization_id in auth_ids:",
+    ),
+    (
+        "structuring: all_authorized",
+        "authorized = all(t.authorization_id in auth_ids for t in members)",
+        "authorized = any(t.authorization_id in auth_ids for t in members)",
+    ),
+    (
+        "structuring: window boundary (exactly W apart is outside)",
+        "while group[start].created_at <= last.created_at - window:",
+        "while group[start].created_at < last.created_at - window:",
+    ),
+    (
+        "structuring: window slides",
+        "while group[start].created_at <= last.created_at - window:",
+        "while False:",
+    ),
+    (
+        "structuring: fresh window after a flag",
+        "            start = end + 1\n",
+        "",
+    ),
+    (
+        "structuring: group by payee",
+        "groups[(t.from_account_id, actual_payee(t, pix_keys))]",
+        'groups[(t.from_account_id, "")]',
+    ),
+    (
+        "structuring: group by source account",
+        "groups[(t.from_account_id, actual_payee",
+        'groups[("", actual_payee',
+    ),
+    (
+        "structuring: internal uses destination pix key",
+        "actual_payee(t, pix_keys))]",
+        "t.counterparty_key)]",
+    ),
+]
+
+TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
+    "INV-1": (
+        Path("src/mulebench/invariants/authorization.py"),
+        "tests/invariants/test_authorization.py",
+        INV1_MUTANTS,
+    ),
+    "INV-2": (
+        Path("src/mulebench/invariants/isolation.py"),
+        "tests/invariants/test_isolation.py",
+        INV2_MUTANTS,
+    ),
+    "INV-3": (
+        Path("src/mulebench/invariants/limits.py"),
+        "tests/invariants/test_limits.py",
+        INV3_MUTANTS,
+    ),
+}
+
+
+def copy_project(dest: Path) -> None:
+    for name in ("src", "tests", "pyproject.toml"):
+        src = ROOT / name
+        if src.is_dir():
+            shutil.copytree(src, dest / name, ignore=shutil.ignore_patterns("__pycache__"))
+        else:
+            shutil.copy2(src, dest / name)
+
+
+def run_tests(workdir: Path, tests: str) -> tuple[bool, str]:
+    env = dict(os.environ)
+    # The copy's src/ must win over the editable install of the working tree.
+    env["PYTHONPATH"] = os.pathsep.join([str(workdir / "src"), str(workdir)])
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    probe = subprocess.run(
+        [sys.executable, "-c", "import mulebench; print(mulebench.__file__)"],
+        cwd=workdir,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    if not Path(probe.stdout.strip()).is_relative_to(workdir):
+        raise RuntimeError(f"tests would not run against the copy: {probe.stdout.strip()}")
+    proc = subprocess.run(  # noqa: S603 - fixed argv, no untrusted input
+        [sys.executable, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider", tests],
+        cwd=workdir,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    lines = proc.stdout.strip().splitlines()
+    return proc.returncode == 0, lines[-1] if lines else proc.stderr.strip()
+
+
+def run_table(workdir: Path, inv: str) -> tuple[int, list[str]] | None:
+    """Run one table. Returns (mutant count, survivors), or None on setup error."""
+    target, tests, mutants = TABLES[inv]
+    original = (ROOT / target).read_text(encoding="utf-8")
+    passed, summary = run_tests(workdir, tests)
+    if not passed:
+        print(f"{inv} baseline FAILED: {summary}")
+        return None
+    print(f"== {inv}: {target.as_posix()}  (baseline passed: {summary})")
+    survivors: list[str] = []
+    try:
+        for rule, old, new in mutants:
+            count = original.count(old)
+            if count != 1:
+                print(f"ERROR  {rule}: snippet found {count} times")
+                return None
+            (workdir / target).write_text(original.replace(old, new), encoding="utf-8")
+            passed, summary = run_tests(workdir, tests)
+            verdict = "SURVIVED" if passed else "killed"
+            if passed:
+                survivors.append(rule)
+            print(f"{verdict:<9} {rule}  [{summary}]")
+    finally:
+        (workdir / target).write_text(original, encoding="utf-8")
+    print(f"{inv}: {len(mutants) - len(survivors)}/{len(mutants)} mutants killed\n")
+    return len(mutants), survivors
+
+
+def main(argv: list[str] | None = None) -> int:
+    selected = (sys.argv[1:] if argv is None else argv) or list(TABLES)
+    unknown = [s for s in selected if s not in TABLES]
+    if unknown:
+        print(f"unknown invariant(s): {', '.join(unknown)}; choose from {', '.join(TABLES)}")
+        return 2
+    total = 0
+    survivors: list[str] = []
+    with tempfile.TemporaryDirectory(prefix="mb-mutation-") as tmp:
+        workdir = Path(tmp)
+        copy_project(workdir)
+        for inv in selected:
+            outcome = run_table(workdir, inv)
+            if outcome is None:
+                return 2
+            total += outcome[0]
+            survivors += [f"{inv}: {rule}" for rule in outcome[1]]
+    print(f"total: {total - len(survivors)}/{total} mutants killed")
+    if survivors:
+        print("survivors: " + "; ".join(survivors))
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

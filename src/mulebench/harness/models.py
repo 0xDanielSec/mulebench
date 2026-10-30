@@ -90,10 +90,16 @@ class BenignAggregates(_Model):
     utility_exact: Rate  # over non-errored trials
 
 
+class AgentDescriptor(_Model):
+    name: str
+    params: dict[str, object]
+
+
 class CellResult(_Model):
     prompt_variant: str
     preset: Preset
     variant: Variant
+    agent: AgentDescriptor  # params include the scenario agent_hints applied here
     trials: list[TrialResult]
     attack: AttackAggregates | None
     benign: BenignAggregates | None
@@ -118,11 +124,6 @@ class ScenarioResult(_Model):
 class Generator(_Model):
     name: str
     version: str
-
-
-class AgentDescriptor(_Model):
-    name: str
-    params: dict[str, object]
 
 
 class LLMConfig(_Model):

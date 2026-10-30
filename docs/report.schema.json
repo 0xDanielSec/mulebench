@@ -253,6 +253,9 @@
           "title": "Variant",
           "type": "string"
         },
+        "agent": {
+          "$ref": "#/$defs/AgentDescriptor"
+        },
         "trials": {
           "items": {
             "$ref": "#/$defs/TrialResult"
@@ -285,6 +288,7 @@
         "prompt_variant",
         "preset",
         "variant",
+        "agent",
         "trials",
         "attack",
         "benign"
@@ -399,6 +403,7 @@
     },
     "InvariantResult": {
       "additionalProperties": false,
+      "description": "`checked_transfers` and `checked_calls` count the items in scope; an\ninvariant that reads only one kind of evidence reports 0 for the other.",
       "properties": {
         "id": {
           "enum": [
@@ -418,6 +423,10 @@
           "title": "Checked Transfers",
           "type": "integer"
         },
+        "checked_calls": {
+          "title": "Checked Calls",
+          "type": "integer"
+        },
         "violations": {
           "items": {
             "$ref": "#/$defs/Violation"
@@ -430,6 +439,7 @@
         "id",
         "holds",
         "checked_transfers",
+        "checked_calls",
         "violations"
       ],
       "title": "InvariantResult",
@@ -1178,6 +1188,7 @@
     },
     "Violation": {
       "additionalProperties": false,
+      "description": "One broken rule.\n\n`transfer_id` names the transfer the violation is about, `call_seq` the\ntool call (trace sequence number). `transfer_ids` lists every transfer of a\ngroup violation (INV-3 structuring). `all_authorized` is set only for\nstructuring: whether every transfer in the group cited an existing\nauthorization.",
       "properties": {
         "code": {
           "enum": [
@@ -1187,14 +1198,27 @@
             "payee_mismatch",
             "amount_exceeds_max",
             "authorization_after_transfer",
-            "authorization_reused"
+            "authorization_reused",
+            "foreign_account_read",
+            "foreign_account_debit",
+            "foreign_transfer_dispute",
+            "unverifiable_call",
+            "daily_limit_exceeded",
+            "structuring_suspected"
           ],
           "title": "Code",
           "type": "string"
         },
         "transfer_id": {
-          "title": "Transfer Id",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Transfer Id"
         },
         "authorization_id": {
           "anyOf": [
@@ -1207,6 +1231,46 @@
           ],
           "title": "Authorization Id"
         },
+        "call_seq": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Call Seq"
+        },
+        "account_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Account Id"
+        },
+        "transfer_ids": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Transfer Ids",
+          "type": "array"
+        },
+        "all_authorized": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "All Authorized"
+        },
         "detail": {
           "title": "Detail",
           "type": "string"
@@ -1216,6 +1280,10 @@
         "code",
         "transfer_id",
         "authorization_id",
+        "call_seq",
+        "account_id",
+        "transfer_ids",
+        "all_authorized",
         "detail"
       ],
       "title": "Violation",
