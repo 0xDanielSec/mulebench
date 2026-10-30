@@ -1,6 +1,6 @@
 # Attack scenarios
 
-Scenarios are declarative YAML files in `src/honeyledger/attacks/scenarios/`.
+Scenarios are declarative YAML files in `src/mulebench/attacks/scenarios/`.
 All data in them is synthetic: names end in "Example", tax ids look like
 `SYNTHETIC-0001`, and every domain is under `example.test`.
 

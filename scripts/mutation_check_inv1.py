@@ -19,7 +19,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TARGET = Path("src/honeyledger/invariants/authorization.py")
+TARGET = Path("src/mulebench/invariants/authorization.py")
 TESTS = "tests/invariants/test_authorization.py"
 
 # (rule, original snippet, mutated snippet). Each original must occur once.
@@ -112,7 +112,7 @@ def run_tests(workdir: Path) -> tuple[bool, str]:
     env["PYTHONPATH"] = os.pathsep.join([str(workdir / "src"), str(workdir)])
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     probe = subprocess.run(
-        [sys.executable, "-c", "import honeyledger; print(honeyledger.__file__)"],
+        [sys.executable, "-c", "import mulebench; print(mulebench.__file__)"],
         cwd=workdir,
         env=env,
         capture_output=True,
@@ -135,7 +135,7 @@ def run_tests(workdir: Path) -> tuple[bool, str]:
 
 def main() -> int:
     original = (ROOT / TARGET).read_text(encoding="utf-8")
-    with tempfile.TemporaryDirectory(prefix="hl-mutation-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="mb-mutation-") as tmp:
         workdir = Path(tmp)
         copy_project(workdir)
 

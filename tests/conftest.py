@@ -6,7 +6,7 @@ from datetime import datetime
 
 import pytest
 
-from honeyledger.ledger import SAO_PAULO, Account, Customer, FixedClock, Ledger
+from mulebench.ledger import SAO_PAULO, Account, Customer, FixedClock, Ledger
 
 # 2026-01-15 10:00 local (13:00 UTC).
 T0 = datetime(2026, 1, 15, 10, 0, tzinfo=SAO_PAULO)

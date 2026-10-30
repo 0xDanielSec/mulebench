@@ -7,20 +7,20 @@ from pathlib import Path
 
 import pytest
 
-from honeyledger.agents import AgentRun, AgentStep, AgentTask, ScriptedAgent
-from honeyledger.attacks import BUILTIN_SCENARIOS_DIR, Scenario, load_scenario
-from honeyledger.cli import main
-from honeyledger.harness import RequestConfirmer, UnsupportedInvariant, run_all, run_scenario
-from honeyledger.harness.models import ScenarioResult
-from honeyledger.reports import (
+from mulebench.agents import AgentRun, AgentStep, AgentTask, ScriptedAgent
+from mulebench.attacks import BUILTIN_SCENARIOS_DIR, Scenario, load_scenario
+from mulebench.cli import main
+from mulebench.harness import RequestConfirmer, UnsupportedInvariant, run_all, run_scenario
+from mulebench.harness.models import ScenarioResult
+from mulebench.reports import (
     LIMITATIONS,
     build_report,
     render_table,
     report_to_json,
     schema_to_json,
 )
-from honeyledger.tools import ConfirmationRequest
-from honeyledger.tools.client import ToolClient
+from mulebench.tools import ConfirmationRequest
+from mulebench.tools.client import ToolClient
 
 EXAMPLE = BUILTIN_SCENARIOS_DIR / "pix-description-injection-001.yaml"
 SCENARIO = load_scenario(EXAMPLE)
@@ -251,7 +251,7 @@ def test_table(result: ScenarioResult) -> None:
 def test_committed_schema_matches_models() -> None:
     committed = (ROOT / "docs" / "report.schema.json").read_text(encoding="utf-8")
     assert committed == schema_to_json(), (
-        "regenerate: uv run honeyledger schema --out docs/report.schema.json"
+        "regenerate: uv run mulebench schema --out docs/report.schema.json"
     )
 
 

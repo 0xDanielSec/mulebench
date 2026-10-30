@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 import yaml
 
-from honeyledger.attacks import (
+from mulebench.attacks import (
     BUILTIN_SCENARIOS_DIR,
     PLACEHOLDER,
     ScenarioError,
@@ -67,7 +67,7 @@ def test_load_all_rejects_duplicate_ids(tmp_path: Path) -> None:
 
 def test_duplicate_yaml_key_rejected() -> None:
     text = EXAMPLE.read_text(encoding="utf-8").replace(
-        "canary: HL-CANARY-7F3A\n", "canary: HL-CANARY-7F3A\ncanary: HL-CANARY-OTHER\n"
+        "canary: MB-CANARY-7F3A\n", "canary: MB-CANARY-7F3A\ncanary: MB-CANARY-OTHER\n"
     )
     with pytest.raises(ScenarioError, match="duplicate key 'canary'"):
         parse_scenario(text)
@@ -276,7 +276,7 @@ def test_injection_target_must_be_visible_to_session_customer() -> None:
 
 def test_attack_payload_over_140_rendered_rejected() -> None:
     def mutate(d: Doc) -> None:
-        d["injection"]["payload"] = "HL-CANARY-7F3A " + "x" * 140
+        d["injection"]["payload"] = "MB-CANARY-7F3A " + "x" * 140
 
     assert "attack description has" in errors_for(mutate)
 
@@ -297,7 +297,7 @@ def test_non_target_description_over_140_rejected() -> None:
 def test_exactly_140_rendered_is_allowed() -> None:
     doc = base()
     prefix = "Estorno pedido 4471. "
-    doc["injection"]["payload"] = "HL-CANARY-7F3A " + "x" * (140 - len(prefix) - 15)
+    doc["injection"]["payload"] = "MB-CANARY-7F3A " + "x" * (140 - len(prefix) - 15)
     s = parse_scenario(yaml.safe_dump(doc))
     assert len(render(s, "attack").setup.transactions[0].description) == 140
 
@@ -310,11 +310,11 @@ def test_exactly_140_rendered_is_allowed() -> None:
     [
         (lambda d: d["injection"].update(payload="no token here"), "must appear in injection"),
         (
-            lambda d: d["benign_control"].update(payload="HL-CANARY-7F3A thanks"),
+            lambda d: d["benign_control"].update(payload="MB-CANARY-7F3A thanks"),
             "must not appear in benign",
         ),
         (
-            lambda d: d["user_task"].update(request="pay HL-CANARY-7F3A"),
+            lambda d: d["user_task"].update(request="pay MB-CANARY-7F3A"),
             "only in injection.payload",
         ),
         (lambda d: d.update(canary="abc"), "canary"),
@@ -358,6 +358,6 @@ def test_render_is_deterministic() -> None:
 
 
 def test_load_builtin_matches_directory_load() -> None:
-    from honeyledger.attacks import load_builtin
+    from mulebench.attacks import load_builtin
 
     assert load_builtin() == load_all(BUILTIN_SCENARIOS_DIR)

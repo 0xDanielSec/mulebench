@@ -48,11 +48,11 @@ the trace's guard decisions and never shown to the agent.
 
 ## Report
 
-`honeyledger run [<dir> | --builtin] --out report.json` writes a versioned JSON
+`mulebench run [<dir> | --builtin] --out report.json` writes a versioned JSON
 report (`schema_version: 1`). With no directory (or with `--builtin`) it runs the
-scenarios packaged with honeyledger, loaded via `importlib.resources`, so it
+scenarios packaged with mulebench, loaded via `importlib.resources`, so it
 also works from an installed wheel. Its JSON Schema is committed at `docs/report.schema.json`
-and regenerated with `uv run honeyledger schema --out docs/report.schema.json`;
+and regenerated with `uv run mulebench schema --out docs/report.schema.json`;
 a test fails if they drift.
 
 The report is deterministic: no wall-clock time, timestamps come from the

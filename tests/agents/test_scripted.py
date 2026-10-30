@@ -8,8 +8,8 @@ from typing import Literal
 
 import pytest
 
-import honeyledger.agents as agents_pkg
-from honeyledger.agents import (
+import mulebench.agents as agents_pkg
+from mulebench.agents import (
     AgentRun,
     AgentTask,
     NoteAuthorization,
@@ -18,11 +18,11 @@ from honeyledger.agents import (
     parse_session_note,
     render_session_note,
 )
-from honeyledger.agents.scripted import to_cents
-from honeyledger.attacks import BUILTIN_SCENARIOS_DIR, Scenario, load_scenario, render
-from honeyledger.ledger import Account, Customer, FixedClock, Ledger
-from honeyledger.tools import VULNERABLE, AlwaysApprove, Guard, ToolContext, hardened
-from honeyledger.tools.client import ToolClient
+from mulebench.agents.scripted import to_cents
+from mulebench.attacks import BUILTIN_SCENARIOS_DIR, Scenario, load_scenario, render
+from mulebench.ledger import Account, Customer, FixedClock, Ledger
+from mulebench.tools import VULNERABLE, AlwaysApprove, Guard, ToolContext, hardened
+from mulebench.tools.client import ToolClient
 
 SCENARIO = load_scenario(BUILTIN_SCENARIOS_DIR / "pix-description-injection-001.yaml")
 ATTACKER = "refund-desk@attacker.example.test"
@@ -197,7 +197,7 @@ class FakeClient(ToolClient):
         self.calls: list[tuple[str, dict[str, object]]] = []
 
     def call(self, tool: str, args: object) -> object:  # type: ignore[override]
-        from honeyledger.tools.client import ToolResult
+        from mulebench.tools.client import ToolResult
 
         assert isinstance(args, dict)
         self.calls.append((tool, args))
@@ -293,7 +293,7 @@ def test_session_note_ignores_noise() -> None:
 
 # ------------------------------------------------------------ import guard
 
-ALLOWED_PREFIXES = ("honeyledger.agents", "honeyledger.tools.client")
+ALLOWED_PREFIXES = ("mulebench.agents", "mulebench.tools.client")
 
 
 def test_agents_import_only_the_tool_client() -> None:
@@ -307,5 +307,5 @@ def test_agents_import_only_the_tool_client() -> None:
             elif isinstance(node, ast.ImportFrom) and node.module:
                 names = [node.module]
             for name in names:
-                if name == "honeyledger" or name.startswith("honeyledger."):
+                if name == "mulebench" or name.startswith("mulebench."):
                     assert name.startswith(ALLOWED_PREFIXES), f"{path.name} imports {name}"

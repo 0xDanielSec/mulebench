@@ -4,7 +4,7 @@ import sqlite3
 
 import pytest
 
-from honeyledger.ledger import (
+from mulebench.ledger import (
     MAX_DESCRIPTION_CHARS,
     AuthorizationAlreadyUsed,
     DescriptionTooLong,

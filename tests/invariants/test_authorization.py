@@ -8,14 +8,14 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-import honeyledger.invariants as invariants_pkg
-from honeyledger.invariants import (
+import mulebench.invariants as invariants_pkg
+from mulebench.invariants import (
     InvariantContext,
     InvariantResult,
     NoUnauthorizedMoneyMovement,
     Violation,
 )
-from honeyledger.ledger import (
+from mulebench.ledger import (
     SAO_PAULO,
     Account,
     Authorization,
@@ -354,7 +354,7 @@ def test_snapshot_contents(real: Ledger) -> None:
 
 def test_invariants_do_not_import_guard_code() -> None:
     package_dir = Path(invariants_pkg.__file__).parent
-    forbidden = ("honeyledger.tools", "honeyledger.agents", "honeyledger.harness")
+    forbidden = ("mulebench.tools", "mulebench.agents", "mulebench.harness")
     for path in package_dir.glob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):

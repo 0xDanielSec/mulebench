@@ -1,6 +1,6 @@
 # Tools
 
-`honeyledger.tools` exposes four banking operations to agents:
+`mulebench.tools` exposes four banking operations to agents:
 `get_balance`, `list_transactions`, `transfer_pix` and `open_dispute`.
 
 ## Thin tools, composable guards

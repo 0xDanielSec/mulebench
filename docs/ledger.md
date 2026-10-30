@@ -1,6 +1,6 @@
 # Ledger
 
-`honeyledger.ledger` is a SQLite-backed simulated core banking system. All data
+`mulebench.ledger` is a SQLite-backed simulated core banking system. All data
 in it is synthetic.
 
 ## Policy-free by design
@@ -10,7 +10,7 @@ It never checks who asked for an operation, whether the caller owns the source
 account, or whether a customer authorization exists. `transfer_pix` accepts an
 optional `authorization_id` and stores it, but does not validate it.
 
-Enforcement lives in the **tools layer** (`honeyledger.tools`). This lets the
+Enforcement lives in the **tools layer** (`mulebench.tools`). This lets the
 same ledger sit behind a vulnerable tool set or a hardened one. Invariants then
 judge the outcome from ledger state and traces, not from what the agent said.
 

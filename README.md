@@ -1,4 +1,4 @@
-# Honeyledger
+# Mulebench
 
 Open-source framework that tests whether AI agents used in financial services
 can be manipulated into violating financial invariants. Attack success is
@@ -23,15 +23,15 @@ so far.
   bank or employer data into scenarios.
 - **Test only agents you own or are explicitly authorized to test.** The
   scenarios target the bundled reference agent and your own agents running
-  against the simulated ledger. Honeyledger is not a tool for attacking real
+  against the simulated ledger. Mulebench is not a tool for attacking real
   systems.
 
 ## Quickstart
 
 ```bash
-git clone <repo-url> honeyledger && cd honeyledger
+git clone <repo-url> mulebench && cd mulebench
 uv sync
-uv run honeyledger run --out report.json   # packaged scenarios; or pass a directory
+uv run mulebench run --out report.json   # packaged scenarios; or pass a directory
 uv run pytest
 ```
 

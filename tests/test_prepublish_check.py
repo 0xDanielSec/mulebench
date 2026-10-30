@@ -75,7 +75,7 @@ def test_toml_table_header_is_not_a_domain(pc: ModuleType) -> None:
 
 
 def test_python_module_paths_are_not_domains(pc: ModuleType) -> None:
-    assert kinds(pc, "from honeyledger.ledger.models import Account  # ledger.py") == []
+    assert kinds(pc, "from mulebench.ledger.models import Account  # ledger.py") == []
 
 
 def test_forbidden_terms_case_insensitive(pc: ModuleType) -> None:

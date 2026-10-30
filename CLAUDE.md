@@ -1,4 +1,4 @@
-# Honeyledger
+# Mulebench
 
 Open-source framework that tests whether AI agents used in financial
 services can be manipulated into violating financial invariants.
@@ -17,7 +17,7 @@ ledger and on tool-call traces, NOT by an LLM opinion.
 - Ask before adding heavy dependencies or changing the architecture.
 
 ## Architecture
-src/honeyledger/
+src/mulebench/
   ledger/        # SQLite-backed simulated core banking: accounts, balances,
                  # daily limits, Pix-like transfers, disputes, audit log
   tools/         # business operations exposed to agents as plain Python

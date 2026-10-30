@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from honeyledger.ledger import (
+from mulebench.ledger import (
     SAO_PAULO,
     Account,
     AccountFrozen,

@@ -4,8 +4,8 @@ import inspect
 
 import pytest
 
-from honeyledger.ledger import Ledger
-from honeyledger.tools import (
+from mulebench.ledger import Ledger
+from mulebench.tools import (
     TOOLS,
     UNTRUSTED_KEY,
     VULNERABLE,

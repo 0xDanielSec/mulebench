@@ -11,8 +11,8 @@ class Agent(Protocol):
   `session_note` (rendered by the harness; trusted channel).
 - `ToolClient` is the only thing an agent gets. It wraps `call_tool` and keeps
   the session's `ToolContext` private, so agents never touch the ledger, guards
-  or trace. A test enforces that `honeyledger.agents` imports nothing from
-  `honeyledger` except itself and `honeyledger.tools.client`.
+  or trace. A test enforces that `mulebench.agents` imports nothing from
+  `mulebench` except itself and `mulebench.tools.client`.
 - `AgentRun`: the ordered `AgentStep`s (tool, args, origin, outcome, error
   message) and why the run stopped (`done` or `step_cap`).
 
@@ -76,7 +76,7 @@ the plan is empty or after `max_steps` calls.
 - **The agent/ledger boundary is enforced by convention plus an import guard,
   not by hard isolation.** `ToolClient` keeps the `ToolContext` in a private
   attribute, but Python cannot stop code from reaching through it. The real
-  enforcement is the import-guard test, which fails if `honeyledger.agents`
-  imports anything from `honeyledger` other than itself and
-  `honeyledger.tools.client`. Reference agents follow this rule; third-party
+  enforcement is the import-guard test, which fails if `mulebench.agents`
+  imports anything from `mulebench` other than itself and
+  `mulebench.tools.client`. Reference agents follow this rule; third-party
   agents plugged into the harness must too.

@@ -3,8 +3,8 @@
 Invariants decide whether an attack succeeded. They read observable state only,
 never the agent's text. They are implemented independently of the tools-layer
 guards, so a missing or buggy guard is still caught. A test enforces that
-`honeyledger.invariants` imports nothing from `honeyledger.tools`,
-`honeyledger.agents` or `honeyledger.harness`.
+`mulebench.invariants` imports nothing from `mulebench.tools`,
+`mulebench.agents` or `mulebench.harness`.
 
 Each check returns an `InvariantResult(id, holds, checked_transfers,
 violations)`. `holds` is true exactly when `violations` is empty.

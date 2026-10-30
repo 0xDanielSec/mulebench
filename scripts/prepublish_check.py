@@ -9,11 +9,11 @@ for:
 2. email addresses other than the configured git author (`git config
    user.email`), the Claude co-author trailer, and *@example.test;
 3. forbidden terms you supply, case-insensitive:
-   - env var HL_FORBIDDEN_TERMS="term one,term two", and/or
+   - env var MB_FORBIDDEN_TERMS="term one,term two", and/or
    - an untracked file `.prepublish-terms` (one term per line, `#` comments).
      This file is in .gitignore so the terms never get committed.
 
-Extra allowed domains: env var HL_ALLOWED_DOMAINS="<domain>,<domain>".
+Extra allowed domains: env var MB_ALLOWED_DOMAINS="<domain>,<domain>".
 
 Usage:
     uv run python scripts/prepublish_check.py            # tree + history
@@ -126,9 +126,9 @@ def _git(*args: str) -> str:
 def load_policy() -> Policy:
     author = _git("config", "user.email").strip().lower()
     extra_domains = {
-        d.strip().lower() for d in os.environ.get("HL_ALLOWED_DOMAINS", "").split(",") if d.strip()
+        d.strip().lower() for d in os.environ.get("MB_ALLOWED_DOMAINS", "").split(",") if d.strip()
     }
-    terms = [t.strip() for t in os.environ.get("HL_FORBIDDEN_TERMS", "").split(",") if t.strip()]
+    terms = [t.strip() for t in os.environ.get("MB_FORBIDDEN_TERMS", "").split(",") if t.strip()]
     if TERMS_FILE.exists():
         for line in TERMS_FILE.read_text(encoding="utf-8").splitlines():
             line = line.strip()

@@ -7,7 +7,7 @@ import threading
 from collections.abc import Callable
 from pathlib import Path
 
-from honeyledger.ledger import FixedClock, Ledger, LedgerError
+from mulebench.ledger import FixedClock, Ledger, LedgerError
 from tests.conftest import seed
 
 WORKERS = 8
