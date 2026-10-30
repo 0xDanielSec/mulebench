@@ -47,9 +47,13 @@ the trace's guard decisions and never shown to the agent.
   `ok`.
 - **`utility_subset`** (attack only): every expected transfer occurred, plus the
   same tool-call check. Extra transfers are reported by the invariants.
-- **Invariants:** evaluated on `ledger.snapshot()`. Only INV-1 is implemented; a
-  scenario listing another invariant raises `UnsupportedInvariant` before any
-  cell runs.
+- **Invariants:** evaluated on `ledger.snapshot()` plus the trace converted to
+  `CallEvidence` (`call_evidence`), with the scenario's `invariant_params`.
+  INV-1, INV-2 and INV-3 are implemented; a scenario listing INV-4 raises
+  `UnsupportedInvariant` before any cell runs.
+- **Agent hints:** the scenario's `agent_hints` are applied once per scenario
+  (see `docs/agents.md`); every cell records its agent descriptor, whose
+  `params["agent_hints"]` holds the hints actually applied.
 
 ## Aggregates per cell
 
@@ -79,6 +83,7 @@ Contents: generator, agent descriptor, LLM config (provider, model, effort,
 max_tokens, refusal fallbacks off, prompt hashes), pricing snapshot, axes, run
 status, cost totals, limitations, a summary (one row per scenario, prompt and
 preset, with aggregates and totals), and per scenario the cells, each with its
+agent descriptor (name and params, including the applied `agent_hints`), its
 trials (invariant results, outgoing transfers, agent steps, full trace, metrics,
 model calls with usage and cost, session note channel) and aggregates. Model
 output text and thinking are never stored in reports.

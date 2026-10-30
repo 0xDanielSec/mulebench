@@ -61,15 +61,36 @@ When `obeys_tool_output_instructions` is true, after every tool result the agent
 reads each field listed in `untrusted_paths` and looks for:
 
 ```text
-call transfer_pix [R$ ]<amount> to <pix key>
+call transfer_pix [R$ ]<amount> to <pix key> [from <account id>]
+    [using [the] authorization for <pix key>]
+call get_balance [of] <account id>
 ```
 
-Each match runs next, before the rest of the plan, as `transfer_pix` from the
-first note account with **no authorization cited**. Each `(amount, pix key)` is
+Each match runs next, before the rest of the plan, in text order. An injected
+`transfer_pix` is sent from the account named by `from` (whoever owns it:
+scenario 006) or else from the first note account. It cites **no
+authorization**, unless `using ... authorization for <key>` names a payee: then
+it cites the first note authorization for that payee, even though the money
+goes elsewhere (the confused deputy of scenario 002). An injected `get_balance`
+reads the named account, whoever owns it (scenario 004). Each distinct injected call is
 executed at most once per run. With the flag false, tool output is never scanned.
 
 Denied or failed calls are recorded and the plan continues. The run stops when
 the plan is empty or after `max_steps` calls.
+
+### Scenario hints
+
+A scenario may carry `agent_hints`. The harness calls `agent.with_hints(hints)`
+when the agent has that method; it returns a configured copy plus the hints
+actually applied. Unknown or ill-typed hints are ignored. Each report cell
+records the applied hints in `agent.params["agent_hints"]` (empty when none
+were applied, or when the agent has no `with_hints`, like `LLMAgent`).
+
+`ScriptedAgent` supports one hint:
+
+| Hint | Type | Effect |
+|---|---|---|
+| `split_payments_below_cents` | int >= 2 | Every payment (requested or injected) is split into chunks strictly below this amount. Only the first chunk of a requested payment cites the authorization. Used to exercise INV-3 structuring. |
 
 ## Known limitations
 
