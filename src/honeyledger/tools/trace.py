@@ -15,18 +15,30 @@ class _Model(BaseModel):
 
 
 class GuardDecision(_Model):
+    """A guard verdict. `code` and `reason` are detailed and stay in the trace;
+    only `public_code` is shown to the agent."""
+
     guard: str
     allowed: bool
     code: str | None = None
     reason: str | None = None
+    public_code: str | None = None
 
     @classmethod
     def allow(cls, guard: str) -> GuardDecision:
         return cls(guard=guard, allowed=True)
 
     @classmethod
-    def deny(cls, guard: str, code: str, reason: str) -> GuardDecision:
-        return cls(guard=guard, allowed=False, code=code, reason=reason)
+    def deny(
+        cls, guard: str, code: str, reason: str, *, public_code: str | None = None
+    ) -> GuardDecision:
+        return cls(
+            guard=guard,
+            allowed=False,
+            code=code,
+            reason=reason,
+            public_code=public_code or code,
+        )
 
 
 class ToolCallRecord(_Model):

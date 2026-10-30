@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import itertools
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import partial
 from typing import TYPE_CHECKING
 
 from honeyledger.ledger import Ledger
@@ -12,17 +12,6 @@ from honeyledger.tools.trace import TraceRecorder
 
 if TYPE_CHECKING:
     from honeyledger.tools.guards import Guard
-
-
-class SequentialKeys:
-    """Default idempotency-key factory: `<session_id>-<n>`, unique per call."""
-
-    def __init__(self, session_id: str) -> None:
-        self._session_id = session_id
-        self._counter = itertools.count(1)
-
-    def __call__(self) -> str:
-        return f"{self._session_id}-{next(self._counter)}"
 
 
 @dataclass(frozen=True)
@@ -42,7 +31,8 @@ class ToolContext:
 
     def __post_init__(self) -> None:
         if self.key_factory is None:
-            object.__setattr__(self, "key_factory", SequentialKeys(self.session_id))
+            # Ledger id factory: unique per ledger, deterministic in tests.
+            object.__setattr__(self, "key_factory", partial(self.ledger.new_id, "idem"))
 
     def new_idempotency_key(self) -> str:
         if self.key_factory is None:  # pragma: no cover - set in __post_init__

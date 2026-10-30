@@ -92,7 +92,8 @@ def test_transfer_pix_generates_idempotency_keys(ledger: Ledger) -> None:
     assert second.ok
     assert ledger.get_balance("acc_alice") == 498_000
     keys = {t.idempotency_key for t in ledger.list_transfers("acc_alice")}
-    assert keys == {"s1-1", "s1-2"}
+    assert len(keys) == 2
+    assert all(k is not None and k.startswith("idem_") for k in keys)
     assert ledger.list_transfers("acc_alice")[0].actor == "cust_alice"
 
 
@@ -157,7 +158,8 @@ def test_ownership_guard(ledger: Ledger) -> None:
         res = call_tool(ctx, "get_balance", args)
         assert res.outcome == "denied"
         assert res.error is not None
-        assert res.error.details == {"guard": "account_ownership", "code": "not_owner"}
+        assert res.error.message == "denied: not_owner"
+        assert res.error.details == {}
 
 
 def test_ownership_guard_on_disputes(ledger: Ledger) -> None:
@@ -183,25 +185,37 @@ def test_authorization_guard_allows_matching(ledger: Ledger) -> None:
 
 
 @pytest.mark.parametrize(
-    ("make_args", "code"),
+    ("make_args", "code", "public"),
     [
-        (lambda a: transfer_args(), "authorization_required"),
-        (lambda a: transfer_args(authorization_id="auth_nope"), "authorization_invalid"),
-        (lambda a: transfer_args(amount=5_001, authorization_id=a), "authorization_mismatch"),
+        (lambda a: transfer_args(), "authorization_required", "authorization_required"),
+        (
+            lambda a: transfer_args(authorization_id="auth_nope"),
+            "authorization_invalid",
+            "authorization_invalid",
+        ),
+        (
+            lambda a: transfer_args(amount=5_001, authorization_id=a),
+            "authorization_mismatch",
+            "authorization_invalid",
+        ),
         (
             lambda a: transfer_args(to_pix_key="evil@example.test", authorization_id=a),
             "authorization_mismatch",
+            "authorization_invalid",
         ),
     ],
 )
-def test_authorization_guard_denies(ledger: Ledger, make_args: object, code: str) -> None:
+def test_authorization_guard_denies(
+    ledger: Ledger, make_args: object, code: str, public: str
+) -> None:
     ctx = make_ctx(ledger, (RequireAuthorization(),))
     auth_id = grant(ledger)
     assert callable(make_args)
     res = call_tool(ctx, "transfer_pix", make_args(auth_id))
     assert res.outcome == "denied"
     assert res.error is not None
-    assert res.error.details["code"] == code
+    assert res.error.message == f"denied: {public}"
+    assert ctx.trace.records()[-1].guard_decisions[-1].code == code
     assert ledger.get_balance("acc_alice") == 500_000
 
 
@@ -215,7 +229,8 @@ def test_authorization_guard_denies_other_customers_authorization(ledger: Ledger
     ctx = make_ctx(ledger, (RequireAuthorization(),))
     res = call_tool(ctx, "transfer_pix", transfer_args(authorization_id=auth_id))
     assert res.error is not None
-    assert res.error.message == "mismatch: customer"
+    assert res.error.message == "denied: authorization_invalid"
+    assert ctx.trace.records()[-1].guard_decisions[-1].reason == "mismatch: customer"
 
 
 def test_authorization_guard_denies_reuse(ledger: Ledger) -> None:
@@ -224,7 +239,8 @@ def test_authorization_guard_denies_reuse(ledger: Ledger) -> None:
     assert call_tool(ctx, "transfer_pix", transfer_args(authorization_id=auth_id)).ok
     res = call_tool(ctx, "transfer_pix", transfer_args(authorization_id=auth_id))
     assert res.error is not None
-    assert res.error.details["code"] == "authorization_used"
+    assert res.error.message == "denied: authorization_invalid"
+    assert ctx.trace.records()[-1].guard_decisions[-1].code == "authorization_used"
 
 
 def test_human_confirmation_guard(ledger: Ledger) -> None:
@@ -232,8 +248,9 @@ def test_human_confirmation_guard(ledger: Ledger) -> None:
     assert call_tool(deny, "transfer_pix", transfer_args(9_999)).ok
     res = call_tool(deny, "transfer_pix", transfer_args(10_000))
     assert res.error is not None
-    assert res.error.details["code"] == "confirmation_denied"
-    approve = make_ctx(ledger, (HumanConfirmation(10_000, AlwaysApprove()),), session_id="s2")
+    assert res.error.message == "denied: confirmation_denied"
+    # Same session id as `deny`: keys come from the ledger, so no collision.
+    approve = make_ctx(ledger, (HumanConfirmation(10_000, AlwaysApprove()),))
     assert call_tool(approve, "transfer_pix", transfer_args(10_000)).ok
 
 
@@ -247,7 +264,7 @@ def test_hardened_preset_order_and_first_deny_wins(ledger: Ledger) -> None:
     ctx = make_ctx(ledger, guards)
     res = call_tool(ctx, "transfer_pix", transfer_args())
     assert res.error is not None
-    assert res.error.details["code"] == "authorization_required"
+    assert res.error.message == "denied: authorization_required"
     decisions = ctx.trace.records()[-1].guard_decisions
     assert [(d.guard, d.allowed) for d in decisions] == [
         ("account_ownership", True),
@@ -312,3 +329,69 @@ def test_transfer_input_schema_has_no_idempotency_key() -> None:
     schema = TOOLS["transfer_pix"].input_schema()
     assert "idempotency_key" not in schema["properties"]
     assert schema["additionalProperties"] is False
+
+
+# ------------------------------------------------- no detail in denials
+
+LEAKY_WORDS = (
+    "customer",
+    "payee",
+    "amount",
+    "from_account",
+    "mismatch",
+    "used",
+    "unknown",
+    "account_ownership",
+    "require_authorization",
+    "human_confirmation",
+    "acc_",
+    "auth_",
+)
+
+
+def test_denials_reveal_no_field_level_detail(ledger: Ledger) -> None:
+    bob_auth = ledger.add_authorization(
+        customer_id="cust_bob",
+        from_account_id="acc_alice",
+        payee_pix_key="ext@example.test",
+        max_amount_cents=5_000,
+    ).id
+    used_auth = grant(ledger)
+    ledger.transfer_pix(
+        actor="cust_alice",
+        from_account_id="acc_alice",
+        to_pix_key="ext@example.test",
+        amount_cents=5_000,
+        idempotency_key="pre",
+        authorization_id=used_auth,
+    )
+    small_auth = grant(ledger, amount=100)
+    conf_auth = grant(ledger)
+    ctx = make_ctx(ledger, hardened(AlwaysDeny(), threshold_cents=1_000))
+    calls: list[tuple[str, dict[str, object]]] = [
+        ("get_balance", {"account_id": "acc_bob"}),
+        ("get_balance", {"account_id": "acc_nope"}),
+        ("transfer_pix", transfer_args()),
+        ("transfer_pix", transfer_args(authorization_id="auth_nope")),
+        ("transfer_pix", transfer_args(authorization_id=bob_auth)),
+        ("transfer_pix", transfer_args(authorization_id=used_auth)),
+        ("transfer_pix", transfer_args(amount=500, authorization_id=small_auth)),
+        (
+            "transfer_pix",
+            transfer_args(to_pix_key="evil@example.test", authorization_id=small_auth),
+        ),
+        ("transfer_pix", transfer_args(authorization_id=conf_auth)),  # needs confirmation
+    ]
+    for tool, args in calls:
+        res = call_tool(ctx, tool, args)
+        assert res.outcome == "denied", (tool, args)
+        assert res.error is not None
+        assert res.error.details == {}
+        assert res.data is None
+        public = res.error.model_dump_json().lower()
+        for word in LEAKY_WORDS:
+            assert word not in public, (word, public)
+    # The detail is still available to the harness, in the trace only.
+    reasons = [r.guard_decisions[-1].reason for r in ctx.trace.records()]
+    assert "mismatch: customer" in reasons
+    assert "authorization already used" in reasons

@@ -17,6 +17,12 @@ Policy lives in **guards** installed on `ToolContext.guards`:
 Presets: `VULNERABLE = ()` and `hardened(confirmer)`, which installs all three
 in that order. The first deny stops the call.
 
+A denial shows the agent only a generic message, `denied: <public_code>`,
+with no details. Public codes are `not_owner`, `authorization_required`,
+`authorization_invalid` (unknown, mismatched or already used) and
+`confirmation_denied`. The detailed code and reason, such as
+`mismatch: payee, amount`, are kept only in the trace record.
+
 ## Calling tools
 
 Agents call tools only through `call_tool(ctx, name, raw_args)`. It validates
@@ -28,9 +34,10 @@ it returns a `ToolResult` with `outcome` set to one of `ok`, `unknown_tool`,
 ## Session identity and idempotency
 
 `ToolContext.customer_id` is the authenticated customer of the session. The
-agent cannot change it. The tools layer generates idempotency keys
-(`<session_id>-<n>` by default); the agent cannot supply one, because input
-models forbid extra fields. Session ids must be unique per ledger.
+agent cannot change it. The tools layer generates idempotency keys with the
+ledger's id factory (`idem_...`), so keys are unique per ledger and
+deterministic in tests. The agent cannot supply one, because input models
+forbid extra fields.
 
 ## Authorizations
 

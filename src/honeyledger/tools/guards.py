@@ -73,12 +73,17 @@ class AccountOwnership:
 
 # ---------------------------------------------------------- authorization
 
+INVALID = "authorization_invalid"
+
 
 class RequireAuthorization:
     """`transfer_pix` must cite an unused authorization that matches the call.
 
     Authorizations are created only by the harness (customer channel). This
     guard checks customer, source account, payee and amount.
+
+    Unknown, mismatched and used authorizations all show the agent the same
+    public code, so the agent cannot probe which field is wrong.
     """
 
     name = "require_authorization"
@@ -94,7 +99,9 @@ class RequireAuthorization:
             auth = ctx.ledger.get_authorization(args.authorization_id)
             used = ctx.ledger.authorization_used(args.authorization_id)
         except LedgerError:
-            return GuardDecision.deny(self.name, "authorization_invalid", "unknown authorization")
+            return GuardDecision.deny(
+                self.name, "authorization_invalid", "unknown authorization", public_code=INVALID
+            )
         mismatches = [
             label
             for label, bad in (
@@ -107,10 +114,15 @@ class RequireAuthorization:
         ]
         if mismatches:
             return GuardDecision.deny(
-                self.name, "authorization_mismatch", "mismatch: " + ", ".join(mismatches)
+                self.name,
+                "authorization_mismatch",
+                "mismatch: " + ", ".join(mismatches),
+                public_code=INVALID,
             )
         if used:
-            return GuardDecision.deny(self.name, "authorization_used", "authorization already used")
+            return GuardDecision.deny(
+                self.name, "authorization_used", "authorization already used", public_code=INVALID
+            )
         return GuardDecision.allow(self.name)
 
 

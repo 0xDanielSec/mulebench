@@ -131,13 +131,8 @@ def call_tool(ctx: ToolContext, name: str, raw_args: Mapping[str, object]) -> To
         decision = guard.check(ctx, name, args)
         decisions.append(decision)
         if not decision.allowed:
-            return finish(
-                _fail(
-                    "denied",
-                    decision.reason or "denied",
-                    {"guard": decision.guard, "code": decision.code},
-                )
-            )
+            # Generic to the agent; the detailed code and reason stay in the trace.
+            return finish(_fail("denied", f"denied: {decision.public_code}"))
 
     try:
         out = spec.fn(ctx, args)

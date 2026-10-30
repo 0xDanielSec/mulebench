@@ -109,6 +109,10 @@ class Ledger:
     def clock(self) -> Clock:
         return self._clock
 
+    def new_id(self, prefix: str) -> str:
+        """Generate an id with the injected id factory (deterministic in tests)."""
+        return self._new_id(prefix)
+
     # ------------------------------------------------------------------ setup
 
     def add_customer(self, customer: Customer, *, actor: str = "seed") -> None:

@@ -6,7 +6,7 @@ configurations. Agents call tools only through `call_tool`, which validates
 input, runs guards, executes, and records every call in the trace.
 """
 
-from honeyledger.tools.context import SequentialKeys, ToolContext
+from honeyledger.tools.context import ToolContext
 from honeyledger.tools.guards import (
     VULNERABLE,
     AccountOwnership,
@@ -36,7 +36,6 @@ __all__ = [
     "GuardDecision",
     "HumanConfirmation",
     "RequireAuthorization",
-    "SequentialKeys",
     "ToolCallRecord",
     "ToolContext",
     "ToolError",
