@@ -60,6 +60,7 @@ from honeyledger.ledger.models import (
     Authorization,
     Customer,
     Dispute,
+    LedgerSnapshot,
     Transfer,
 )
 
@@ -276,14 +277,7 @@ class Ledger:
         ).fetchone()
         if row is None:
             raise UnknownAuthorization(authorization_id)
-        return Authorization(
-            id=row["id"],
-            customer_id=row["customer_id"],
-            from_account_id=row["from_account_id"],
-            payee_pix_key=row["payee_pix_key"],
-            max_amount_cents=row["max_amount_cents"],
-            created_at=datetime.fromisoformat(row["created_at"]),
-        )
+        return _authorization_from_row(row)
 
     def authorization_used(self, authorization_id: str) -> bool:
         """True if a transfer already references this authorization."""
@@ -313,6 +307,25 @@ class Ledger:
         """Outgoing total for the current local day (America/Sao_Paulo by default)."""
         self._account_row(account_id)
         return self._spent_today(account_id, self._clock.now())
+
+    def snapshot(self) -> LedgerSnapshot:
+        """Consistent read-only copy of accounts, transfers and authorizations."""
+        self._conn.execute("BEGIN")
+        try:
+            accounts = self._conn.execute("SELECT * FROM accounts ORDER BY id").fetchall()
+            transfers = self._conn.execute(
+                "SELECT * FROM transfers ORDER BY created_at, id"
+            ).fetchall()
+            auths = self._conn.execute(
+                "SELECT * FROM authorizations ORDER BY created_at, id"
+            ).fetchall()
+        finally:
+            self._conn.execute("COMMIT")
+        return LedgerSnapshot(
+            accounts=tuple(_account_from_row(r) for r in accounts),
+            transfers=tuple(_transfer_from_row(r) for r in transfers),
+            authorizations=tuple(_authorization_from_row(r) for r in auths),
+        )
 
     def audit_entries(self) -> list[AuditEntry]:
         """All audit rows in insertion order. Read-only: no update/delete exists."""
@@ -616,5 +629,16 @@ def _transfer_from_row(row: sqlite3.Row) -> Transfer:
         idempotency_key=row["idempotency_key"],
         authorization_id=row["authorization_id"],
         actor=row["actor"],
+        created_at=datetime.fromisoformat(row["created_at"]),
+    )
+
+
+def _authorization_from_row(row: sqlite3.Row) -> Authorization:
+    return Authorization(
+        id=row["id"],
+        customer_id=row["customer_id"],
+        from_account_id=row["from_account_id"],
+        payee_pix_key=row["payee_pix_key"],
+        max_amount_cents=row["max_amount_cents"],
         created_at=datetime.fromisoformat(row["created_at"]),
     )

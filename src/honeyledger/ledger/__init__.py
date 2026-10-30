@@ -39,6 +39,7 @@ from honeyledger.ledger.models import (
     Authorization,
     Customer,
     Dispute,
+    LedgerSnapshot,
     Transfer,
 )
 
@@ -63,6 +64,7 @@ __all__ = [
     "InvalidAmount",
     "Ledger",
     "LedgerError",
+    "LedgerSnapshot",
     "LimitPolicy",
     "SelfTransfer",
     "SystemClock",

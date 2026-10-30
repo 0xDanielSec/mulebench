@@ -80,3 +80,11 @@ class Authorization(_Frozen):
     payee_pix_key: str
     max_amount_cents: int = Field(gt=0)
     created_at: datetime
+
+
+class LedgerSnapshot(_Frozen):
+    """Read-only copy of ledger state, the input to invariant checks."""
+
+    accounts: tuple[Account, ...]
+    transfers: tuple[Transfer, ...]
+    authorizations: tuple[Authorization, ...]
