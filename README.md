@@ -5,9 +5,26 @@ can be manipulated into violating financial invariants. Attack success is
 judged by observable effects on a simulated ledger and tool-call traces, not by
 an LLM opinion. All data is synthetic.
 
-Status: work in progress (Week 1).
-
 License: Apache-2.0.
+
+## Project status
+
+**Week 1 MVP.** The scripted reference agent validates the harness, not
+real-model vulnerability. It obeys instructions found in tool output by
+construction, so its results show that the ledger, guards, trace and
+invariants detect and block an unauthorized transfer. They say nothing about
+how any real model behaves. Only one scenario and one invariant (INV-1) exist
+so far.
+
+## Responsible use
+
+- **Synthetic data only.** Every customer, account, tax id and pix key is
+  invented (`SYNTHETIC-0001`, `*@example.test`). Do not load real customer,
+  bank or employer data into scenarios.
+- **Test only agents you own or are explicitly authorized to test.** The
+  scenarios target the bundled reference agent and your own agents running
+  against the simulated ledger. Honeyledger is not a tool for attacking real
+  systems.
 
 ## Quickstart
 
@@ -39,3 +56,16 @@ found in tool output **by construction**. The demo validates the harness (the
 ledger, guards, trace and invariants), not the vulnerability of any real model.
 The same agent is run against `VULNERABLE` and hardened tool guards to show
 before/after.
+
+## Roadmap
+
+- Invariants 2-4: customer isolation, limits including structuring, human
+  confirmation for high-risk actions.
+- More injection channels: payee name, dispute reason, KYC document text,
+  support tickets.
+- An LLM-backed reference agent and an MCP wrapper for the tools.
+- HTML and SARIF reports.
+- A CI gate on the hardened preset or a user's real agent (never on the
+  vulnerable control).
+- Review of the OWASP Agentic, LGPD and BACEN Res. 4.893 mappings (currently
+  marked "to be reviewed").
