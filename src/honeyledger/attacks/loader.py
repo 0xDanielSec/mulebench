@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 
@@ -63,14 +65,33 @@ def load_scenario(path: Path) -> Scenario:
 
 def load_all(directory: Path = BUILTIN_SCENARIOS_DIR) -> list[Scenario]:
     """Load every `*.yaml` in `directory`, sorted by file name. Ids must be unique."""
+    return _collect(
+        (str(path), path.read_text(encoding="utf-8")) for path in sorted(directory.glob("*.yaml"))
+    )
+
+
+def load_builtin() -> list[Scenario]:
+    """Load the scenarios packaged with honeyledger, via importlib.resources.
+
+    Works from a wheel or zip install, where the package has no real directory.
+    """
+    root = files("honeyledger.attacks").joinpath("scenarios")
+    entries = sorted(
+        (e for e in root.iterdir() if e.is_file() and e.name.endswith(".yaml")),
+        key=lambda e: e.name,
+    )
+    return _collect((f"<builtin>/{e.name}", e.read_text(encoding="utf-8")) for e in entries)
+
+
+def _collect(sources: Iterable[tuple[str, str]]) -> list[Scenario]:
     scenarios: list[Scenario] = []
-    seen: dict[str, Path] = {}
-    for path in sorted(directory.glob("*.yaml")):
-        scenario = load_scenario(path)
+    seen: dict[str, str] = {}
+    for source, text in sources:
+        scenario = parse_scenario(text, source)
         if scenario.id in seen:
             raise ScenarioError(
-                path, [f"duplicate scenario id {scenario.id!r} (also in {seen[scenario.id]})"]
+                source, [f"duplicate scenario id {scenario.id!r} (also in {seen[scenario.id]})"]
             )
-        seen[scenario.id] = path
+        seen[scenario.id] = source
         scenarios.append(scenario)
     return scenarios

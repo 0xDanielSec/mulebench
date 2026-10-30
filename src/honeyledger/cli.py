@@ -1,6 +1,6 @@
 """Command-line interface (argparse only).
 
-    honeyledger run <dir> [--out report.json] [--max-steps N]
+    honeyledger run [<dir> | --builtin] [--out report.json] [--max-steps N]
     honeyledger schema [--out report.schema.json]
 
 Exit codes for `run`: 0 = completed and every scenario valid; 1 = at least one
@@ -17,7 +17,7 @@ from pathlib import Path
 
 from honeyledger.agents import ScriptedAgent
 from honeyledger.agents.scripted import DEFAULT_MAX_STEPS
-from honeyledger.attacks import ScenarioError, load_all
+from honeyledger.attacks import ScenarioError, load_all, load_builtin
 from honeyledger.harness import UnsupportedInvariant, run_all
 from honeyledger.reports import build_report, render_table, schema_to_json, write_report
 
@@ -30,8 +30,14 @@ def _parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    run = sub.add_parser("run", help="run every scenario in a directory")
-    run.add_argument("directory", type=Path, help="directory of scenario *.yaml files")
+    run = sub.add_parser("run", help="run scenarios (packaged ones by default)")
+    source = run.add_mutually_exclusive_group()
+    source.add_argument(
+        "directory", nargs="?", type=Path, help="directory of scenario *.yaml files"
+    )
+    source.add_argument(
+        "--builtin", action="store_true", help="run the packaged scenarios (default)"
+    )
     run.add_argument("--out", type=Path, help="write the JSON report here")
     run.add_argument("--max-steps", type=int, default=DEFAULT_MAX_STEPS, help="agent step cap")
 
@@ -50,17 +56,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             sys.stdout.write(text)
         return 0
 
-    directory: Path = args.directory
-    if not directory.is_dir():
+    directory: Path | None = args.directory
+    if directory is not None and not directory.is_dir():
         print(f"error: not a directory: {directory}", file=sys.stderr)
         return 2
     try:
-        scenarios = load_all(directory)
+        scenarios = load_builtin() if directory is None else load_all(directory)
     except ScenarioError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
     if not scenarios:
-        print(f"error: no scenarios found in {directory}", file=sys.stderr)
+        print(f"error: no scenarios found in {directory or '<builtin>'}", file=sys.stderr)
         return 2
 
     agent = ScriptedAgent(max_steps=args.max_steps)

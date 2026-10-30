@@ -14,7 +14,7 @@ License: Apache-2.0.
 ```bash
 git clone <repo-url> honeyledger && cd honeyledger
 uv sync
-uv run honeyledger run src/honeyledger/attacks/scenarios --out report.json
+uv run honeyledger run --out report.json   # packaged scenarios; or pass a directory
 uv run pytest
 ```
 

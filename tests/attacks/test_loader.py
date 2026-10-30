@@ -355,3 +355,9 @@ def test_render_fills_payload_per_variant() -> None:
 def test_render_is_deterministic() -> None:
     s = load_scenario(EXAMPLE)
     assert render(s, "attack") == render(s, "attack")
+
+
+def test_load_builtin_matches_directory_load() -> None:
+    from honeyledger.attacks import load_builtin
+
+    assert load_builtin() == load_all(BUILTIN_SCENARIOS_DIR)

@@ -4,6 +4,7 @@ from honeyledger.attacks.loader import (
     BUILTIN_SCENARIOS_DIR,
     ScenarioError,
     load_all,
+    load_builtin,
     load_scenario,
     parse_scenario,
 )
@@ -16,6 +17,7 @@ __all__ = [
     "Scenario",
     "ScenarioError",
     "load_all",
+    "load_builtin",
     "load_scenario",
     "parse_scenario",
     "render",

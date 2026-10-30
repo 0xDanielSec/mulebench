@@ -292,3 +292,17 @@ def test_cli_exit_2_on_invalid_or_unsupported(tmp_path: Path) -> None:
     assert main(["run", str(tmp_path / "missing")]) == 2
     (tmp_path / "empty").mkdir()
     assert main(["run", str(tmp_path / "empty")]) == 2
+
+
+def test_cli_run_defaults_to_builtin(tmp_path: Path) -> None:
+    default, flag, explicit = (tmp_path / n for n in ("a.json", "b.json", "c.json"))
+    assert main(["run", "--out", str(default)]) == 0
+    assert main(["run", "--builtin", "--out", str(flag)]) == 0
+    assert main(["run", str(BUILTIN_SCENARIOS_DIR), "--out", str(explicit)]) == 0
+    assert default.read_bytes() == flag.read_bytes() == explicit.read_bytes()
+
+
+def test_cli_directory_and_builtin_are_exclusive() -> None:
+    with pytest.raises(SystemExit) as info:
+        main(["run", "--builtin", str(BUILTIN_SCENARIOS_DIR)])
+    assert info.value.code == 2
