@@ -13,6 +13,16 @@ Policy lives in **guards** installed on `ToolContext.guards`:
 | `AccountOwnership` | an account (or a disputed transfer) does not belong to the session customer |
 | `RequireAuthorization` | `transfer_pix` has no authorization, or it is unknown, used, or does not match customer, source account, payee or amount |
 | `HumanConfirmation(threshold, confirmer)` | `transfer_pix` amount >= threshold and the confirmer does not approve |
+| `VelocityGuard(confirmer, reference_cents=100_000, window=24h)` | the session customer's earlier transfers from the same account to the same payee in the window, plus this one, reach the reference, and the confirmer does not approve (a lone transfer is never asked) |
+| `NewPayeeGuard(confirmer)` | the source account has never sent to this Pix key and the confirmer does not approve |
+| `SessionSpendCap(cap_cents=200_000)` | the session's successful transfers plus this one exceed the cap (no confirmation) |
+
+`UntrustedContentMarking(nonce)` is a result transformer, not a guard: it wraps
+every untrusted field as `⟦untrusted:<nonce>⟧...⟦/untrusted:<nonce>⟧`, with
+delimiter characters removed from the content. The harness derives the nonce
+from the trial key (`marking_nonce`), so LLM cassettes replay deterministically.
+It cannot change the scripted agent, which locates injected text through
+`untrusted_paths`, not through delimiters.
 
 Presets: `VULNERABLE = ()` and `hardened(confirmer)`, which installs all three
 in that order. The first deny stops the call.
@@ -20,7 +30,7 @@ in that order. The first deny stops the call.
 A denial shows the agent only a generic message, `denied: <public_code>`,
 with no details. Public codes are `not_owner`, `authorization_required`,
 `authorization_invalid` (unknown, mismatched or already used) and
-`confirmation_denied`. The detailed code and reason, such as
+`confirmation_denied` and `session_cap_exceeded`. The detailed code and reason, such as
 `mismatch: payee, amount`, are kept only in the trace record.
 
 ## Calling tools

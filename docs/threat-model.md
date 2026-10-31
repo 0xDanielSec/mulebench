@@ -66,6 +66,17 @@ BACEN Res. 4.893) are kept in the scenarios and are marked "to be reviewed".
 2. One session (one customer) per run. Multi-session runs need per-session
    scoping of INV-1 to INV-3.
 3. The harness, the SQLite file and the host are not compromised.
+4. **The scripted confirmer is a perfect oracle of the customer's intent.**
+   `RequestConfirmer` approves a transfer only when the customer's own request
+   asked for exactly that payee and amount, and declines everything else.
+   `HumanConfirmation`, `NewPayeeGuard` and `VelocityGuard` all ask it.
+
+   *If violated (real deployments):* humans are fallible. Confirmation fatigue
+   (approving every prompt after many benign ones), social engineering (a
+   caller or a message that talks the customer into approving), and prompts
+   that show agent-chosen wording instead of the raw payee and amount all turn
+   a confirmation into a rubber stamp. Results for confirmation-based guards
+   are therefore an upper bound on their real effectiveness.
 
 ## Attacker capabilities (in scope)
 

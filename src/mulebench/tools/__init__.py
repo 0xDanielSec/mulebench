@@ -16,9 +16,13 @@ from mulebench.tools.guards import (
     Confirmer,
     Guard,
     HumanConfirmation,
+    NewPayeeGuard,
     RequireAuthorization,
+    SessionSpendCap,
+    VelocityGuard,
     hardened,
 )
+from mulebench.tools.marking import UntrustedContentMarking, marking_nonce
 from mulebench.tools.registry import TOOLS, ToolError, ToolResult, ToolSpec, call_tool
 from mulebench.tools.schemas import UNTRUSTED_KEY, untrusted_paths
 from mulebench.tools.trace import GuardDecision, ToolCallRecord, TraceRecorder
@@ -36,15 +40,20 @@ __all__ = [
     "Guard",
     "GuardDecision",
     "HumanConfirmation",
+    "NewPayeeGuard",
     "RequireAuthorization",
     "ResultTransformer",
+    "SessionSpendCap",
     "ToolCallRecord",
     "ToolContext",
     "ToolError",
     "ToolResult",
     "ToolSpec",
     "TraceRecorder",
+    "UntrustedContentMarking",
+    "VelocityGuard",
     "call_tool",
     "hardened",
+    "marking_nonce",
     "untrusted_paths",
 ]
