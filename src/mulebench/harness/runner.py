@@ -30,6 +30,7 @@ from mulebench.harness.models import (
     TrialResult,
     Variant,
 )
+from mulebench.harness.presets import build_guard_set, preset_guard_names
 from mulebench.harness.seed import seed_cell
 from mulebench.harness.stats import wilson
 from mulebench.invariants import (
@@ -42,7 +43,7 @@ from mulebench.invariants import (
     NoUnauthorizedMoneyMovement,
 )
 from mulebench.ledger import FixedClock, LedgerSnapshot
-from mulebench.tools import VULNERABLE, Guard, ToolCallRecord, ToolContext, hardened
+from mulebench.tools import ToolCallRecord, ToolContext
 from mulebench.tools.client import ToolClient, ToolResult
 
 INVARIANTS: Mapping[str, Invariant] = {
@@ -81,12 +82,6 @@ class RunOutcome:
     abort_reason: str | None = None
 
 
-def guards_for(preset: Preset, request: str) -> tuple[Guard, ...]:
-    if preset == "vulnerable":
-        return VULNERABLE
-    return hardened(RequestConfirmer(request))
-
-
 def trial_key(scenario_id: str, prompt_variant: str, preset: str, variant: str, trial: int) -> str:
     return f"{scenario_id}/{prompt_variant}/{preset}/{variant}/t{trial:03d}"
 
@@ -97,11 +92,14 @@ def run_all(
     *,
     prompt_variants: Sequence[str] = (NO_PROMPT,),
     trials: int = 1,
+    presets: Sequence[Preset] = PRESETS,
 ) -> RunOutcome:
     """Run every scenario. A RunAborted (e.g. cost cap) stops the run; finished
     trials are kept and the outcome is marked aborted."""
     if trials < 1:
         raise ValueError("trials must be >= 1")
+    for p in presets:
+        preset_guard_names(p)  # raises UnknownPreset before any trial runs
     ordered = sorted(scenarios, key=lambda s: s.id)
     for s in ordered:
         _check_invariants(s)
@@ -111,7 +109,7 @@ def run_all(
         cell_agent, descriptor = apply_hints(agent, s.agent_hints)
         try:
             for prompt in prompt_variants:
-                for preset in PRESETS:
+                for preset in presets:
                     for variant in VARIANTS:
                         done: list[TrialResult] = []
                         try:
@@ -135,8 +133,11 @@ def run_scenario(
     *,
     prompt_variants: Sequence[str] = (NO_PROMPT,),
     trials: int = 1,
+    presets: Sequence[Preset] = PRESETS,
 ) -> ScenarioResult:
-    outcome = run_all([scenario], agent, prompt_variants=prompt_variants, trials=trials)
+    outcome = run_all(
+        [scenario], agent, prompt_variants=prompt_variants, trials=trials, presets=presets
+    )
     if outcome.status != "complete":
         raise RunAborted(outcome.abort_reason or "aborted")
     return outcome.results[0]
@@ -187,11 +188,13 @@ def run_trial(
     ledger, clock, note = seed_cell(scenario, render(scenario, variant))
     customer = scenario.user_task.customer
     request = scenario.user_task.request
+    guard_set = build_guard_set(preset, RequestConfirmer(request), key)
     ctx = ToolContext(
         customer_id=customer,
         session_id=key,
         ledger=ledger,
-        guards=guards_for(preset, request),
+        guards=guard_set.guards,
+        transformers=guard_set.transformers,
     )
     task = AgentTask(
         customer_id=customer,

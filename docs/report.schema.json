@@ -129,10 +129,6 @@
         },
         "presets": {
           "items": {
-            "enum": [
-              "vulnerable",
-              "hardened"
-            ],
             "type": "string"
           },
           "title": "Presets",
@@ -238,10 +234,6 @@
           "type": "string"
         },
         "preset": {
-          "enum": [
-            "vulnerable",
-            "hardened"
-          ],
           "title": "Preset",
           "type": "string"
         },
@@ -796,10 +788,6 @@
           "type": "string"
         },
         "preset": {
-          "enum": [
-            "vulnerable",
-            "hardened"
-          ],
           "title": "Preset",
           "type": "string"
         },

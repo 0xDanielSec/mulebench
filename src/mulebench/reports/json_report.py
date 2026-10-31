@@ -55,12 +55,13 @@ def build_report(
     trials: int = 1,
     llm: LLMConfig | None = None,
     pricing: PricingInfo | None = None,
+    presets: Sequence[str] = PRESETS,
 ) -> Report:
     results = sorted(outcome.results, key=lambda r: r.scenario_id)
     rows: list[SummaryRow] = []
     for s in results:
         for prompt in prompt_variants:
-            for preset in PRESETS:
+            for preset in presets:
                 attack = _find(s, prompt, preset, "attack")
                 benign = _find(s, prompt, preset, "benign")
                 if attack is None and benign is None:
@@ -98,7 +99,7 @@ def build_report(
         pricing=pricing,
         axes=Axes(
             prompt_variants=list(prompt_variants),
-            presets=list(PRESETS),
+            presets=list(presets),
             variants=list(VARIANTS),
             trials_per_cell=trials,
         ),

@@ -28,6 +28,7 @@ from mulebench.agents.scripted import DEFAULT_MAX_STEPS
 from mulebench.attacks import ScenarioError, load_all, load_builtin
 from mulebench.harness import NO_PROMPT, UnsupportedInvariant, run_all
 from mulebench.harness.models import LLMConfig, PricingInfo
+from mulebench.harness.presets import DEFAULT_PRESETS, UnknownPreset, preset_guard_names
 from mulebench.reports import build_report, render_table, schema_to_json, write_report
 
 DEFAULT_LLM_TRIALS = 10
@@ -55,6 +56,14 @@ def _parser() -> argparse.ArgumentParser:
         "--trials", type=int, help=f"trials per cell (scripted: 1, llm: {DEFAULT_LLM_TRIALS})"
     )
     run.add_argument("--max-steps", type=int, default=DEFAULT_MAX_STEPS, help="agent step cap")
+    run.add_argument(
+        "--preset",
+        action="append",
+        dest="presets",
+        metavar="NAME",
+        help="guard preset to run (repeatable; default: vulnerable and hardened). Names: "
+        "vulnerable, hardened, strict, none, all, only:<guard>, all-minus:<guard>",
+    )
     llm = run.add_argument_group("llm agent")
     llm.add_argument("--model", help="model id (required for --agent llm)")
     llm.add_argument("--effort", default="medium", help="output_config.effort (default medium)")
@@ -97,6 +106,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not scenarios:
         return _error(f"no scenarios found in {directory or '<builtin>'}")
 
+    presets: list[str] = args.presets or list(DEFAULT_PRESETS)
+    try:
+        for p in presets:
+            preset_guard_names(p)
+    except UnknownPreset as exc:
+        return _error(str(exc))
+
     llm_config: LLMConfig | None = None
     pricing: PricingInfo | None = None
     agent: Agent
@@ -115,14 +131,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     from mulebench.agents.llm.transport import CassetteMissing
 
     try:
-        outcome = run_all(scenarios, agent, prompt_variants=prompts, trials=trials)
+        outcome = run_all(scenarios, agent, prompt_variants=prompts, trials=trials, presets=presets)
     except UnsupportedInvariant as exc:
         return _error(str(exc))
     except (CassetteMissing, ModelRequestInvalid) as exc:
         return _error(str(exc))
 
     report = build_report(
-        outcome, agent, prompt_variants=prompts, trials=trials, llm=llm_config, pricing=pricing
+        outcome,
+        agent,
+        prompt_variants=prompts,
+        trials=trials,
+        llm=llm_config,
+        pricing=pricing,
+        presets=presets,
     )
     if args.out:
         write_report(report, args.out)

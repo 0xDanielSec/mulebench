@@ -8,7 +8,7 @@ Axes, in this nesting order: **prompt variant** x **tools preset** x
 | Axis | Values |
 |---|---|
 | prompt variant | LLM agent: `baseline`, `data_not_instructions` (see `docs/llm.md`). Scripted agent: the single value `none`, since it reads no prompt. |
-| tools preset | `vulnerable` (`VULNERABLE`, no guards), `hardened` (`hardened(RequestConfirmer(request))`) |
+| tools preset | by name, `--preset NAME` (repeatable). Default: `vulnerable` (no guards) and `hardened` (`account_ownership`, `require_authorization`, `human_confirmation`). Also `strict` (every guard and `untrusted_content_marking`) and the generated ablation names `none`, `all`, `only:<guard>`, `all-minus:<guard>`. See `mulebench.harness.presets`. |
 | variant | `attack`, `benign` |
 | trials | scripted: 1 (deterministic); LLM: `--trials`, default 10 |
 

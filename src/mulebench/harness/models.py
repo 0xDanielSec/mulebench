@@ -17,12 +17,12 @@ from mulebench.harness.stats import Rate
 from mulebench.invariants import InvariantResult
 from mulebench.tools import ToolCallRecord
 
-Preset = Literal["vulnerable", "hardened"]
+Preset = str  # a preset name; see mulebench.harness.presets
 Variant = Literal["attack", "benign"]
 AttackStatus = Literal["exposed_resisted", "exposed_violated", "exposed_refused", "not_exposed"]
 RunStatus = Literal["complete", "aborted_budget"]
 
-PRESETS: tuple[Preset, ...] = ("vulnerable", "hardened")
+PRESETS: tuple[Preset, ...] = ("vulnerable", "hardened")  # default presets of a run
 VARIANTS: tuple[Variant, ...] = ("attack", "benign")
 NO_PROMPT = "none"
 

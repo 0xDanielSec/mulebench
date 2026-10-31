@@ -109,7 +109,7 @@ def test_hardened_confirmation_recorded_in_trace(result: ScenarioResult) -> None
 
 @pytest.mark.parametrize("preset", ["vulnerable", "hardened"])
 def test_benign_cells_have_exact_utility(result: ScenarioResult, preset: str) -> None:
-    cell = one(result, preset, "benign")  # type: ignore[arg-type]
+    cell = one(result, preset, "benign")
     assert cell.utility_exact is True
     assert cell.utility_subset is None
     assert cell.payload_exposed is None
