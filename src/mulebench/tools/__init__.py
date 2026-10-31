@@ -22,6 +22,7 @@ from mulebench.tools.guards import (
 from mulebench.tools.registry import TOOLS, ToolError, ToolResult, ToolSpec, call_tool
 from mulebench.tools.schemas import UNTRUSTED_KEY, untrusted_paths
 from mulebench.tools.trace import GuardDecision, ToolCallRecord, TraceRecorder
+from mulebench.tools.transform import ResultTransformer
 
 __all__ = [
     "TOOLS",
@@ -36,6 +37,7 @@ __all__ = [
     "GuardDecision",
     "HumanConfirmation",
     "RequireAuthorization",
+    "ResultTransformer",
     "ToolCallRecord",
     "ToolContext",
     "ToolError",

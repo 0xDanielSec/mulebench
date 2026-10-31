@@ -967,6 +967,19 @@
           ],
           "title": "Result"
         },
+        "agent_result": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agent Result"
+        },
         "error": {
           "anyOf": [
             {

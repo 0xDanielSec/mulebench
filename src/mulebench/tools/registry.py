@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -97,11 +98,15 @@ class ToolResult(BaseModel):
 
 
 def call_tool(ctx: ToolContext, name: str, raw_args: Mapping[str, object]) -> ToolResult:
-    """Validate, run guards, execute, and record the call in `ctx.trace`."""
+    """Validate, run guards, execute, transform, and record the call in `ctx.trace`.
+
+    The trace stores the original result; the agent receives the result after
+    every transformer in `ctx.transformers` has run.
+    """
     args_record = _jsonable(dict(raw_args))
     decisions: list[GuardDecision] = []
 
-    def finish(result: ToolResult) -> ToolResult:
+    def finish(result: ToolResult, original: dict[str, object] | None = None) -> ToolResult:
         ctx.trace.record(
             ts=ctx.ledger.clock.now(),
             session_id=ctx.session_id,
@@ -109,7 +114,8 @@ def call_tool(ctx: ToolContext, name: str, raw_args: Mapping[str, object]) -> To
             tool=name,
             args=args_record,
             outcome=result.outcome,
-            result=result.data,
+            result=result.data if original is None else original,
+            agent_result=None if original is None else result.data,
             error=None if result.error is None else result.error.model_dump(),
             guard_decisions=decisions,
             untrusted_paths=result.untrusted_paths,
@@ -138,14 +144,13 @@ def call_tool(ctx: ToolContext, name: str, raw_args: Mapping[str, object]) -> To
     except LedgerError as exc:
         return finish(_fail("ledger_error", str(exc), exc.to_result()))
 
-    return finish(
-        ToolResult(
-            ok=True,
-            outcome="ok",
-            data=out.model_dump(mode="json"),
-            untrusted_paths=untrusted_paths(out),
-        )
-    )
+    data: dict[str, object] = out.model_dump(mode="json")
+    paths = untrusted_paths(out)
+    shown = data
+    for transformer in ctx.transformers:
+        shown = transformer.transform(ctx, name, copy.deepcopy(shown), list(paths))
+    result = ToolResult(ok=True, outcome="ok", data=shown, untrusted_paths=paths)
+    return finish(result, None if shown == data else data)
 
 
 def _fail(

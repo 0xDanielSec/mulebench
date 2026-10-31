@@ -55,6 +55,14 @@ schema: `TransactionView.description`, `TransactionView.counterparty_name` and
 `OpenDisputeOut.reason`. `untrusted_paths` lists where they occur in a concrete
 result, for example `transactions[0].description`.
 
+## Result transformers
+
+`ResultTransformer` (separate from `Guard`) rewrites the agent's view of a
+successful result; `ctx.transformers` run in order on a deep copy. The trace
+keeps both views: `result` is the ORIGINAL tool output, used by invariants and
+by payload-exposure detection; `agent_result` is what the agent saw, or `None`
+when no transformer changed anything. Failed calls are never transformed.
+
 Input and output JSON schemas come from the pydantic models
 (`ToolSpec.input_schema()`, `ToolSpec.output_schema()`), ready for a future MCP
 wrapper.

@@ -50,6 +50,9 @@ class ToolCallRecord(_Model):
     args: dict[str, object]
     outcome: CallOutcome
     result: dict[str, object] | None
+    # What the agent saw, when a result transformer changed it; None means the
+    # agent saw `result` unchanged. Invariants never read this field.
+    agent_result: dict[str, object] | None = None
     error: dict[str, object] | None
     guard_decisions: list[GuardDecision]
     untrusted_paths: list[str]
@@ -71,6 +74,7 @@ class TraceRecorder:
         args: dict[str, object],
         outcome: CallOutcome,
         result: dict[str, object] | None = None,
+        agent_result: dict[str, object] | None = None,
         error: dict[str, object] | None = None,
         guard_decisions: list[GuardDecision] | None = None,
         untrusted_paths: list[str] | None = None,
@@ -84,6 +88,7 @@ class TraceRecorder:
             args=args,
             outcome=outcome,
             result=result,
+            agent_result=agent_result,
             error=error,
             guard_decisions=guard_decisions or [],
             untrusted_paths=untrusted_paths or [],

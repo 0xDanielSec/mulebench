@@ -12,6 +12,7 @@ from mulebench.tools.trace import TraceRecorder
 
 if TYPE_CHECKING:
     from mulebench.tools.guards import Guard
+    from mulebench.tools.transform import ResultTransformer
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,7 @@ class ToolContext:
     session_id: str
     ledger: Ledger
     guards: tuple[Guard, ...] = ()
+    transformers: tuple[ResultTransformer, ...] = ()
     trace: TraceRecorder = field(default_factory=TraceRecorder)
     key_factory: Callable[[], str] | None = None
 
