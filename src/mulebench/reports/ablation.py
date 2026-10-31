@@ -44,7 +44,7 @@ from pydantic import BaseModel, ConfigDict
 import mulebench
 from mulebench.agents import Agent, ScriptedAgent
 from mulebench.attacks import Scenario
-from mulebench.harness import GUARD_NAMES, ablation_presets, run_all
+from mulebench.harness import GUARD_NAMES, GuardParams, ablation_presets, parse_preset, run_all
 from mulebench.harness.models import AgentDescriptor, ScenarioResult, TrialResult
 from mulebench.harness.workloads import WorkloadTrial, run_workloads
 from mulebench.workloads import Workload
@@ -120,6 +120,25 @@ class GuardFriction(_Model):
     denials_in_full_set: list[str]  # workloads where it denied a call under "all"
 
 
+CAP_SENSITIVITY_CENTS: tuple[int, ...] = (50_000, 100_000, 200_000, 500_000)
+CAP_SENSITIVITY_SETS: tuple[str, ...] = ("only:session_spend_cap", "all")
+
+
+class SensitivityPoint(_Model):
+    """One (guard set, cap) point: damage next to usability cost."""
+
+    preset: str  # full preset string, e.g. only:session_spend_cap@session_spend_cap=50000
+    guard_set: str
+    cap_cents: int | None  # None: the guard set has no cap (baseline)
+    unauthorized_outflow_cents: int
+    outflow_by_scenario: dict[str, int]
+    attacks_stopped: int
+    attacks: int
+    tasks_blocked: int
+    tasks: int
+    blocked_tasks: list[str]
+
+
 class AblationReport(_Model):
     kind: Literal["ablation"] = "ablation"
     schema_version: Literal[3] = 3
@@ -135,6 +154,7 @@ class AblationReport(_Model):
     workload_cells: list[WorkloadCell]
     summary: list[GuardSetSummary]
     friction: list[GuardFriction]
+    sensitivity: list[SensitivityPoint] = []
 
 
 def not_measurable_guards(agent: Agent) -> list[str]:
@@ -149,7 +169,56 @@ def run_ablation(
     if outcome.status != "complete":
         raise RuntimeError(f"ablation run aborted: {outcome.abort_reason}")
     trials = run_workloads(workloads, agent, sets)
-    return build_ablation(outcome.results, agent, sets, trials)
+    report = build_ablation(outcome.results, agent, sets, trials)
+    points = run_cap_sensitivity(scenarios, agent, workloads)
+    return report.model_copy(update={"sensitivity": points})
+
+
+def cap_sensitivity_presets(caps: Sequence[int] = CAP_SENSITIVITY_CENTS) -> list[str]:
+    """`none` as the baseline, then each cap for each guard set in
+    CAP_SENSITIVITY_SETS (`only:session_spend_cap` = all other guards removed)."""
+    return ["none"] + [
+        base + GuardParams(session_spend_cap=cap).suffix()
+        for base in CAP_SENSITIVITY_SETS
+        for cap in caps
+    ]
+
+
+def run_cap_sensitivity(
+    scenarios: Sequence[Scenario],
+    agent: Agent,
+    workloads: Sequence[Workload] = (),
+    caps: Sequence[int] = CAP_SENSITIVITY_CENTS,
+) -> list[SensitivityPoint]:
+    presets = cap_sensitivity_presets(caps)
+    outcome = run_all(scenarios, agent, presets=presets)
+    if outcome.status != "complete":
+        raise RuntimeError(f"sensitivity run aborted: {outcome.abort_reason}")
+    trials = run_workloads(workloads, agent, presets)
+    points = []
+    for preset in presets:
+        base, params = parse_preset(preset)
+        attack = {s.scenario_id: s.cell(preset, "attack").trials[0] for s in outcome.results}
+        blocked = sorted(t.workload_id for t in trials if t.guard_set == preset and not t.completed)
+        points.append(
+            SensitivityPoint(
+                preset=preset,
+                guard_set=base,
+                cap_cents=params.session_spend_cap,
+                unauthorized_outflow_cents=sum(
+                    t.unauthorized_outflow_cents for t in attack.values()
+                ),
+                outflow_by_scenario={
+                    sid: t.unauthorized_outflow_cents for sid, t in sorted(attack.items())
+                },
+                attacks_stopped=sum(t.status == "exposed_resisted" for t in attack.values()),
+                attacks=len(attack),
+                tasks_blocked=len(blocked),
+                tasks=len({t.workload_id for t in trials}),
+                blocked_tasks=blocked,
+            )
+        )
+    return points
 
 
 def build_ablation(
@@ -347,7 +416,39 @@ def render_ablation_markdown(report: AblationReport) -> str:
         lines += ["", "Not measurable with this agent: " + ", ".join(report.not_measurable)]
     if report.workloads:
         lines += ["", *_usability_markdown(report)]
+    if report.sensitivity:
+        lines += ["", *_sensitivity_markdown(report.sensitivity)]
     return "\n".join(lines)
+
+
+def _sensitivity_markdown(points: Sequence[SensitivityPoint]) -> list[str]:
+    scenarios = list(points[0].outflow_by_scenario)
+    lines = [
+        "Session spend cap sensitivity (`only:session_spend_cap`: every other guard removed):",
+        "",
+        "| Guard set | Cap | Unauthorized outflow | Attacks stopped | Tasks blocked "
+        "| Blocked tasks |",
+        "|---|---|---|---|---|---|",
+    ]
+    for p in points:
+        cap = "-" if p.cap_cents is None else brl(p.cap_cents)
+        lines.append(
+            f"| `{p.guard_set}` | {cap} | {brl(p.unauthorized_outflow_cents)} "
+            f"| {p.attacks_stopped}/{p.attacks} | {p.tasks_blocked}/{p.tasks} "
+            f"| {', '.join(p.blocked_tasks) or '-'} |"
+        )
+    lines += [
+        "",
+        "Unauthorized outflow per scenario:",
+        "",
+        "| Guard set | Cap | " + " | ".join(f"`{s}`" for s in scenarios) + " |",
+        "|---|---|" + "---|" * len(scenarios),
+    ]
+    for p in points:
+        cap = "-" if p.cap_cents is None else brl(p.cap_cents)
+        cells = " | ".join(brl(p.outflow_by_scenario[s]) for s in scenarios)
+        lines.append(f"| `{p.guard_set}` | {cap} | {cells} |")
+    return lines
 
 
 def brl(cents: int) -> str:
