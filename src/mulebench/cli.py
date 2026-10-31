@@ -64,6 +64,14 @@ def _parser() -> argparse.ArgumentParser:
         help="guard preset to run (repeatable; default: vulnerable and hardened). Names: "
         "vulnerable, hardened, strict, none, all, only:<guard>, all-minus:<guard>",
     )
+    ablate = sub.add_parser(
+        "ablate",
+        help="guard ablation matrix with the scripted agent (packaged scenarios by default)",
+    )
+    ablate.add_argument(
+        "directory", nargs="?", type=Path, help="directory of scenario *.yaml files"
+    )
+    ablate.add_argument("--out", type=Path, help="write the JSON ablation report here")
     llm = run.add_argument_group("llm agent")
     llm.add_argument("--model", help="model id (required for --agent llm)")
     llm.add_argument("--effort", default="medium", help="output_config.effort (default medium)")
@@ -86,6 +94,31 @@ def _error(message: str) -> int:
     return 2
 
 
+def _ablate(directory: Path | None, out: Path | None) -> int:
+    from mulebench.reports.ablation import (
+        render_ablation_markdown,
+        run_ablation,
+        write_ablation,
+    )
+
+    if directory is not None and not directory.is_dir():
+        return _error(f"not a directory: {directory}")
+    try:
+        scenarios = load_builtin() if directory is None else load_all(directory)
+    except ScenarioError as exc:
+        return _error(str(exc))
+    if not scenarios:
+        return _error(f"no scenarios found in {directory or '<builtin>'}")
+    try:
+        report = run_ablation(scenarios, ScriptedAgent())
+    except UnsupportedInvariant as exc:
+        return _error(str(exc))
+    if out:
+        write_ablation(report, out)
+    print(render_ablation_markdown(report))
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.command == "schema":
@@ -95,6 +128,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             sys.stdout.write(text)
         return 0
+
+    if args.command == "ablate":
+        return _ablate(args.directory, args.out)
 
     directory: Path | None = args.directory
     if directory is not None and not directory.is_dir():

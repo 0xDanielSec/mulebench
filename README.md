@@ -69,6 +69,8 @@ before/after.
   threat mapping.
 - `docs/adr/`: decisions (invariants over LLM judges, cassettes, policy-free
   ledger, fail-closed invariants).
+- `docs/ablation.md`: guard ablation matrix (`mulebench ablate`): which guard
+  stops which attack, and its limits.
 
 ## Roadmap
 
