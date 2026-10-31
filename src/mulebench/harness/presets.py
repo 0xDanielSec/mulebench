@@ -10,12 +10,20 @@ were listed. Named presets:
 
 Ablation presets are generated: `none`, `all`, `only:<guard>` and
 `all-minus:<guard>`.
+
+Guard parameters are a typed `GuardParams` object. Its string form, used in
+preset names, reports and the CLI, is a suffix: `<preset>@<param>=<value>`, for
+example `only:session_spend_cap@session_spend_cap=50000`. Unknown parameters,
+non-integer or non-positive values, repeated parameters, and parameters for a
+guard the preset does not install are rejected.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from mulebench.tools import (
     AccountOwnership,
@@ -59,6 +67,48 @@ class UnknownPreset(ValueError):
         )
 
 
+class GuardParams(BaseModel):
+    """Typed guard parameters. None means the guard's default."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+
+    session_spend_cap: int | None = Field(default=None, gt=0)
+
+    def suffix(self) -> str:
+        """Serialization form: `@name=value` per set parameter, in field order."""
+        return "".join(f"@{k}={v}" for k, v in self.model_dump().items() if v is not None)
+
+
+class InvalidGuardParams(UnknownPreset):
+    def __init__(self, name: str, reason: str) -> None:
+        ValueError.__init__(self, f"invalid guard parameters in preset {name!r}: {reason}")
+
+
+def parse_preset(name: str) -> tuple[str, GuardParams]:
+    """Split a preset name into its base preset and typed GuardParams."""
+    base, *parts = name.split("@")
+    raw: dict[str, int] = {}
+    for part in parts:
+        key, sep, value = part.partition("=")
+        if not sep or not key:
+            raise InvalidGuardParams(name, f"expected <param>=<value>, got {part!r}")
+        if key in raw:
+            raise InvalidGuardParams(name, f"repeated parameter {key!r}")
+        if not value.isdigit():
+            raise InvalidGuardParams(name, f"{key} must be a positive integer, got {value!r}")
+        raw[key] = int(value)
+    try:
+        params = GuardParams.model_validate(raw)
+    except ValidationError as exc:
+        reasons = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())
+        raise InvalidGuardParams(name, reasons) from exc
+    guards = _base_guard_names(base, name)
+    for key, value in params.model_dump().items():
+        if value is not None and key not in guards:
+            raise InvalidGuardParams(name, f"{key} is not installed by preset {base!r}")
+    return base, params
+
+
 def ablation_presets() -> tuple[str, ...]:
     """none, every guard alone, every guard removed from the full set, all."""
     return (
@@ -70,7 +120,13 @@ def ablation_presets() -> tuple[str, ...]:
 
 
 def preset_guard_names(name: str) -> tuple[str, ...]:
-    """Guard names of a preset, in canonical order. Raises UnknownPreset."""
+    """Guard names of a preset (parameter suffix allowed), in canonical order.
+    Raises UnknownPreset (InvalidGuardParams for bad parameters)."""
+    base, _ = parse_preset(name)
+    return _base_guard_names(base, name)
+
+
+def _base_guard_names(name: str, full_name: str) -> tuple[str, ...]:
     if name in NAMED_PRESETS:
         chosen = NAMED_PRESETS[name]
     elif name == "none":
@@ -82,7 +138,7 @@ def preset_guard_names(name: str) -> tuple[str, ...]:
     elif name.startswith("all-minus:") and name.removeprefix("all-minus:") in GUARD_NAMES:
         chosen = frozenset(GUARD_NAMES) - {name.removeprefix("all-minus:")}
     else:
-        raise UnknownPreset(name)
+        raise UnknownPreset(full_name)
     return tuple(g for g in GUARD_NAMES if g in chosen)
 
 
@@ -103,10 +159,16 @@ def build_guard_set(
     threshold_cents: int = DEFAULT_CONFIRMATION_THRESHOLD_CENTS,
 ) -> GuardSet:
     names = preset_guard_names(name)
+    _, params = parse_preset(name)
+    cap = (
+        SessionSpendCap()
+        if params.session_spend_cap is None
+        else SessionSpendCap(params.session_spend_cap)
+    )
     factories: Mapping[str, Guard] = {
         "account_ownership": AccountOwnership(),
         "require_authorization": RequireAuthorization(),
-        "session_spend_cap": SessionSpendCap(),
+        "session_spend_cap": cap,
         "velocity": VelocityGuard(confirmer),
         "new_payee": NewPayeeGuard(confirmer),
         "human_confirmation": HumanConfirmation(threshold_cents, confirmer),
