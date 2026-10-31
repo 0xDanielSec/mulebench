@@ -1,6 +1,6 @@
-"""Guard ablation report, and the drift check for the table in docs/ablation.md.
+"""Guard ablation report, and the drift checks for docs/ablation.md and README.md.
 
-To regenerate the documented table:
+To regenerate the documented tables (both files):
 
     uv run python -m tests.test_ablation
 """
@@ -23,6 +23,7 @@ from mulebench.reports.ablation import (
     CAP_SENSITIVITY_CENTS,
     AblationReport,
     SensitivityPoint,
+    brl,
     build_ablation,
     cap_sensitivity_presets,
     render_ablation_markdown,
@@ -34,6 +35,16 @@ from mulebench.workloads import load_workloads
 DOC = Path(__file__).resolve().parent.parent / "docs" / "ablation.md"
 START = "<!-- ablation:start (generated; checked by tests/test_ablation.py) -->"
 END = "<!-- ablation:end -->"
+README = DOC.parent.parent / "README.md"
+README_START = "<!-- results:start (generated; checked by tests/test_ablation.py) -->"
+README_END = "<!-- results:end -->"
+README_GUARD_SETS = (
+    "none",
+    "only:require_authorization",
+    "only:human_confirmation",
+    "all-minus:session_spend_cap",
+    "all",
+)
 
 
 @pytest.fixture(scope="module")
@@ -363,9 +374,83 @@ def test_doc_table_matches_builtin_ablation() -> None:
     )
 
 
+def _frac(value: int | None, total: int) -> str:
+    return "n/m" if value is None else f"{value}/{total}"
+
+
+def _attack_cell(s: ScenarioResult, preset: str) -> str:
+    t = s.cell(preset, "attack").trials[0]
+    broken = [i.id for i in t.invariants if i.applicable and not i.holds]
+    text = "violated " + ", ".join(broken) if t.status == "exposed_violated" else str(t.status)
+    if t.status == "exposed_resisted":
+        text = "stopped"
+    if t.unauthorized_outflow_cents:
+        text += f" ({brl(t.unauthorized_outflow_cents)})"
+    return text
+
+
+def render_readme() -> str:
+    results = run_all(load_builtin(), ScriptedAgent()).results
+    lines = [
+        README_START,
+        "| Scenario | Channel | `vulnerable` | `hardened` | Benign control |",
+        "|---|---|---|---|---|",
+    ]
+    for s in results:
+        benign = all(s.cell(p, "benign").trials[0].benign_pass for p in ("vulnerable", "hardened"))
+        lines.append(
+            f"| `{s.scenario_id}` | `{s.channel}` | {_attack_cell(s, 'vulnerable')} "
+            f"| {_attack_cell(s, 'hardened')} | {'passes' if benign else 'FAILS'} |"
+        )
+    report = run_ablation(load_builtin(), ScriptedAgent(), load_workloads())
+    by_set = {x.guard_set: x for x in report.summary}
+    lines += [
+        "",
+        "Guard ablation excerpt (7 attacks, 8 benign workloads):",
+        "",
+        "| Guard set | Attacks stopped | Unauthorized outflow | Tasks blocked |",
+        "|---|---|---|---|",
+    ]
+    for name in README_GUARD_SETS:
+        x = by_set[name]
+        lines.append(
+            f"| `{name}` | {_frac(x.attacks_stopped, x.attacks)} "
+            f"| {brl(x.unauthorized_outflow_cents)} | {_frac(x.tasks_blocked, x.tasks)} |"
+        )
+    lines += [
+        "",
+        "Session spend cap alone (`only:session_spend_cap`):",
+        "",
+        "| Cap | Unauthorized outflow | Attacks stopped | Tasks blocked |",
+        "|---|---|---|---|",
+    ]
+    for p in report.sensitivity:
+        if p.guard_set == "only:session_spend_cap" and p.cap_cents is not None:
+            lines.append(
+                f"| {brl(p.cap_cents)} | {brl(p.unauthorized_outflow_cents)} "
+                f"| {p.attacks_stopped}/{p.attacks} | {p.tasks_blocked}/{p.tasks} |"
+            )
+    lines.append(README_END)
+    return "\n".join(lines)
+
+
+def documented_readme() -> str:
+    text = README.read_text(encoding="utf-8")
+    return text[text.index(README_START) : text.index(README_END) + len(README_END)]
+
+
+def test_readme_results_match_builtin_run() -> None:
+    expected = render_readme()
+    assert documented_readme() == expected, (
+        "README.md results are out of date; run `uv run python -m tests.test_ablation`."
+    )
+
+
 def main_regenerate() -> None:
     text = DOC.read_text(encoding="utf-8")
     DOC.write_text(text.replace(documented(), render()), encoding="utf-8")
+    text = README.read_text(encoding="utf-8")
+    README.write_text(text.replace(documented_readme(), render_readme()), encoding="utf-8")
 
 
 if __name__ == "__main__":
