@@ -14,6 +14,7 @@ from mulebench.agents.base import AgentRun, RunAborted, TokenUsage
 from mulebench.attacks import Scenario, render
 from mulebench.attacks.schema import ExpectedOutcome
 from mulebench.harness.confirmer import RecordingConfirmer, RequestConfirmer
+from mulebench.harness.metrics import unauthorized_outflow_cents
 from mulebench.harness.models import (
     NO_PROMPT,
     PRESETS,
@@ -265,6 +266,7 @@ def run_trial(
         agent_steps=list(run.steps),
         trace=trace,
         confirmations=confirmations,
+        unauthorized_outflow_cents=unauthorized_outflow_cents(snapshot, inv_ctx),
         metrics=CellMetrics(
             steps=len(run.steps),
             stopped=run.stopped,
@@ -342,6 +344,7 @@ def build_cell(
             trials=trials,
             attack=attack,
             benign=None,
+            unauthorized_outflow_cents=sum(t.unauthorized_outflow_cents for t in ok),
         )
     benign = BenignAggregates(
         trials=len(trials),
@@ -357,6 +360,7 @@ def build_cell(
         trials=trials,
         attack=None,
         benign=benign,
+        unauthorized_outflow_cents=sum(t.unauthorized_outflow_cents for t in ok),
     )
 
 

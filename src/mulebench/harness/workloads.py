@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict
 
 from mulebench.agents import Agent, AgentTask, render_session_note
 from mulebench.harness.confirmer import RecordingConfirmer, RequestConfirmer
+from mulebench.harness.metrics import unauthorized_outflow_cents
 from mulebench.harness.presets import build_guard_set, preset_guard_names
 from mulebench.harness.runner import (
     INVARIANTS,
@@ -50,6 +51,7 @@ class WorkloadTrial(_Model):
     confirmations_requested: int
     confirmations_approved: int
     tool_calls: int
+    unauthorized_outflow_cents: int
     invariants: list[InvariantResult]
 
 
@@ -111,6 +113,7 @@ def run_workload(workload: Workload, preset: str, agent: Agent) -> WorkloadTrial
         confirmations_requested=len(confirmations),
         confirmations_approved=sum(c.approved for c in confirmations),
         tool_calls=len(records),
+        unauthorized_outflow_cents=unauthorized_outflow_cents(snapshot, inv_ctx),
         invariants=[inv.check(snapshot, inv_ctx) for inv in INVARIANTS.values()],
     )
 

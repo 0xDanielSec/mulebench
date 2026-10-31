@@ -74,6 +74,9 @@ class TrialResult(_Model):
     agent_steps: list[AgentStep]
     trace: list[ToolCallRecord]
     confirmations: list[ConfirmationRecord] = []
+    # Agent transfers that break INV-1 or go to a payee no authorization of the
+    # session customer names (see mulebench.harness.metrics). 0 in upgraded v1.
+    unauthorized_outflow_cents: int = 0
     metrics: CellMetrics
 
 
@@ -107,6 +110,7 @@ class CellResult(_Model):
     trials: list[TrialResult]
     attack: AttackAggregates | None
     benign: BenignAggregates | None
+    unauthorized_outflow_cents: int = 0  # total over non-errored trials
 
 
 class ScenarioResult(_Model):

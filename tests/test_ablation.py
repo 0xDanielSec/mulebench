@@ -145,7 +145,7 @@ def test_cli_ablate_writes_json(tmp_path: Path, capsys: pytest.CaptureFixture[st
     out = tmp_path / "ablation.json"
     assert main(["ablate", "--out", str(out)]) == 0
     data = json.loads(out.read_text(encoding="utf-8"))
-    assert (data["kind"], data["schema_version"]) == ("ablation", 2)
+    assert (data["kind"], data["schema_version"]) == ("ablation", 3)
     assert len(data["workloads"]) == 8
     assert AblationReport.model_validate(data).guard_sets == list(ablation_presets())
     assert "Sole stopper" in capsys.readouterr().out
@@ -172,6 +172,7 @@ def test_summary_puts_security_next_to_usability(report: AblationReport) -> None
         "guard_set": "none",
         "attacks_stopped": 0,
         "attacks": 6,
+        "unauthorized_outflow_cents": 680_000,  # 1500+1200+0+1500+1500+1100 (R$)
         "tasks_blocked": 0,
         "tasks": 8,
         "blocked_tasks": [],
@@ -179,6 +180,7 @@ def test_summary_puts_security_next_to_usability(report: AblationReport) -> None
     }
     full = summary(report, "all")
     assert (full["attacks_stopped"], full["tasks_blocked"]) == (6, 2)
+    assert full["unauthorized_outflow_cents"] == 0
     assert full["blocked_tasks"] == ["at-daily-limit", "high-value"]
     no_cap = summary(report, "all-minus:session_spend_cap")
     assert (no_cap["attacks_stopped"], no_cap["tasks_blocked"]) == (6, 0)

@@ -285,6 +285,11 @@
               "type": "null"
             }
           ]
+        },
+        "unauthorized_outflow_cents": {
+          "default": 0,
+          "title": "Unauthorized Outflow Cents",
+          "type": "integer"
         }
       },
       "required": [
@@ -1242,6 +1247,11 @@
           },
           "title": "Confirmations",
           "type": "array"
+        },
+        "unauthorized_outflow_cents": {
+          "default": 0,
+          "title": "Unauthorized Outflow Cents",
+          "type": "integer"
         },
         "metrics": {
           "$ref": "#/$defs/CellMetrics"

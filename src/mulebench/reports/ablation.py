@@ -77,6 +77,7 @@ class AblationCell(_Model):
     guards: list[str]
     attack: CellOutcome
     violated_invariants: list[str]  # applicable expected invariants that broke
+    unauthorized_outflow_cents: int  # attack trial
     benign_pass: bool | None  # None when not measurable or errored
     false_positive: bool
 
@@ -104,6 +105,7 @@ class GuardSetSummary(_Model):
     guard_set: str
     attacks_stopped: int | None  # None when not measurable
     attacks: int
+    unauthorized_outflow_cents: int  # total over the guard set's attack trials
     tasks_blocked: int | None
     tasks: int
     blocked_tasks: list[str]
@@ -120,7 +122,7 @@ class GuardFriction(_Model):
 
 class AblationReport(_Model):
     kind: Literal["ablation"] = "ablation"
-    schema_version: Literal[2] = 2
+    schema_version: Literal[3] = 3
     generator_version: str
     agent: AgentDescriptor
     guards: list[str]
@@ -179,6 +181,7 @@ def build_ablation(
                 violated_invariants=[
                     i.id for i in attack.invariants if i.applicable and not i.holds
                 ],
+                unauthorized_outflow_cents=attack.unauthorized_outflow_cents,
                 benign_pass=benign,
                 false_positive=benign is False and baseline_benign is True,
             )
@@ -259,6 +262,7 @@ def _summary(
         guard_set=name,
         attacks_stopped=sum(c.attack == "stopped" for c in attacks) if measurable else None,
         attacks=len(attacks),
+        unauthorized_outflow_cents=sum(c.unauthorized_outflow_cents for c in attacks),
         tasks_blocked=len(blocked) if measurable else None,
         tasks=tasks,
         blocked_tasks=blocked,
@@ -322,6 +326,8 @@ def render_ablation_markdown(report: AblationReport) -> str:
             mark = _SYMBOL[c.attack]
             if c.attack in ("violated", "not_measurable") and c.violated_invariants:
                 mark += " " + ",".join(c.violated_invariants)
+            if c.unauthorized_outflow_cents:
+                mark += " " + brl(c.unauthorized_outflow_cents)
             if c.false_positive:
                 mark += " FP"
             marks.append(mark)
@@ -344,6 +350,11 @@ def render_ablation_markdown(report: AblationReport) -> str:
     return "\n".join(lines)
 
 
+def brl(cents: int) -> str:
+    """Synthetic amount in reais, e.g. `R$1500.00`."""
+    return f"R${cents // 100}.{cents % 100:02d}"
+
+
 def _n(value: int | None, total: int) -> str:
     return "n/m" if value is None else f"{value}/{total}"
 
@@ -352,14 +363,16 @@ def _usability_markdown(report: AblationReport) -> list[str]:
     lines = [
         "Security vs usability, per guard set (confirmations: requests to the customer):",
         "",
-        "| Guard set | Attacks stopped | Tasks blocked | Blocked tasks | Confirmations |",
-        "|---|---|---|---|---|",
+        "| Guard set | Attacks stopped | Unauthorized outflow | Tasks blocked | Blocked tasks "
+        "| Confirmations |",
+        "|---|---|---|---|---|---|",
     ]
     for s in report.summary:
         conf = "n/m" if s.confirmations_requested is None else str(s.confirmations_requested)
         lines.append(
             f"| `{s.guard_set}` | {_n(s.attacks_stopped, s.attacks)} "
-            f"| {_n(s.tasks_blocked, s.tasks)} | {', '.join(s.blocked_tasks) or '-'} | {conf} |"
+            f"| {brl(s.unauthorized_outflow_cents)} | {_n(s.tasks_blocked, s.tasks)} "
+            f"| {', '.join(s.blocked_tasks) or '-'} | {conf} |"
         )
     by_key = {(c.workload_id, c.guard_set): c for c in report.workload_cells}
     lines += [
