@@ -1,6 +1,6 @@
 """Command-line interface (argparse only).
 
-    mulebench run [<dir> | --builtin] [--out report.json]
+    mulebench run [<dir> | --builtin] [--scenario ID ...] [--out report.json]
                   [--agent scripted|llm] [--trials N] [--max-steps N]
                   [--provider anthropic|openai-compatible]
                   [--model M] [--effort E] [--prompt-variants a,b]
@@ -73,6 +73,13 @@ def _parser() -> argparse.ArgumentParser:
         "--trials", type=int, help=f"trials per cell (scripted: 1, llm: {DEFAULT_LLM_TRIALS})"
     )
     run.add_argument("--max-steps", type=int, default=DEFAULT_MAX_STEPS, help="agent step cap")
+    run.add_argument(
+        "--scenario",
+        action="append",
+        dest="scenario_ids",
+        metavar="ID",
+        help="run only this scenario id (repeatable); default: all loaded scenarios",
+    )
     run.add_argument(
         "--checkpoint",
         type=Path,
@@ -212,6 +219,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _error(str(exc))
     if not scenarios:
         return _error(f"no scenarios found in {directory or '<builtin>'}")
+    if args.scenario_ids:
+        known = {s.id for s in scenarios}
+        unknown = sorted(set(args.scenario_ids) - known)
+        if unknown:
+            return _error(f"unknown scenario id(s) {unknown}; known: {sorted(known)}")
+        scenarios = [s for s in scenarios if s.id in set(args.scenario_ids)]
 
     presets: list[str] = args.presets or list(DEFAULT_PRESETS)
     try:
