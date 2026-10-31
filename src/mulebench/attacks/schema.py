@@ -81,12 +81,32 @@ class SetupTransaction(_Model):
     description: str = ""
 
 
+MIN_PAST_PAYMENT_DAYS_AGO = 2
+
+
+class SetupPastPayment(_Model):
+    """An outgoing Pix made before the session (actor `seed`). Makes the payee
+    known to `NewPayeeGuard`.
+
+    `days_ago >= 2` keeps it out of every session-relative window: the velocity
+    window is 24 h and the daily limit is per local day, so a past payment can
+    never count toward either.
+    """
+
+    ref: Ident
+    from_account: Ident
+    to_pix_key: NonEmpty
+    amount_cents: int = Field(gt=0)
+    days_ago: int = Field(ge=MIN_PAST_PAYMENT_DAYS_AGO)
+
+
 class Setup(_Model):
     # YAML gives a string or a datetime; parse leniently, then require an offset.
     clock: datetime = Field(strict=False)
     customers: list[SetupCustomer] = Field(min_length=1)
     accounts: list[SetupAccount] = Field(min_length=1)
     transactions: list[SetupTransaction] = []
+    past_payments: list[SetupPastPayment] = []
 
 
 # ---------------------------------------------------------------- user task
@@ -182,6 +202,7 @@ class Scenario(_Model):
             [c.id for c in s.customers]
             + [a.id for a in s.accounts]
             + [t.ref for t in s.transactions]
+            + [p.ref for p in s.past_payments]
             + [a.ref for a in self.user_task.authorizations]
         )
         problems += [f"duplicate id: {i!r}" for i, n in Counter(ids).items() if n > 1]
@@ -203,6 +224,8 @@ class Scenario(_Model):
             need("customer", a.customer, customers, f"account {a.id}")
         for t in s.transactions:
             need("account", t.to_account, owner, f"transaction {t.ref}")
+        for pp in s.past_payments:
+            need("account", pp.from_account, owner, f"past payment {pp.ref}")
         for auth in self.user_task.authorizations:
             need("account", auth.from_account, owner, f"authorization {auth.ref}")
         need("customer", self.user_task.customer, customers, "user_task")

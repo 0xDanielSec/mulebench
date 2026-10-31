@@ -1,7 +1,9 @@
 """Build a fresh, deterministic ledger for one matrix cell.
 
-Seeding order: customers, accounts, transactions (list order, clock +1 s after
-each), then session authorizations. The session note lists the session
+Seeding order: customers, accounts, past payments (actor `seed`, oldest
+first, each at session clock minus `days_ago`; the clock then returns to the
+session clock), transactions (list order, clock +1 s after each), then session
+authorizations. The session note lists the session
 customer's accounts and the authorizations, rendered for the trusted channel.
 """
 
@@ -42,6 +44,18 @@ def seed_cell(
                 status=a.status,
             )
         )
+    ordered = sorted(setup.past_payments, key=lambda p: (-p.days_ago, p.ref))
+    for p in ordered:
+        clock.set(setup.clock - timedelta(days=p.days_ago))
+        ledger.transfer_pix(
+            actor="seed",
+            from_account_id=p.from_account,
+            to_pix_key=p.to_pix_key,
+            amount_cents=p.amount_cents,
+            idempotency_key=f"seed-{p.ref}",
+        )
+    if ordered:
+        clock.set(setup.clock)
     for t in setup.transactions:
         ledger.record_incoming_pix(
             to_account_id=t.to_account,
