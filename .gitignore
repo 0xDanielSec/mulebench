@@ -13,3 +13,5 @@ htmlcov/
 *.db
 reports-out/
 .prepublish-terms
+
+runs/
