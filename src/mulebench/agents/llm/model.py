@@ -19,6 +19,18 @@ class ToolCall(_Model):
     args: dict[str, Any]
 
 
+MalformedKind = Literal["json", "unknown_tool", "schema"]
+
+
+class InvalidToolCall(_Model):
+    """A tool call the provider returned in a form that cannot be executed."""
+
+    id: str
+    name: str
+    kind: MalformedKind
+    detail: str
+
+
 class ToolOutcome(_Model):
     call_id: str
     content: str
@@ -53,6 +65,9 @@ class ChatRequest(_Model):
     max_tokens: int
     effort: str
     trial_key: str  # keys cassettes; not sent to the provider
+    # Sampling, for providers that accept it (OpenAI-compatible); Anthropic ignores it.
+    temperature: float | None = None
+    seed: int | None = None
 
 
 class ChatResponse(_Model):
@@ -63,6 +78,9 @@ class ChatResponse(_Model):
     served_model: str
     request_id: str | None
     provider_raw: tuple[dict[str, Any], ...]
+    # Calls the adapter could not parse (e.g. arguments that are not JSON).
+    invalid_tool_calls: tuple[InvalidToolCall, ...] = ()
+    prompt_tokens: int | None = None  # whole prompt as counted by the server, if reported
 
 
 class ModelCallError(Exception):

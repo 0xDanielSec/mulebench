@@ -62,6 +62,22 @@ class ModelCallRecord(_Model):
     request_id: str | None = None
 
 
+class ServerMeta(_Model):
+    """What a local model server reports about the model under test.
+
+    Fields a server does not expose are None (digest, quantization and version
+    come from Ollama-only endpoints).
+    """
+
+    model: str
+    digest: str | None = None
+    quantization: str | None = None
+    server_version: str | None = None
+    num_ctx: int | None = None  # effective context window, if known
+    num_ctx_source: str | None = None  # "parameters" (Modelfile) or "ps" (loaded model)
+    context_length: int | None = None  # model's trained maximum
+
+
 class AgentRun(_Model):
     steps: tuple[AgentStep, ...]
     stopped: StopReason
