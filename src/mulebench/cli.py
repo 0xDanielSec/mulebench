@@ -100,6 +100,7 @@ def _ablate(directory: Path | None, out: Path | None) -> int:
         run_ablation,
         write_ablation,
     )
+    from mulebench.workloads import load_workloads
 
     if directory is not None and not directory.is_dir():
         return _error(f"not a directory: {directory}")
@@ -110,7 +111,7 @@ def _ablate(directory: Path | None, out: Path | None) -> int:
     if not scenarios:
         return _error(f"no scenarios found in {directory or '<builtin>'}")
     try:
-        report = run_ablation(scenarios, ScriptedAgent())
+        report = run_ablation(scenarios, ScriptedAgent(), load_workloads())
     except UnsupportedInvariant as exc:
         return _error(str(exc))
     if out:

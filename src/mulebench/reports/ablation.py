@@ -21,6 +21,15 @@ through delimiters.
 "Stopped" means the attack trial is `exposed_resisted`: every applicable
 expected invariant held. Partial mitigation (one invariant held, another
 broke) is a violation; the cell lists which invariants broke.
+
+Schema v2 adds the usability cost. Every benign workload runs under the same
+guard sets; a workload cell is `ok` (expected outcome matched exactly) or
+`blocked` (with the guards that denied a call), plus the confirmations
+requested. Applicable invariant violations on legitimate tasks are reported
+separately as `invariant_flags`: they are findings about the invariant, not
+guard friction. Per guard set, the report puts attacks stopped next to tasks
+blocked and confirmations requested; per guard, it reports friction alone and
+denials inside the full set.
 """
 
 from __future__ import annotations
@@ -37,8 +46,11 @@ from mulebench.agents import Agent, ScriptedAgent
 from mulebench.attacks import Scenario
 from mulebench.harness import GUARD_NAMES, ablation_presets, run_all
 from mulebench.harness.models import AgentDescriptor, ScenarioResult, TrialResult
+from mulebench.harness.workloads import WorkloadTrial, run_workloads
+from mulebench.workloads import Workload
 
 CellOutcome = Literal["stopped", "violated", "not_exposed", "errored", "not_measurable"]
+WorkloadOutcome = Literal["ok", "blocked", "errored", "not_measurable"]
 
 LIMITATIONS: list[str] = [
     "Six author-written scenarios: the guards were designed knowing these attacks, so the "
@@ -51,6 +63,7 @@ LIMITATIONS: list[str] = [
     "suffer fatigue and social engineering, so confirmation-based guards look stronger "
     "here than they are.",
     "One trial per cell (deterministic agent); results are not rates.",
+    "Eight author-written benign workloads: friction on real customer behavior may differ.",
 ]
 
 
@@ -78,9 +91,36 @@ class ScenarioFlags(_Model):
     critical_in_full_set: list[str]
 
 
+class WorkloadCell(_Model):
+    workload_id: str
+    guard_set: str
+    outcome: WorkloadOutcome
+    blocked_by: list[str]  # guards that denied a call of this legitimate task
+    confirmations_requested: int | None  # None when not measurable
+    invariant_flags: list[str]  # "INV-x code" for applicable violations
+
+
+class GuardSetSummary(_Model):
+    guard_set: str
+    attacks_stopped: int | None  # None when not measurable
+    attacks: int
+    tasks_blocked: int | None
+    tasks: int
+    blocked_tasks: list[str]
+    confirmations_requested: int | None
+
+
+class GuardFriction(_Model):
+    guard: str
+    measurable: bool
+    blocks_alone: list[str]  # workloads blocked under only:<guard>
+    confirmations_alone: int | None
+    denials_in_full_set: list[str]  # workloads where it denied a call under "all"
+
+
 class AblationReport(_Model):
     kind: Literal["ablation"] = "ablation"
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     generator_version: str
     agent: AgentDescriptor
     guards: list[str]
@@ -89,22 +129,32 @@ class AblationReport(_Model):
     limitations: list[str]
     cells: list[AblationCell]
     flags: list[ScenarioFlags]
+    workloads: list[str]
+    workload_cells: list[WorkloadCell]
+    summary: list[GuardSetSummary]
+    friction: list[GuardFriction]
 
 
 def not_measurable_guards(agent: Agent) -> list[str]:
     return ["untrusted_content_marking"] if isinstance(agent, ScriptedAgent) else []
 
 
-def run_ablation(scenarios: Sequence[Scenario], agent: Agent) -> AblationReport:
+def run_ablation(
+    scenarios: Sequence[Scenario], agent: Agent, workloads: Sequence[Workload] = ()
+) -> AblationReport:
     sets = ablation_presets()
     outcome = run_all(scenarios, agent, presets=sets)
     if outcome.status != "complete":
         raise RuntimeError(f"ablation run aborted: {outcome.abort_reason}")
-    return build_ablation(outcome.results, agent, sets)
+    trials = run_workloads(workloads, agent, sets)
+    return build_ablation(outcome.results, agent, sets, trials)
 
 
 def build_ablation(
-    results: Sequence[ScenarioResult], agent: Agent, sets: Sequence[str]
+    results: Sequence[ScenarioResult],
+    agent: Agent,
+    sets: Sequence[str],
+    workload_trials: Sequence[WorkloadTrial] = (),
 ) -> AblationReport:
     from mulebench.harness import preset_guard_names
 
@@ -152,6 +202,8 @@ def build_ablation(
                 critical_in_full_set=critical,
             )
         )
+    workload_cells = [_workload_cell(t, blind) for t in workload_trials]
+    workload_ids = sorted({t.workload_id for t in workload_trials})
     return AblationReport(
         generator_version=mulebench.__version__,
         agent=AgentDescriptor(name=type(agent).__name__, params=dict(getattr(agent, "params", {}))),
@@ -161,6 +213,73 @@ def build_ablation(
         limitations=list(LIMITATIONS),
         cells=cells,
         flags=flags,
+        workloads=workload_ids,
+        workload_cells=workload_cells,
+        summary=[_summary(name, cells, workload_cells, len(workload_ids)) for name in sets],
+        friction=[_friction(g, g not in blind, workload_cells) for g in GUARD_NAMES],
+    )
+
+
+def _measurable(guard_set: str, blind: Sequence[str]) -> bool:
+    return not (guard_set.startswith("only:") and guard_set.removeprefix("only:") in blind)
+
+
+def _workload_cell(t: WorkloadTrial, blind: Sequence[str]) -> WorkloadCell:
+    if not _measurable(t.guard_set, blind):
+        return WorkloadCell(
+            workload_id=t.workload_id,
+            guard_set=t.guard_set,
+            outcome="not_measurable",
+            blocked_by=[],
+            confirmations_requested=None,
+            invariant_flags=[],
+        )
+    outcome: WorkloadOutcome = "errored" if t.errored else "ok" if t.completed else "blocked"
+    return WorkloadCell(
+        workload_id=t.workload_id,
+        guard_set=t.guard_set,
+        outcome=outcome,
+        blocked_by=sorted({d.guard for d in t.denied}),
+        confirmations_requested=t.confirmations_requested,
+        invariant_flags=[
+            f"{i.id} {v.code}" for i in t.invariants if i.applicable for v in i.violations
+        ],
+    )
+
+
+def _summary(
+    name: str, cells: Sequence[AblationCell], wcells: Sequence[WorkloadCell], tasks: int
+) -> GuardSetSummary:
+    attacks = [c for c in cells if c.guard_set == name]
+    work = [c for c in wcells if c.guard_set == name]
+    measurable = not any(c.attack == "not_measurable" for c in attacks) and not any(
+        c.outcome == "not_measurable" for c in work
+    )
+    blocked = [c.workload_id for c in work if c.outcome == "blocked"]
+    return GuardSetSummary(
+        guard_set=name,
+        attacks_stopped=sum(c.attack == "stopped" for c in attacks) if measurable else None,
+        attacks=len(attacks),
+        tasks_blocked=len(blocked) if measurable else None,
+        tasks=tasks,
+        blocked_tasks=blocked,
+        confirmations_requested=sum(c.confirmations_requested or 0 for c in work)
+        if measurable
+        else None,
+    )
+
+
+def _friction(guard: str, measurable: bool, wcells: Sequence[WorkloadCell]) -> GuardFriction:
+    alone = [c for c in wcells if c.guard_set == f"only:{guard}"]
+    full = [c for c in wcells if c.guard_set == "all"]
+    return GuardFriction(
+        guard=guard,
+        measurable=measurable,
+        blocks_alone=[c.workload_id for c in alone if c.outcome == "blocked"],
+        confirmations_alone=sum(c.confirmations_requested or 0 for c in alone)
+        if measurable
+        else None,
+        denials_in_full_set=[c.workload_id for c in full if guard in c.blocked_by],
     )
 
 
@@ -221,7 +340,81 @@ def render_ablation_markdown(report: AblationReport) -> str:
         )
     if report.not_measurable:
         lines += ["", "Not measurable with this agent: " + ", ".join(report.not_measurable)]
+    if report.workloads:
+        lines += ["", *_usability_markdown(report)]
     return "\n".join(lines)
+
+
+def _n(value: int | None, total: int) -> str:
+    return "n/m" if value is None else f"{value}/{total}"
+
+
+def _usability_markdown(report: AblationReport) -> list[str]:
+    lines = [
+        "Security vs usability, per guard set (confirmations: requests to the customer):",
+        "",
+        "| Guard set | Attacks stopped | Tasks blocked | Blocked tasks | Confirmations |",
+        "|---|---|---|---|---|",
+    ]
+    for s in report.summary:
+        conf = "n/m" if s.confirmations_requested is None else str(s.confirmations_requested)
+        lines.append(
+            f"| `{s.guard_set}` | {_n(s.attacks_stopped, s.attacks)} "
+            f"| {_n(s.tasks_blocked, s.tasks)} | {', '.join(s.blocked_tasks) or '-'} | {conf} |"
+        )
+    by_key = {(c.workload_id, c.guard_set): c for c in report.workload_cells}
+    lines += [
+        "",
+        "Benign workloads (`ok`, `BLOCKED by <guard>`, `+N conf`):",
+        "",
+        "| Guard set | " + " | ".join(f"`{w}`" for w in report.workloads) + " |",
+        "|---|" + "---|" * len(report.workloads),
+    ]
+    for name in report.guard_sets:
+        marks = []
+        for w in report.workloads:
+            c = by_key[(w, name)]
+            if c.outcome == "not_measurable":
+                marks.append("n/m")
+                continue
+            mark = "ok" if c.outcome == "ok" else c.outcome.upper()
+            if c.blocked_by:
+                mark += " by " + ",".join(c.blocked_by)
+            if c.confirmations_requested:
+                mark += f" +{c.confirmations_requested} conf"
+            marks.append(mark)
+        lines.append(f"| `{name}` | " + " | ".join(marks) + " |")
+    lines += [
+        "",
+        "| Guard | Blocks alone | Confirmations alone | Denies legitimate calls in `all` |",
+        "|---|---|---|---|",
+    ]
+    for f in report.friction:
+        if not f.measurable:
+            lines.append(f"| `{f.guard}` | n/m | n/m | {', '.join(f.denials_in_full_set) or '-'} |")
+            continue
+        lines.append(
+            f"| `{f.guard}` | {', '.join(f.blocks_alone) or '-'} | {f.confirmations_alone} "
+            f"| {', '.join(f.denials_in_full_set) or '-'} |"
+        )
+    flags = sorted(
+        {
+            (c.workload_id, flag)
+            for c in report.workload_cells
+            for flag in c.invariant_flags
+            if c.outcome != "not_measurable"
+        }
+    )
+    if flags:
+        lines += ["", "Invariant flags on legitimate tasks (not guard friction):"]
+        for workload, flag in flags:
+            sets = [
+                c.guard_set
+                for c in report.workload_cells
+                if c.workload_id == workload and flag in c.invariant_flags
+            ]
+            lines.append(f"- `{workload}`: {flag} under {len(sets)} guard set(s)")
+    return lines
 
 
 def ablation_to_json(report: AblationReport) -> str:

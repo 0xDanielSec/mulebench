@@ -17,12 +17,14 @@ from mulebench.attacks import load_builtin
 from mulebench.cli import main
 from mulebench.harness import GUARD_NAMES, ablation_presets, run_all
 from mulebench.harness.models import ScenarioResult
+from mulebench.harness.workloads import WorkloadTrial, run_workloads
 from mulebench.reports.ablation import (
     AblationReport,
     build_ablation,
     render_ablation_markdown,
     run_ablation,
 )
+from mulebench.workloads import load_workloads
 
 DOC = Path(__file__).resolve().parent.parent / "docs" / "ablation.md"
 START = "<!-- ablation:start (generated; checked by tests/test_ablation.py) -->"
@@ -35,8 +37,13 @@ def results() -> list[ScenarioResult]:
 
 
 @pytest.fixture(scope="module")
-def report(results: list[ScenarioResult]) -> AblationReport:
-    return build_ablation(results, ScriptedAgent(), ablation_presets())
+def workload_trials() -> list[WorkloadTrial]:
+    return run_workloads(load_workloads(), ScriptedAgent(), ablation_presets())
+
+
+@pytest.fixture(scope="module")
+def report(results: list[ScenarioResult], workload_trials: list[WorkloadTrial]) -> AblationReport:
+    return build_ablation(results, ScriptedAgent(), ablation_presets(), workload_trials)
 
 
 def flags(report: AblationReport, scenario_id: str) -> dict[str, object]:
@@ -133,7 +140,8 @@ def test_cli_ablate_writes_json(tmp_path: Path, capsys: pytest.CaptureFixture[st
     out = tmp_path / "ablation.json"
     assert main(["ablate", "--out", str(out)]) == 0
     data = json.loads(out.read_text(encoding="utf-8"))
-    assert (data["kind"], data["schema_version"]) == ("ablation", 1)
+    assert (data["kind"], data["schema_version"]) == ("ablation", 2)
+    assert len(data["workloads"]) == 8
     assert AblationReport.model_validate(data).guard_sets == list(ablation_presets())
     assert "Sole stopper" in capsys.readouterr().out
 
@@ -142,11 +150,98 @@ def test_cli_ablate_bad_directory(tmp_path: Path) -> None:
     assert main(["ablate", str(tmp_path / "missing")]) == 2
 
 
+# ------------------------------------------------------------ workloads
+
+
+def summary(report: AblationReport, guard_set: str) -> dict[str, object]:
+    return next(s for s in report.summary if s.guard_set == guard_set).model_dump()
+
+
+def test_workload_matrix_shape(report: AblationReport) -> None:
+    assert len(report.workloads) == 8
+    assert len(report.workload_cells) == 8 * len(ablation_presets())
+
+
+def test_summary_puts_security_next_to_usability(report: AblationReport) -> None:
+    assert summary(report, "none") == {
+        "guard_set": "none",
+        "attacks_stopped": 0,
+        "attacks": 6,
+        "tasks_blocked": 0,
+        "tasks": 8,
+        "blocked_tasks": [],
+        "confirmations_requested": 0,
+    }
+    full = summary(report, "all")
+    assert (full["attacks_stopped"], full["tasks_blocked"]) == (6, 2)
+    assert full["blocked_tasks"] == ["at-daily-limit", "high-value"]
+    no_cap = summary(report, "all-minus:session_spend_cap")
+    assert (no_cap["attacks_stopped"], no_cap["tasks_blocked"]) == (6, 0)
+    assert no_cap["confirmations_requested"] == 4
+
+
+def test_marking_alone_is_not_measurable_on_workloads(report: AblationReport) -> None:
+    s = summary(report, "only:untrusted_content_marking")
+    assert (s["attacks_stopped"], s["tasks_blocked"], s["confirmations_requested"]) == (
+        None,
+        None,
+        None,
+    )
+    cells = [c for c in report.workload_cells if c.guard_set == "only:untrusted_content_marking"]
+    assert {c.outcome for c in cells} == {"not_measurable"}
+
+
+def test_per_guard_friction(report: AblationReport) -> None:
+    f = {x.guard: x for x in report.friction}
+    assert f["session_spend_cap"].blocks_alone == ["at-daily-limit", "high-value"]
+    assert f["session_spend_cap"].denials_in_full_set == ["at-daily-limit", "high-value"]
+    assert (f["velocity"].confirmations_alone, f["new_payee"].confirmations_alone) == (1, 1)
+    assert f["human_confirmation"].confirmations_alone == 2
+    assert not f["untrusted_content_marking"].measurable
+    assert f["untrusted_content_marking"].confirmations_alone is None
+
+
+def test_blocked_cell_names_the_denying_guard(report: AblationReport) -> None:
+    (c,) = [
+        c
+        for c in report.workload_cells
+        if c.workload_id == "high-value" and c.guard_set == "only:session_spend_cap"
+    ]
+    assert (c.outcome, c.blocked_by, c.confirmations_requested) == (
+        "blocked",
+        ["session_spend_cap"],
+        0,
+    )
+
+
+def test_invariant_flags_are_separate_from_friction(report: AblationReport) -> None:
+    flagged = {
+        (c.workload_id, f)
+        for c in report.workload_cells
+        if c.outcome != "not_measurable"
+        for f in c.invariant_flags
+    }
+    assert flagged == {("repeated-same-payee", "INV-3 structuring_suspected")}
+    (cell,) = [
+        c
+        for c in report.workload_cells
+        if c.workload_id == "repeated-same-payee" and c.guard_set == "none"
+    ]
+    assert cell.outcome == "ok"
+
+
+def test_report_without_workloads_has_empty_usability(results: list[ScenarioResult]) -> None:
+    r = build_ablation(results, ScriptedAgent(), ablation_presets())
+    assert (r.workloads, r.workload_cells) == ([], [])
+    assert "Security vs usability" not in render_ablation_markdown(r)
+
+
 # ------------------------------------------------------------- doc drift
 
 
 def render() -> str:
-    table = render_ablation_markdown(run_ablation(load_builtin(), ScriptedAgent()))
+    report = run_ablation(load_builtin(), ScriptedAgent(), load_workloads())
+    table = render_ablation_markdown(report)
     return f"{START}\n{table}\n{END}"
 
 
