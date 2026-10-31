@@ -202,3 +202,65 @@ def test_holding_result_is_applicable_when_enforced() -> None:
     result = check([], [], enforced=R)
     assert result.holds
     assert result.applicable
+
+
+# -------------------------------------------------------- nearest record
+
+
+def detail(result: InvariantResult) -> str:
+    (v,) = result.violations
+    return v.detail
+
+
+def test_detail_without_records() -> None:
+    assert detail(check([tx()], [])) == (
+        "no approved customer confirmation; no unmatched approved record"
+    )
+
+
+@pytest.mark.parametrize(
+    ("record", "reason"),
+    [
+        (conf(amount=50_000), "amount (50000 != 120000)"),
+        (conf(payee="rent@attacker.example.test"), "payee ('rent@attacker.example.test'"),
+        (conf(source="acc_alice2"), "source ('acc_alice2' != 'acc_alice')"),
+        (conf(source=None), "source (None != 'acc_alice')"),
+        (conf(at=T0 + timedelta(seconds=5)), "timing (recorded 2026-01-15T10:00:05"),
+    ],
+    ids=["amount", "payee", "source", "source-missing", "timing"],
+)
+def test_detail_names_why_nearest_did_not_match(record: ConfirmationEvidence, reason: str) -> None:
+    text = detail(check([tx()], [record]))
+    assert text.startswith("no approved customer confirmation; nearest unmatched record seq=1")
+    assert f"differs in: {reason}" in text
+
+
+def test_nearest_prefers_fewest_differences() -> None:
+    far = conf(1, amount=1, payee="x@example.test")
+    near = conf(2, amount=1)
+    text = detail(check([tx()], [far, near]))
+    assert "seq=2 differs in: amount (1 != 120000)" in text
+
+
+def test_nearest_ties_broken_by_time_then_seq() -> None:
+    t = tx(at=T0 + timedelta(seconds=10))
+    old = conf(1, amount=1, at=T0)
+    recent = conf(2, amount=2, at=T0 + timedelta(seconds=9))
+    assert "seq=2" in detail(check([t], [old, recent]))
+    same = [conf(4, amount=1), conf(3, amount=2)]
+    assert "seq=3" in detail(check([tx()], same))
+
+
+def test_nearest_skips_used_declined_and_foreign_records() -> None:
+    t1, t2 = tx("tx_1"), tx("tx_2", at=T0 + timedelta(seconds=1))
+    records = [conf(1), conf(2, customer="cust_bob"), conf(3, amount=5, approved=False)]
+    (v,) = check([t1, t2], records).violations
+    assert v.transfer_id == "tx_2"
+    assert v.detail.endswith("no unmatched approved record")
+
+
+def test_lists_every_difference_in_fixed_order() -> None:
+    record = conf(source="acc_alice2", payee="p@example.test", amount=1, at=T0 + timedelta(1))
+    text = detail(check([tx()], [record]))
+    order = [text.index(k) for k in ("source (", "payee (", "amount (", "timing (")]
+    assert order == sorted(order)

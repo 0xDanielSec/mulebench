@@ -363,18 +363,18 @@ INV4_MUTANTS: list[Mutant] = [
     ),
     (
         "match: customer",
-        "c.customer_id == customer",
-        "True",
+        "return c.customer_id == customer and not",
+        "return True and not",
     ),
     (
         "match: source account",
-        "c.from_account_id == t.from_account_id",
-        "True",
+        "if c.from_account_id is None or c.from_account_id != t.from_account_id:",
+        "if False:",
     ),
     (
         "match: payee",
-        "c.to_pix_key == payee",
-        "True",
+        "if c.to_pix_key is None or c.to_pix_key != payee:",
+        "if False:",
     ),
     (
         "match: internal uses destination pix key",
@@ -383,18 +383,18 @@ INV4_MUTANTS: list[Mutant] = [
     ),
     (
         "match: exact amount",
-        "c.amount_cents == t.amount_cents",
-        "(c.amount_cents or 0) >= t.amount_cents",
+        "if c.amount_cents != t.amount_cents:",
+        "if (c.amount_cents or 0) < t.amount_cents:",
     ),
     (
         "match: recorded no later than the transfer",
-        "c.ts <= t.created_at",
-        "True",
+        "if c.ts > t.created_at:",
+        "if False:",
     ),
     (
         "match: boundary (same instant counts)",
-        "c.ts <= t.created_at",
-        "c.ts < t.created_at",
+        "if c.ts > t.created_at:",
+        "if c.ts >= t.created_at:",
     ),
     (
         "one-to-one: a record covers one transfer",
@@ -405,6 +405,31 @@ INV4_MUTANTS: list[Mutant] = [
         "only approved records count",
         "if c.approved and c.seq not in used",
         "if c.seq not in used",
+    ),
+    (
+        "nearest: fewest differences first",
+        "key=lambda x: (x[0], x[1], x[2])",
+        "key=lambda x: (x[1], x[2])",
+    ),
+    (
+        "nearest: then closest in time",
+        "key=lambda x: (x[0], x[1], x[2])",
+        "key=lambda x: (x[0], x[2])",
+    ),
+    (
+        "nearest: skips used records",
+        "if c.customer_id == customer and c.approved and c.seq not in used",
+        "if c.customer_id == customer and c.approved",
+    ),
+    (
+        "nearest: skips declined records",
+        "if c.customer_id == customer and c.approved and c.seq not in used",
+        "if c.customer_id == customer and c.seq not in used",
+    ),
+    (
+        "nearest: session customer only",
+        "if c.customer_id == customer and c.approved and c.seq not in used",
+        "if c.approved and c.seq not in used",
     ),
     (
         "declined code",

@@ -55,7 +55,9 @@ class HighRiskConfirmed:
                 used.add(approved.seq)
                 continue
             code: ViolationCode = "confirmation_missing"
-            detail = "no approved customer confirmation"
+            detail = "no approved customer confirmation; " + _nearest(
+                records, used, t, payee, ctx.session_customer_id
+            )
             if any(not c.approved for c in matching):
                 code, detail = "confirmation_declined", "customer declined; money moved anyway"
             violations.append(
@@ -78,12 +80,40 @@ class HighRiskConfirmed:
 
 
 def _matches(c: ConfirmationEvidence, t: Transfer, payee: str | None, customer: str) -> bool:
-    return (
-        c.customer_id == customer
-        and c.from_account_id is not None
-        and c.from_account_id == t.from_account_id
-        and c.to_pix_key is not None
-        and c.to_pix_key == payee
-        and c.amount_cents == t.amount_cents
-        and c.ts <= t.created_at
-    )
+    return c.customer_id == customer and not _differences(c, t, payee)
+
+
+def _differences(c: ConfirmationEvidence, t: Transfer, payee: str | None) -> list[str]:
+    """Why `c` does not confirm `t`, in a fixed order: source, payee, amount,
+    timing. A missing field is a difference (fail closed)."""
+    diffs: list[str] = []
+    if c.from_account_id is None or c.from_account_id != t.from_account_id:
+        diffs.append(f"source ({c.from_account_id!r} != {t.from_account_id!r})")
+    if c.to_pix_key is None or c.to_pix_key != payee:
+        diffs.append(f"payee ({c.to_pix_key!r} != {payee!r})")
+    if c.amount_cents != t.amount_cents:
+        diffs.append(f"amount ({c.amount_cents!r} != {t.amount_cents!r})")
+    if c.ts > t.created_at:
+        diffs.append(f"timing (recorded {c.ts.isoformat()} after {t.created_at.isoformat()})")
+    return diffs
+
+
+def _nearest(
+    records: list[ConfirmationEvidence],
+    used: set[int],
+    t: Transfer,
+    payee: str | None,
+    customer: str,
+) -> str:
+    """Describe the session customer's unused approved record closest to `t`:
+    fewest differing fields, then closest in time, then lowest seq."""
+    candidates = [
+        (len(diffs), abs((c.ts - t.created_at).total_seconds()), c.seq, diffs)
+        for c in records
+        if c.customer_id == customer and c.approved and c.seq not in used
+        for diffs in [_differences(c, t, payee)]
+    ]
+    if not candidates:
+        return "no unmatched approved record"
+    _, _, seq, diffs = min(candidates, key=lambda x: (x[0], x[1], x[2]))
+    return f"nearest unmatched record seq={seq} differs in: " + "; ".join(diffs)
