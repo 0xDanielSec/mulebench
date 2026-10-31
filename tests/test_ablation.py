@@ -1,14 +1,19 @@
 """Guard ablation report, and the drift checks for docs/ablation.md and README.md.
 
-To regenerate the documented tables (both files):
+The README's mutant count comes from docs/mutation-summary.json, written by a
+full `uv run python scripts/mutation_check.py`.
+
+To regenerate the documented tables and count (both files):
 
     uv run python -m tests.test_ablation
 """
 
 from __future__ import annotations
 
+import importlib.util
 import json
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -38,6 +43,10 @@ END = "<!-- ablation:end -->"
 README = DOC.parent.parent / "README.md"
 README_START = "<!-- results:start (generated; checked by tests/test_ablation.py) -->"
 README_END = "<!-- results:end -->"
+MUTANTS_START = "<!-- mutants:start (generated from docs/mutation-summary.json) -->"
+MUTANTS_END = "<!-- mutants:end -->"
+MUTATION_SUMMARY = DOC.parent / "mutation-summary.json"
+MUTATION_SCRIPT = DOC.parent.parent / "scripts" / "mutation_check.py"
 README_GUARD_SETS = (
     "none",
     "only:require_authorization",
@@ -446,11 +455,49 @@ def test_readme_results_match_builtin_run() -> None:
     )
 
 
+def load_mutation_check() -> ModuleType:
+    spec = importlib.util.spec_from_file_location("mutation_check", MUTATION_SCRIPT)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def render_mutants() -> str:
+    data = json.loads(MUTATION_SUMMARY.read_text(encoding="utf-8"))
+    return f"{MUTANTS_START}{data['killed']}/{data['total']}{MUTANTS_END}"
+
+
+def documented_mutants() -> str:
+    text = README.read_text(encoding="utf-8")
+    return text[text.index(MUTANTS_START) : text.index(MUTANTS_END) + len(MUTANTS_END)]
+
+
+def test_readme_mutant_count_matches_summary() -> None:
+    assert documented_mutants() == render_mutants(), (
+        "README.md mutant count is out of date; run `uv run python -m tests.test_ablation`."
+    )
+
+
+def test_mutation_summary_covers_current_tables() -> None:
+    # A table or mutant added without a full rerun makes the summary stale.
+    mc = load_mutation_check()
+    data = json.loads(MUTATION_SUMMARY.read_text(encoding="utf-8"))
+    assert {name: t["total"] for name, t in data["tables"].items()} == {
+        name: len(mutants) for name, (_, _, mutants) in mc.TABLES.items()
+    }, "docs/mutation-summary.json is stale; run `uv run python scripts/mutation_check.py`."
+    counts = {name: (t["killed"], t["total"]) for name, t in data["tables"].items()}
+    assert MUTATION_SUMMARY.read_text(encoding="utf-8") == mc.summary_json(counts)
+
+
 def main_regenerate() -> None:
     text = DOC.read_text(encoding="utf-8")
     DOC.write_text(text.replace(documented(), render()), encoding="utf-8")
     text = README.read_text(encoding="utf-8")
-    README.write_text(text.replace(documented_readme(), render_readme()), encoding="utf-8")
+    text = text.replace(documented_readme(), render_readme())
+    text = text.replace(documented_mutants(), render_mutants())
+    README.write_text(text, encoding="utf-8")
 
 
 if __name__ == "__main__":

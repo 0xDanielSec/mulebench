@@ -214,7 +214,9 @@ check, a reuse that also exceeds the funds or the daily limit (or comes from a
 frozen account) raises that error instead of `AuthorizationAlreadyUsed`. It copies the project to a temporary
 directory, breaks one condition at a time in the copy of the module, and runs
 that module's tests against it. It never edits the working tree. Every mutant
-must be killed.
+must be killed. A full run (no arguments) rewrites `docs/mutation-summary.json`
+(per-table killed/total, no dates); the README's mutant count is rendered from
+it and checked by `tests/test_ablation.py`.
 
 ```bash
 uv run python scripts/mutation_check.py              # all six tables

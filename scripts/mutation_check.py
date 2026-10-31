@@ -6,12 +6,15 @@ tests for that module run there. A mutant is "killed"
 when at least one test fails. The working tree is never modified.
 
 Usage: uv run python scripts/mutation_check.py [INV-1] [INV-2] [INV-3] [INV-4] [AUDIT] [LEDGER]
-With no arguments every table runs. Exit code is 0 only if every mutant of
-every selected table is killed.
+With no arguments every table runs and docs/mutation-summary.json is rewritten
+(per-table killed/total; no dates, so it is deterministic). The README's mutant
+count is rendered from it. Exit code is 0 only if every mutant of every
+selected table is killed.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -20,6 +23,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+SUMMARY = ROOT / "docs" / "mutation-summary.json"
 
 Mutant = tuple[str, str, str]  # (rule, original snippet, mutated snippet); original occurs once
 
@@ -549,6 +553,17 @@ def run_table(workdir: Path, inv: str) -> tuple[int, list[str]] | None:
     return len(mutants), survivors
 
 
+def summary_json(counts: dict[str, tuple[int, int]]) -> str:
+    """Deterministic summary: {"tables": {name: {killed, total}}, "killed", "total"}."""
+    tables = {name: {"killed": k, "total": t} for name, (k, t) in counts.items()}
+    data = {
+        "tables": tables,
+        "killed": sum(k for k, _ in counts.values()),
+        "total": sum(t for _, t in counts.values()),
+    }
+    return json.dumps(data, indent=2, sort_keys=True) + "\n"
+
+
 def main(argv: list[str] | None = None) -> int:
     selected = (sys.argv[1:] if argv is None else argv) or list(TABLES)
     unknown = [s for s in selected if s not in TABLES]
@@ -557,6 +572,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     total = 0
     survivors: list[str] = []
+    counts: dict[str, tuple[int, int]] = {}
     with tempfile.TemporaryDirectory(prefix="mb-mutation-") as tmp:
         workdir = Path(tmp)
         copy_project(workdir)
@@ -566,7 +582,11 @@ def main(argv: list[str] | None = None) -> int:
                 return 2
             total += outcome[0]
             survivors += [f"{inv}: {rule}" for rule in outcome[1]]
+            counts[inv] = (outcome[0] - len(outcome[1]), outcome[0])
     print(f"total: {total - len(survivors)}/{total} mutants killed")
+    if list(counts) == list(TABLES):  # full run only; a partial run keeps the file
+        SUMMARY.write_text(summary_json(counts), encoding="utf-8", newline="\n")
+        print(f"wrote {SUMMARY.relative_to(ROOT).as_posix()}")
     if survivors:
         print("survivors: " + "; ".join(survivors))
         return 1

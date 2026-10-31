@@ -1,0 +1,30 @@
+{
+  "killed": 82,
+  "tables": {
+    "AUDIT": {
+      "killed": 10,
+      "total": 10
+    },
+    "INV-1": {
+      "killed": 14,
+      "total": 14
+    },
+    "INV-2": {
+      "killed": 17,
+      "total": 17
+    },
+    "INV-3": {
+      "killed": 20,
+      "total": 20
+    },
+    "INV-4": {
+      "killed": 20,
+      "total": 20
+    },
+    "LEDGER": {
+      "killed": 1,
+      "total": 1
+    }
+  },
+  "total": 82
+}
