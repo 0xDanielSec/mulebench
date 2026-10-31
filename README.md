@@ -154,8 +154,10 @@ uv run pytest                                      # offline, no API keys
 can run against the same scenarios, ledger and invariants. Today the
 harness ships the scripted agent and an experimental LLM-backed agent
 (`--agent llm`) that replays recorded cassettes offline by default; live
-recording is opt-in and cost-capped. See [`docs/agents.md`](docs/agents.md)
-and [`docs/llm.md`](docs/llm.md).
+recording is opt-in and cost-capped. Local models run through an
+OpenAI-compatible server such as Ollama (`--provider openai-compatible`,
+`mulebench doctor`), with no paid API. See [`docs/agents.md`](docs/agents.md),
+[`docs/llm.md`](docs/llm.md) and [`docs/local-models.md`](docs/local-models.md).
 
 ## Roadmap
 

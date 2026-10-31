@@ -10,6 +10,10 @@ pip install "mulebench[llm]"     # or: uv sync (the dev group includes it)
 
 The core install does not import the Anthropic SDK.
 
+Local models through an OpenAI-compatible server (Ollama first) use
+`OpenAICompatChatModel` with the same agent, cassettes and report; see
+`docs/local-models.md`.
+
 ## What the model sees
 
 - **System prompt** by prompt variant (an explicit matrix axis):
