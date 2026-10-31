@@ -4,7 +4,13 @@
                   [--agent scripted|llm] [--trials N] [--max-steps N]
                   [--model M] [--effort E] [--prompt-variants a,b]
                   [--cassettes DIR] [--record] [--max-cost-usd X]
+                  [--checkpoint FILE] [--resume]
     mulebench schema [--out report.schema.json]
+
+Long runs write a per-trial checkpoint (JSON Lines): --checkpoint FILE, or by
+default `<out>.checkpoint.jsonl` for --agent llm with --out. --resume skips the
+trials already in it. Ctrl+C keeps the finished trials and writes a valid
+partial report. The checkpoint is deleted once a run completes.
 
 LLM runs replay recorded cassettes by default. `--record` makes live calls and
 stores them; it requires MB_LIVE=1, ANTHROPIC_API_KEY and --max-cost-usd.
@@ -12,7 +18,8 @@ stores them; it requires MB_LIVE=1, ANTHROPIC_API_KEY and --max-cost-usd.
 Exit codes for `run`: 0 = completed and every attack trial exposed the payload;
 1 = at least one attack trial was not_exposed (invalid scenario); 2 = usage,
 load/validation error, unsupported invariant, missing cassette or invalid model
-request; 3 = run aborted by the cost cap (partial report still written).
+request; 3 = run aborted by the cost cap (partial report still written);
+130 = interrupted with Ctrl+C (partial report still written).
 A successful attack is a finding, not an error.
 """
 
@@ -56,6 +63,13 @@ def _parser() -> argparse.ArgumentParser:
         "--trials", type=int, help=f"trials per cell (scripted: 1, llm: {DEFAULT_LLM_TRIALS})"
     )
     run.add_argument("--max-steps", type=int, default=DEFAULT_MAX_STEPS, help="agent step cap")
+    run.add_argument(
+        "--checkpoint",
+        type=Path,
+        help="per-trial checkpoint file (default for --agent llm with --out: "
+        "<out>.checkpoint.jsonl)",
+    )
+    run.add_argument("--resume", action="store_true", help="skip trials already in the checkpoint")
     run.add_argument(
         "--preset",
         action="append",
@@ -166,13 +180,46 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     from mulebench.agents.llm.model import ModelRequestInvalid
     from mulebench.agents.llm.transport import CassetteMissing
+    from mulebench.harness.checkpoint import Checkpoint, CheckpointError, fingerprint
+
+    checkpoint_path: Path | None = args.checkpoint
+    if checkpoint_path is None and args.agent == "llm" and args.out:
+        checkpoint_path = args.out.with_name(args.out.name + ".checkpoint.jsonl")
+    if args.resume and checkpoint_path is None:
+        return _error("--resume needs --checkpoint FILE (or --agent llm with --out)")
+    checkpoint: Checkpoint | None = None
+    if checkpoint_path is not None:
+        config = {
+            "agent": dict(getattr(agent, "params", {})),
+            "llm": None if llm_config is None else llm_config.model_dump(mode="json"),
+            "prompts": prompts,
+            "presets": presets,
+            "trials": trials,
+        }
+        try:
+            checkpoint = Checkpoint.open(
+                checkpoint_path, fingerprint(config, scenarios), resume=args.resume
+            )
+        except CheckpointError as exc:
+            return _error(str(exc))
 
     try:
-        outcome = run_all(scenarios, agent, prompt_variants=prompts, trials=trials, presets=presets)
+        outcome = run_all(
+            scenarios,
+            agent,
+            prompt_variants=prompts,
+            trials=trials,
+            presets=presets,
+            completed=None if checkpoint is None else checkpoint.completed,
+            on_trial=None if checkpoint is None else checkpoint.write,
+        )
     except UnsupportedInvariant as exc:
         return _error(str(exc))
     except (CassetteMissing, ModelRequestInvalid) as exc:
         return _error(str(exc))
+    finally:
+        if checkpoint is not None:
+            checkpoint.close()
 
     report = build_report(
         outcome,
@@ -188,7 +235,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(render_table(report))
     if outcome.status != "complete":
         print(f"aborted: {outcome.abort_reason}", file=sys.stderr)
-        return 3
+        if checkpoint is not None:
+            print(f"resume with --resume (checkpoint: {checkpoint.path})", file=sys.stderr)
+        return 130 if outcome.status == "aborted_interrupt" else 3
+    if checkpoint is not None:
+        checkpoint.path.unlink()
     return 1 if report.summary.totals.not_exposed else 0
 
 

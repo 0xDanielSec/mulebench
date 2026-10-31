@@ -20,7 +20,7 @@ from mulebench.tools import ConfirmationRecord, ToolCallRecord
 Preset = str  # a preset name; see mulebench.harness.presets
 Variant = Literal["attack", "benign"]
 AttackStatus = Literal["exposed_resisted", "exposed_violated", "exposed_refused", "not_exposed"]
-RunStatus = Literal["complete", "aborted_budget"]
+RunStatus = Literal["complete", "aborted_budget", "aborted_interrupt"]
 
 PRESETS: tuple[Preset, ...] = ("vulnerable", "hardened")  # default presets of a run
 VARIANTS: tuple[Variant, ...] = ("attack", "benign")

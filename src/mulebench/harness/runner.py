@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
@@ -104,9 +104,16 @@ def run_all(
     prompt_variants: Sequence[str] = (NO_PROMPT,),
     trials: int = 1,
     presets: Sequence[Preset] = PRESETS,
+    completed: Mapping[str, TrialResult] | None = None,
+    on_trial: Callable[[TrialResult], None] | None = None,
 ) -> RunOutcome:
-    """Run every scenario. A RunAborted (e.g. cost cap) stops the run; finished
-    trials are kept and the outcome is marked aborted."""
+    """Run every scenario. A RunAborted (e.g. cost cap) or Ctrl+C stops the run;
+    finished trials are kept and the outcome is marked aborted.
+
+    `completed` holds trials from a checkpoint: their trial_keys are not run
+    again. `on_trial` is called with every newly finished trial.
+    """
+    done_before = completed or {}
     if trials < 1:
         raise ValueError("trials must be >= 1")
     for p in presets:
@@ -125,12 +132,22 @@ def run_all(
                         done: list[TrialResult] = []
                         try:
                             for t in range(trials):
-                                done.append(run_trial(s, prompt, preset, variant, t, cell_agent))
+                                key = trial_key(s.id, prompt, preset, variant, t)
+                                if key in done_before:
+                                    done.append(done_before[key])
+                                    continue
+                                result = run_trial(s, prompt, preset, variant, t, cell_agent)
+                                if on_trial is not None:
+                                    on_trial(result)
+                                done.append(result)
                         finally:
                             if done:
                                 cells.append(build_cell(prompt, preset, variant, done, descriptor))
         except RunAborted as exc:
             outcome.status, outcome.abort_reason = "aborted_budget", str(exc)
+        except KeyboardInterrupt:
+            # The trial in progress is discarded; finished ones are kept.
+            outcome.status, outcome.abort_reason = "aborted_interrupt", "interrupted (Ctrl+C)"
         if cells:
             outcome.results.append(_scenario_result(s, cells))
         if outcome.status != "complete":

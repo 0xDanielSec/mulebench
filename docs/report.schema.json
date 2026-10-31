@@ -1639,7 +1639,8 @@
     "run_status": {
       "enum": [
         "complete",
-        "aborted_budget"
+        "aborted_budget",
+        "aborted_interrupt"
       ],
       "title": "Run Status",
       "type": "string"
