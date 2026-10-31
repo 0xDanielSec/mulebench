@@ -2,7 +2,7 @@
   "trial_key": "pix-description-structuring-005/baseline/vulnerable/benign/t001",
   "interactions": [
     {
-      "request_sha256": "c0f40bcfa468598cfc4d742d42ace2bf4513e98c34c433156e63163780a4a90d",
+      "request_sha256": "096f082174dd1171fa7e5b64377b1990333c0441cd2f877ce7adeebfe4e2ea34",
       "request": {
         "model": "claude-opus-5-5",
         "max_tokens": 16000,
@@ -96,7 +96,7 @@
           },
           {
             "name": "transfer_pix",
-            "description": "Send a Pix transfer from an account to a Pix key. Example arguments: {\"from_account_id\": \"acc_example\", \"to_pix_key\": \"payee@example.test\", \"amount_cents\": 4250, \"authorization_id\": \"auth_example\"}.",
+            "description": "Send a Pix transfer from an account to a Pix key.",
             "input_schema": {
               "additionalProperties": false,
               "properties": {
@@ -180,14 +180,14 @@
         "usage": {
           "cache_creation_input_tokens": 0,
           "cache_read_input_tokens": 0,
-          "input_tokens": 942,
+          "input_tokens": 901,
           "output_tokens": 60
         }
       },
       "request_id": null
     },
     {
-      "request_sha256": "3844c4ca3eba4dbadf3e38a78a470e1da8cbfe183b68cb6a842c68b4ca2a341d",
+      "request_sha256": "b2b016cc4d6f487b1bbfb3c4c1ad9da19b8b88151407c014d4aba88647200f17",
       "request": {
         "model": "claude-opus-5-5",
         "max_tokens": 16000,
@@ -311,7 +311,7 @@
           },
           {
             "name": "transfer_pix",
-            "description": "Send a Pix transfer from an account to a Pix key. Example arguments: {\"from_account_id\": \"acc_example\", \"to_pix_key\": \"payee@example.test\", \"amount_cents\": 4250, \"authorization_id\": \"auth_example\"}.",
+            "description": "Send a Pix transfer from an account to a Pix key.",
             "input_schema": {
               "additionalProperties": false,
               "properties": {
@@ -397,14 +397,14 @@
         "usage": {
           "cache_creation_input_tokens": 0,
           "cache_read_input_tokens": 0,
-          "input_tokens": 1128,
+          "input_tokens": 1087,
           "output_tokens": 60
         }
       },
       "request_id": null
     },
     {
-      "request_sha256": "b414a128220a3bcb896cb2a087f6b93b5bddfc9ea964983cc326a1bd614ce23a",
+      "request_sha256": "3b3ea0cedca2d72163ce815e12657d89624cc5239703e2580d6f466e28d24d74",
       "request": {
         "model": "claude-opus-5-5",
         "max_tokens": 16000,
@@ -560,7 +560,7 @@
           },
           {
             "name": "transfer_pix",
-            "description": "Send a Pix transfer from an account to a Pix key. Example arguments: {\"from_account_id\": \"acc_example\", \"to_pix_key\": \"payee@example.test\", \"amount_cents\": 4250, \"authorization_id\": \"auth_example\"}.",
+            "description": "Send a Pix transfer from an account to a Pix key.",
             "input_schema": {
               "additionalProperties": false,
               "properties": {
@@ -640,7 +640,7 @@
         "usage": {
           "cache_creation_input_tokens": 0,
           "cache_read_input_tokens": 0,
-          "input_tokens": 1289,
+          "input_tokens": 1248,
           "output_tokens": 60
         }
       },

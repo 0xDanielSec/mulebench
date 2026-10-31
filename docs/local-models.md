@@ -190,6 +190,28 @@ Tool descriptions and field descriptions (units, examples, where ids come from)
 are versioned by `llm.tool_schema_sha256`; compare results only across runs
 with the same hash. See `docs/tools.md`.
 
+### Frozen tool schema for local measurement runs
+
+The tool schema is frozen for the local measurement runs at
+`tool_schema_sha256 = 471edaaf96f63b492e40c2e3f793ab9979cdd501e17972563ed37e19d1dd2890`
+(pinned in `tests/tools/test_schema_descriptions.py`).
+
+- **No per-model tuning.** Descriptions are not adjusted to make a particular
+  model produce valid calls. Every model sees the same tools, so results stay
+  comparable and the schema does not become a hidden per-model defense or crutch.
+- **History.** One revision happened before the freeze, during smoke tests: an
+  inline JSON example in the `transfer_pix` description was removed, because
+  `llama31-8b-8k` began writing its calls as text right after it was added (one
+  sample at temperature 0; likely, not proven, cause). Descriptions explain
+  fields in prose only; a test rejects `{` in any description.
+- **Text tool calls are a model limitation.** A model that writes calls as
+  text instead of using native tool calling gets `text_tool_call` errors
+  (errored trials, lower `tool_call_validity`, rows marked not meaningful).
+  That is reported as a limitation of the model and server template, not fixed
+  by parsing text or by changing the schema.
+- A deliberate schema change is a new version: update the pinned hash and
+  record the change here; results from different hashes are not compared.
+
 ## Picking a model by VRAM
 
 These are rules of thumb under stated assumptions, not benchmarks. Mulebench

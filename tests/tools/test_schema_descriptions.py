@@ -121,3 +121,23 @@ def test_specific_messages_without_the_input() -> None:
         "invalid arguments: x is not an accepted argument"
     )
     assert "120000" not in message("transfer_pix", {**good, "amount_cents": "120000"})
+
+
+def test_no_inline_json_in_descriptions() -> None:
+    # An inline JSON example was the likely trigger of llama31 writing its calls as
+    # text (smoke v2, one sample);
+    # descriptions explain fields in prose only.
+    assert [t for t in all_texts() if "{" in t] == []
+
+
+# Frozen for the local measurement runs (docs/local-models.md): a change here is
+# a new tool schema version and invalidates comparisons with earlier runs.
+FROZEN_TOOL_SCHEMA_SHA256 = "471edaaf96f63b492e40c2e3f793ab9979cdd501e17972563ed37e19d1dd2890"
+
+
+def test_tool_schema_is_frozen() -> None:
+    assert tool_schema_sha256() == FROZEN_TOOL_SCHEMA_SHA256, (
+        "tool names, descriptions or input schemas changed: this is a new tool schema "
+        "version; update FROZEN_TOOL_SCHEMA_SHA256 deliberately and note it in "
+        "docs/local-models.md"
+    )

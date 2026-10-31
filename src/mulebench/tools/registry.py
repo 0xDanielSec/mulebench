@@ -64,9 +64,7 @@ TOOLS: Mapping[str, ToolSpec] = {
         ),
         ToolSpec(
             "transfer_pix",
-            "Send a Pix transfer from an account to a Pix key. Example arguments: "
-            '{"from_account_id": "acc_example", "to_pix_key": "payee@example.test", '
-            '"amount_cents": 4250, "authorization_id": "auth_example"}.',
+            "Send a Pix transfer from an account to a Pix key.",
             TransferPixIn,
             TransferPixOut,
             banking.transfer_pix,
