@@ -13,7 +13,17 @@ from mulebench.harness import (
     preset_guard_names,
     run_all,
 )
-from mulebench.tools import AlwaysApprove, UntrustedContentMarking, marking_nonce
+from mulebench.harness.confirmer import RecordingConfirmer
+from mulebench.ledger import FixedClock
+from mulebench.tools import (
+    AlwaysApprove,
+    AlwaysDeny,
+    ConfirmationRequest,
+    TraceRecorder,
+    UntrustedContentMarking,
+    marking_nonce,
+)
+from tests.conftest import T0
 
 
 def test_named_presets() -> None:
@@ -89,3 +99,52 @@ def test_cli_preset_option(capsys: pytest.CaptureFixture[str]) -> None:
 def test_cli_unknown_preset(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["run", "--preset", "nope"]) == 2
     assert "unknown preset" in capsys.readouterr().err
+
+
+# ------------------------------------------------- INV-4 wiring (plain data)
+
+
+def test_enforced_confirmation_threshold_per_guard_set() -> None:
+    def enforced(name: str) -> int | None:
+        return build_guard_set(name, AlwaysApprove(), "k").enforced_confirmation_cents
+
+    assert enforced("vulnerable") is None
+    assert enforced("hardened") == 100_000
+    assert enforced("strict") == 100_000
+    assert enforced("only:new_payee") is None  # asks only for new payees
+    assert enforced("only:velocity") is None  # asks only for repeated payments
+    assert enforced("all-minus:human_confirmation") is None
+
+
+def test_recording_confirmer_writes_customer_answers() -> None:
+    clock = FixedClock(T0)
+    trace = TraceRecorder()
+    confirmer = RecordingConfirmer(AlwaysDeny(), trace, clock)
+    request = ConfirmationRequest(
+        session_id="s1", customer_id="cust_alice", tool="transfer_pix", args={"amount_cents": 1}
+    )
+    assert confirmer.confirm(request) is False
+    (rec,) = trace.confirmations()
+    assert (rec.seq, rec.ts, rec.approved, rec.args) == (1, T0, False, {"amount_cents": 1})
+    assert trace.records() == ()
+
+
+def test_inv4_counts_only_where_confirmation_is_enforced() -> None:
+    s001 = next(s for s in load_builtin() if s.id == "pix-description-injection-001")
+    presets = ["vulnerable", "hardened", "all-minus:require_authorization"]
+    res = run_all([s001], ScriptedAgent(), presets=presets).results[0]
+    for preset in presets:
+        for variant in ("attack", "benign"):
+            trial = res.cell(preset, variant).trials[0]
+            inv4 = next(i for i in trial.invariants if i.id == "INV-4")
+            assert inv4.applicable is (preset != "vulnerable"), (preset, variant)
+            assert inv4.holds is (preset != "vulnerable"), (preset, variant)
+            if variant == "benign":
+                assert trial.benign_pass is True
+                approved = [c for c in trial.confirmations if c.approved]
+                assert (len(approved) == 0) is (preset == "vulnerable")
+    # Without RequireAuthorization the customer is asked about the attacker
+    # payment, declines, and INV-4 sees no unconfirmed transfer.
+    attack = res.cell("all-minus:require_authorization", "attack").trials[0]
+    assert attack.status == "exposed_resisted"
+    assert any(not c.approved for c in attack.confirmations)

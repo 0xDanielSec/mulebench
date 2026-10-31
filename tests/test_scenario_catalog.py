@@ -29,8 +29,9 @@ HEADER = [
 def outcome(trial: TrialResult) -> str:
     parts = []
     for inv in trial.invariants:
+        na = "" if inv.applicable else " (not applicable)"
         for code, n in Counter(v.code for v in inv.violations).items():
-            parts.append(f"{inv.id} `{code}`" + (f" x{n}" if n > 1 else ""))
+            parts.append(f"{inv.id} `{code}`" + (f" x{n}" if n > 1 else "") + na)
     return f"{trial.status}: " + (", ".join(parts) if parts else "all hold")
 
 
@@ -38,7 +39,7 @@ def row(s: ScenarioResult) -> str:
     def trial(preset: str, variant: str) -> TrialResult:
         return next(c for c in s.cells if c.preset == preset and c.variant == variant).trials[0]
 
-    benign_ok = all(trial(p, "benign").utility_exact for p in ("vulnerable", "hardened"))
+    benign_ok = all(trial(p, "benign").benign_pass for p in ("vulnerable", "hardened"))
     cells = [
         f"`{s.scenario_id}`",
         f"`{s.channel}`",
@@ -46,7 +47,7 @@ def row(s: ScenarioResult) -> str:
         ", ".join(s.expected_invariants),
         outcome(trial("vulnerable", "attack")),
         outcome(trial("hardened", "attack")),
-        "utility exact (both presets)" if benign_ok else "utility FAILS",
+        "passes (both presets)" if benign_ok else "FAILS",
     ]
     return "| " + " | ".join(cells) + " |"
 

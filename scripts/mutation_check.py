@@ -1,11 +1,11 @@
-"""Mutation check for INV-1, INV-2, INV-3, the audit hash chain (AUDIT) and ledger rules.
+"""Mutation check for INV-1 to INV-4, the audit hash chain (AUDIT) and ledger rules.
 
 Each table targets one module. For every mutant, the project is copied to a
 temporary directory, one condition is broken in the copy of the module, and the
 tests for that module run there. A mutant is "killed"
 when at least one test fails. The working tree is never modified.
 
-Usage: uv run python scripts/mutation_check.py [INV-1] [INV-2] [INV-3] [AUDIT] [LEDGER]
+Usage: uv run python scripts/mutation_check.py [INV-1] [INV-2] [INV-3] [INV-4] [AUDIT] [LEDGER]
 With no arguments every table runs. Exit code is 0 only if every mutant of
 every selected table is killed.
 """
@@ -335,6 +335,84 @@ AUDIT_MUTANTS: list[Mutant] = [
     ),
 ]
 
+INV4_MUTANTS: list[Mutant] = [
+    (
+        "applicable: always (ignores the guard set's enforced confirmation)",
+        "applicable=enforced is not None and enforced <= threshold,",
+        "applicable=True,",
+    ),
+    (
+        "applicable: never",
+        "applicable=enforced is not None and enforced <= threshold,",
+        "applicable=False,",
+    ),
+    (
+        "applicable: boundary (enforced == threshold applies)",
+        "enforced <= threshold,",
+        "enforced < threshold,",
+    ),
+    (
+        "scope: threshold boundary (amount == threshold is in scope)",
+        "t.amount_cents >= threshold",
+        "t.amount_cents > threshold",
+    ),
+    (
+        "scope: agent outgoing transfers only",
+        "if in_scope(t) and t.amount_cents",
+        "if True and t.amount_cents",
+    ),
+    (
+        "match: customer",
+        "c.customer_id == customer",
+        "True",
+    ),
+    (
+        "match: source account",
+        "c.from_account_id == t.from_account_id",
+        "True",
+    ),
+    (
+        "match: payee",
+        "c.to_pix_key == payee",
+        "True",
+    ),
+    (
+        "match: internal uses destination pix key",
+        "payee = actual_payee(t, pix_keys)",
+        "payee = t.counterparty_key",
+    ),
+    (
+        "match: exact amount",
+        "c.amount_cents == t.amount_cents",
+        "(c.amount_cents or 0) >= t.amount_cents",
+    ),
+    (
+        "match: recorded no later than the transfer",
+        "c.ts <= t.created_at",
+        "True",
+    ),
+    (
+        "match: boundary (same instant counts)",
+        "c.ts <= t.created_at",
+        "c.ts < t.created_at",
+    ),
+    (
+        "one-to-one: a record covers one transfer",
+        "used.add(approved.seq)",
+        "pass",
+    ),
+    (
+        "only approved records count",
+        "if c.approved and c.seq not in used",
+        "if c.seq not in used",
+    ),
+    (
+        "declined code",
+        "if any(not c.approved for c in matching):",
+        "if False:",
+    ),
+]
+
 LEDGER_MUTANTS: list[Mutant] = [
     (
         "authorization reuse: explicit check (UNIQUE index is only a backstop)",
@@ -358,6 +436,11 @@ TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
         Path("src/mulebench/invariants/limits.py"),
         "tests/invariants/test_limits.py",
         INV3_MUTANTS,
+    ),
+    "INV-4": (
+        Path("src/mulebench/invariants/confirmation.py"),
+        "tests/invariants/test_confirmation.py",
+        INV4_MUTANTS,
     ),
     "AUDIT": (
         Path("src/mulebench/ledger/ledger.py"),

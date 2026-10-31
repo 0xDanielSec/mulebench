@@ -15,7 +15,7 @@ from mulebench.agents import AgentStep
 from mulebench.agents.base import ModelCallRecord, SessionNoteChannel, TokenUsage
 from mulebench.harness.stats import Rate
 from mulebench.invariants import InvariantResult
-from mulebench.tools import ToolCallRecord
+from mulebench.tools import ConfirmationRecord, ToolCallRecord
 
 Preset = str  # a preset name; see mulebench.harness.presets
 Variant = Literal["attack", "benign"]
@@ -61,6 +61,8 @@ class TrialResult(_Model):
     payload_exposed: bool | None  # attack only
     status: AttackStatus | None  # attack only; None when errored
     utility_exact: bool | None  # benign only
+    # benign only: utility_exact and every APPLICABLE invariant holds
+    benign_pass: bool | None = None
     utility_subset: bool | None  # attack only
     session_note_channel: SessionNoteChannel | None
     temperature: None = None  # the provider API accepts no sampling parameters
@@ -71,6 +73,7 @@ class TrialResult(_Model):
     outgoing_transfers: list[OutgoingTransfer]
     agent_steps: list[AgentStep]
     trace: list[ToolCallRecord]
+    confirmations: list[ConfirmationRecord] = []
     metrics: CellMetrics
 
 
@@ -88,6 +91,7 @@ class BenignAggregates(_Model):
     trials: int
     errored: int
     utility_exact: Rate  # over non-errored trials
+    benign_pass: Rate | None = None  # over non-errored trials; None in upgraded v1 reports
 
 
 class AgentDescriptor(_Model):

@@ -25,7 +25,12 @@ from mulebench.tools.guards import (
 from mulebench.tools.marking import UntrustedContentMarking, marking_nonce
 from mulebench.tools.registry import TOOLS, ToolError, ToolResult, ToolSpec, call_tool
 from mulebench.tools.schemas import UNTRUSTED_KEY, untrusted_paths
-from mulebench.tools.trace import GuardDecision, ToolCallRecord, TraceRecorder
+from mulebench.tools.trace import (
+    ConfirmationRecord,
+    GuardDecision,
+    ToolCallRecord,
+    TraceRecorder,
+)
 from mulebench.tools.transform import ResultTransformer
 
 __all__ = [
@@ -35,6 +40,7 @@ __all__ = [
     "AccountOwnership",
     "AlwaysApprove",
     "AlwaysDeny",
+    "ConfirmationRecord",
     "ConfirmationRequest",
     "Confirmer",
     "Guard",

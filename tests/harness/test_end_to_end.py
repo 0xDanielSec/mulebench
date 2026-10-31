@@ -10,7 +10,7 @@ import pytest
 from mulebench.agents import AgentRun, AgentStep, AgentTask, ScriptedAgent
 from mulebench.attacks import BUILTIN_SCENARIOS_DIR, Scenario, load_scenario
 from mulebench.cli import main
-from mulebench.harness import RequestConfirmer, UnsupportedInvariant, run_all, run_scenario
+from mulebench.harness import RequestConfirmer, UnsupportedInvariant, run_all, run_scenario, runner
 from mulebench.harness.models import Preset, ScenarioResult, TrialResult, Variant
 from mulebench.harness.runner import RunOutcome
 from mulebench.reports import (
@@ -69,8 +69,12 @@ def test_vulnerable_attack_is_exposed_violated(result: ScenarioResult) -> None:
     assert cell.status == "exposed_violated"
     assert cell.utility_subset is True
     assert cell.utility_exact is None
-    (inv1,) = cell.invariants
+    inv1, inv4 = cell.invariants
     assert inv1.id == "INV-1"
+    # Vulnerable enforces no confirmation: INV-4 is reported, not counted.
+    assert inv4.id == "INV-4"
+    assert not inv4.holds
+    assert not inv4.applicable
     assert not inv1.holds
     (violation,) = inv1.violations
     assert violation.code == "no_authorization"
@@ -171,10 +175,11 @@ def test_extra_agent_transfer_fails_exact_but_not_subset() -> None:
     assert one(res, "vulnerable", "attack").utility_subset is True
 
 
-def test_unsupported_invariant_raises() -> None:
-    scenario = SCENARIO.model_copy(update={"expected_invariants": ["INV-1", "INV-4"]})
+def test_unsupported_invariant_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Every InvariantId is implemented; simulate a missing one.
+    monkeypatch.delitem(runner.INVARIANTS, "INV-4")
     with pytest.raises(UnsupportedInvariant, match="INV-4"):
-        run_scenario(scenario, ScriptedAgent())
+        run_scenario(SCENARIO, ScriptedAgent())
 
 
 # ------------------------------------------------------------ confirmer
@@ -294,13 +299,15 @@ def test_cli_exit_1_on_not_exposed(tmp_path: Path) -> None:
     assert main(["run", str(write_scenario(tmp_path / "d", text))]) == 1
 
 
-def test_cli_exit_2_on_invalid_or_unsupported(tmp_path: Path) -> None:
+def test_cli_exit_2_on_invalid_or_unsupported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     bad = write_scenario(tmp_path / "bad", "id: [oops\n")
     assert main(["run", str(bad)]) == 2
-    inv4 = EXAMPLE.read_text(encoding="utf-8").replace(
-        "expected_invariants: [INV-1]", "expected_invariants: [INV-1, INV-4]"
-    )
-    assert main(["run", str(write_scenario(tmp_path / "inv4", inv4))]) == 2
+    with monkeypatch.context() as m:
+        m.delitem(runner.INVARIANTS, "INV-4")
+        text = EXAMPLE.read_text(encoding="utf-8")
+        assert main(["run", str(write_scenario(tmp_path / "inv4", text))]) == 2
     assert main(["run", str(tmp_path / "missing")]) == 2
     (tmp_path / "empty").mkdir()
     assert main(["run", str(tmp_path / "empty")]) == 2

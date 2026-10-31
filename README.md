@@ -13,8 +13,8 @@ License: Apache-2.0.
 real-model vulnerability. It obeys instructions found in tool output by
 construction, so its results show that the ledger, guards, trace and
 invariants detect and block an unauthorized transfer. They say nothing about
-how any real model behaves. Six scenarios and three invariants (INV-1 to
-INV-3) exist so far.
+how any real model behaves. Six scenarios and four invariants (INV-1 to
+INV-4) exist so far.
 
 ## Responsible use
 
@@ -72,8 +72,6 @@ before/after.
 
 ## Roadmap
 
-- Invariant 4: human confirmation for high-risk actions (INV-1 to INV-3 are
-  implemented; see `docs/invariants.md`).
 - More injection channels: dispute reason, KYC document text,
   support tickets.
 - An LLM-backed reference agent and an MCP wrapper for the tools.

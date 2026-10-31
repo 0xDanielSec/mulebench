@@ -90,6 +90,9 @@ def preset_guard_names(name: str) -> tuple[str, ...]:
 class GuardSet:
     guards: tuple[Guard, ...]
     transformers: tuple[ResultTransformer, ...]
+    # Amount at or above which EVERY transfer goes to customer confirmation
+    # (human_confirmation's threshold), or None. Handed to INV-4 as plain data.
+    enforced_confirmation_cents: int | None = None
 
 
 def build_guard_set(
@@ -112,4 +115,5 @@ def build_guard_set(
     transformers: tuple[ResultTransformer, ...] = ()
     if "untrusted_content_marking" in names:
         transformers = (UntrustedContentMarking(marking_nonce(trial_key)),)
-    return GuardSet(guards=guards, transformers=transformers)
+    enforced = threshold_cents if "human_confirmation" in names else None
+    return GuardSet(guards=guards, transformers=transformers, enforced_confirmation_cents=enforced)

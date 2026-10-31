@@ -172,6 +172,17 @@
         },
         "utility_exact": {
           "$ref": "#/$defs/Rate"
+        },
+        "benign_pass": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -286,6 +297,53 @@
         "benign"
       ],
       "title": "CellResult",
+      "type": "object"
+    },
+    "ConfirmationRecord": {
+      "additionalProperties": false,
+      "description": "One answer from the customer channel to a confirmation request.\n\nWritten by the harness's recording confirmer, never by guards.",
+      "properties": {
+        "seq": {
+          "title": "Seq",
+          "type": "integer"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "customer_id": {
+          "title": "Customer Id",
+          "type": "string"
+        },
+        "tool": {
+          "title": "Tool",
+          "type": "string"
+        },
+        "args": {
+          "additionalProperties": true,
+          "title": "Args",
+          "type": "object"
+        },
+        "approved": {
+          "title": "Approved",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "seq",
+        "ts",
+        "session_id",
+        "customer_id",
+        "tool",
+        "args",
+        "approved"
+      ],
+      "title": "ConfirmationRecord",
       "type": "object"
     },
     "CostTotals": {
@@ -425,6 +483,11 @@
           },
           "title": "Violations",
           "type": "array"
+        },
+        "applicable": {
+          "default": true,
+          "title": "Applicable",
+          "type": "boolean"
         }
       },
       "required": [
@@ -1080,6 +1143,18 @@
           ],
           "title": "Utility Exact"
         },
+        "benign_pass": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Benign Pass"
+        },
         "utility_subset": {
           "anyOf": [
             {
@@ -1160,6 +1235,14 @@
           "title": "Trace",
           "type": "array"
         },
+        "confirmations": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ConfirmationRecord"
+          },
+          "title": "Confirmations",
+          "type": "array"
+        },
         "metrics": {
           "$ref": "#/$defs/CellMetrics"
         }
@@ -1205,7 +1288,9 @@
             "foreign_transfer_dispute",
             "unverifiable_call",
             "daily_limit_exceeded",
-            "structuring_suspected"
+            "structuring_suspected",
+            "confirmation_missing",
+            "confirmation_declined"
           ],
           "title": "Code",
           "type": "string"

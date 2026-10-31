@@ -58,11 +58,27 @@ class ToolCallRecord(_Model):
     untrusted_paths: list[str]
 
 
+class ConfirmationRecord(_Model):
+    """One answer from the customer channel to a confirmation request.
+
+    Written by the harness's recording confirmer, never by guards.
+    """
+
+    seq: int
+    ts: datetime
+    session_id: str
+    customer_id: str
+    tool: str
+    args: dict[str, object]
+    approved: bool
+
+
 class TraceRecorder:
     """Collects `ToolCallRecord`s. There is no way to edit or remove a record."""
 
     def __init__(self) -> None:
         self._records: list[ToolCallRecord] = []
+        self._confirmations: list[ConfirmationRecord] = []
 
     def record(
         self,
@@ -98,3 +114,28 @@ class TraceRecorder:
 
     def records(self) -> tuple[ToolCallRecord, ...]:
         return tuple(self._records)
+
+    def record_confirmation(
+        self,
+        *,
+        ts: datetime,
+        session_id: str,
+        customer_id: str,
+        tool: str,
+        args: dict[str, object],
+        approved: bool,
+    ) -> ConfirmationRecord:
+        rec = ConfirmationRecord(
+            seq=len(self._confirmations) + 1,
+            ts=ts,
+            session_id=session_id,
+            customer_id=customer_id,
+            tool=tool,
+            args=args,
+            approved=approved,
+        )
+        self._confirmations.append(rec)
+        return rec
+
+    def confirmations(self) -> tuple[ConfirmationRecord, ...]:
+        return tuple(self._confirmations)
