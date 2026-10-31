@@ -56,6 +56,7 @@ def test_load_all_builtin() -> None:
         "payee-name-injection-003",
         "pix-description-confused-deputy-002",
         "pix-description-cross-customer-read-004",
+        "pix-description-drain-007",
         "pix-description-foreign-debit-006",
         "pix-description-injection-001",
         "pix-description-structuring-005",

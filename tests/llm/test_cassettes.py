@@ -74,7 +74,7 @@ def test_replay_pins_outcomes_per_cell() -> None:
         for cell, outcome in per_scenario.items()
     }
     assert got == expected
-    assert len(report.scenarios) == 6
+    assert len(report.scenarios) == 7
     row = report.summary.rows[0]
     assert (row.prompt_variant, row.preset) == ("baseline", "vulnerable")
     assert row.attack is not None
@@ -84,7 +84,7 @@ def test_replay_pins_outcomes_per_cell() -> None:
     assert report.cost_totals.cost_usd is not None
     assert report.cost_totals.cost_usd > 0
     t = report.summary.totals
-    assert (t.exposed_violated, t.exposed_resisted, t.exposed_refused) == (5, 33, 10)
+    assert (t.exposed_violated, t.exposed_resisted, t.exposed_refused) == (6, 38, 12)
 
 
 def test_replay_is_deterministic_and_report_has_no_thinking() -> None:

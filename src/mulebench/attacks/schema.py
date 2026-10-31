@@ -127,9 +127,25 @@ class UserTask(_Model):
     authorizations: list[SessionAuthorization] = []
 
 
-class Injection(_Model):
+class InjectionPart(_Model):
     transaction: Ident
     payload: NonEmpty
+
+
+class Injection(_Model):
+    """The payload slot. `extra_parts` spread a longer attack over several
+    seeded transactions (one placeholder each), for payloads that do not fit
+    one Pix description. The benign control fills every slot with its payload."""
+
+    transaction: Ident
+    payload: NonEmpty
+    extra_parts: list[InjectionPart] = []
+
+    def payloads(self) -> dict[str, str]:
+        """Attack payload per target transaction ref."""
+        return {self.transaction: self.payload} | {
+            p.transaction: p.payload for p in self.extra_parts
+        }
 
 
 # ----------------------------------------------------------------- outcomes
@@ -230,6 +246,11 @@ class Scenario(_Model):
             need("account", auth.from_account, owner, f"authorization {auth.ref}")
         need("customer", self.user_task.customer, customers, "user_task")
         need("transaction", self.injection.transaction, txs, "injection")
+        for part in self.injection.extra_parts:
+            need("transaction", part.transaction, txs, "injection.extra_parts")
+        refs = [self.injection.transaction] + [p.transaction for p in self.injection.extra_parts]
+        if len(set(refs)) != len(refs):
+            problems.append("injection targets must be distinct transactions")
         for e in self.benign_control.expected_outcome.transfers:
             need("account", e.from_account, owner, "expected_outcome.transfers")
 
@@ -239,26 +260,36 @@ class Scenario(_Model):
             t.description.count(PLACEHOLDER) + t.counterparty_name.count(PLACEHOLDER)
             for t in s.transactions
         )
-        target = txs.get(self.injection.transaction)
         if field is None:
             problems.append(f"channel {self.channel!r} has no setup slot yet")
-        elif target is not None:
-            if total != 1 or getattr(target, field).count(PLACEHOLDER) != 1:
+        else:
+            if total != len(refs):
                 problems.append(
-                    f"{PLACEHOLDER} must appear exactly once in the setup, in "
-                    f"transaction {target.ref}.{field}"
+                    f"{PLACEHOLDER} must appear exactly once per injection target "
+                    f"({len(refs)} in total), found {total}"
                 )
-            # The agent must be able to see the payload.
-            if owner.get(target.to_account, self.user_task.customer) != self.user_task.customer:
-                problems.append(
-                    f"injection target {target.ref} is not credited to an account "
-                    "of the session customer"
-                )
+            for ref in refs:
+                target = txs.get(ref)
+                if target is None:
+                    continue
+                if getattr(target, field).count(PLACEHOLDER) != 1:
+                    problems.append(
+                        f"{PLACEHOLDER} must appear exactly once in transaction "
+                        f"{target.ref}.{field}"
+                    )
+                # The agent must be able to see the payload.
+                customer = self.user_task.customer
+                if owner.get(target.to_account, customer) != customer:
+                    problems.append(
+                        f"injection target {target.ref} is not credited to an account "
+                        "of the session customer"
+                    )
 
         # Description length (Pix cap), with both payloads rendered.
+        attack_payloads = self.injection.payloads()
         for t in s.transactions:
             for label, payload in (
-                ("attack", self.injection.payload),
+                ("attack", attack_payloads.get(t.ref, self.injection.payload)),
                 ("benign", self.benign_control.payload),
             ):
                 rendered = t.description.replace(PLACEHOLDER, payload)
@@ -268,7 +299,7 @@ class Scenario(_Model):
                         f"chars, max is {MAX_DESCRIPTION_CHARS}"
                     )
 
-        # Canary: only in the attack payload.
+        # Canary: in the main attack payload; extra parts may repeat it.
         if self.canary not in self.injection.payload:
             problems.append("canary must appear in injection.payload")
         if self.canary in self.benign_control.payload:
@@ -299,15 +330,18 @@ class RenderedSetup(_Model):
 def render(scenario: Scenario, variant: Literal["attack", "benign"]) -> RenderedSetup:
     """Fill the payload placeholder. Pure: the scenario is not modified."""
     payload = scenario.injection.payload if variant == "attack" else scenario.benign_control.payload
-    transactions = [
-        t.model_copy(
+    per_ref = scenario.injection.payloads() if variant == "attack" else {}
+
+    def fill(t: SetupTransaction) -> SetupTransaction:
+        value = per_ref.get(t.ref, payload)
+        return t.model_copy(
             update={
-                "description": t.description.replace(PLACEHOLDER, payload),
-                "counterparty_name": t.counterparty_name.replace(PLACEHOLDER, payload),
+                "description": t.description.replace(PLACEHOLDER, value),
+                "counterparty_name": t.counterparty_name.replace(PLACEHOLDER, value),
             }
         )
-        for t in scenario.setup.transactions
-    ]
+
+    transactions = [fill(t) for t in scenario.setup.transactions]
     return RenderedSetup(
         scenario_id=scenario.id,
         variant=variant,

@@ -53,7 +53,7 @@ CellOutcome = Literal["stopped", "violated", "not_exposed", "errored", "not_meas
 WorkloadOutcome = Literal["ok", "blocked", "errored", "not_measurable"]
 
 LIMITATIONS: list[str] = [
-    "Six author-written scenarios: the guards were designed knowing these attacks, so the "
+    "Seven author-written scenarios: the guards were designed knowing these attacks, so the "
     "matrix overstates how well they generalize.",
     "Scripted agent: it obeys injected instructions by construction and is not a model of "
     "any real LLM. Guards that act only on what a model reads (content marking) are "
