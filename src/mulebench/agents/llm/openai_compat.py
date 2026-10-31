@@ -8,12 +8,22 @@ Targets `/v1/chat/completions` as served by Ollama (later LM Studio, vLLM).
 - Tool call arguments arrive as a JSON string. Arguments that do not parse to a
   JSON object are returned as `invalid_tool_calls` (kind `json`), never dropped.
   Unknown tools and schema-invalid arguments are detected by the agent.
-- Assistant messages are sent back exactly as returned.
+- Reasoning ("thinking", e.g. qwen3) arrives in one of two shapes: a separate
+  `reasoning` / `reasoning_content` field, or `<think>...</think>` inside
+  `content` (an unclosed `<think>`, cut off by max_tokens, runs to the end).
+  It is never treated as final text or as tool calls: tool calls come only from
+  `message.tool_calls`. It is stripped from the assistant message sent back in
+  the history, so it reaches the cassettes (raw response bodies) and nothing
+  else. Each call records `reasoning_present` and, when the server reports it,
+  `reasoning_tokens`; context usage counts prompt + completion tokens, which
+  include the reasoning.
+- Assistant messages are otherwise sent back as returned.
 """
 
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from mulebench.agents.base import ServerMeta, SessionNoteChannel, TokenUsage
@@ -21,6 +31,8 @@ from mulebench.agents.llm.model import ChatRequest, ChatResponse, InvalidToolCal
 from mulebench.agents.llm.transport import Transport
 
 PROVIDER = "openai-compatible"
+REASONING_FIELDS = ("reasoning", "reasoning_content")
+_THINK = re.compile(r"<think>.*?(?:</think>|\Z)", re.DOTALL)
 
 
 class ResponseShapeError(ValueError):
@@ -100,8 +112,12 @@ def parse_completion(body: dict[str, Any], request_id: str | None = None) -> Cha
             invalid.append(InvalidToolCall(id=call_id, name=name, kind="json", detail=problem))
         else:
             calls.append(ToolCall(id=call_id, name=name, args=args))
+    clean, reasoning = strip_reasoning(message)
     usage = body.get("usage") or {}
     prompt = usage.get("prompt_tokens")
+    completion = usage.get("completion_tokens")
+    details = usage.get("completion_tokens_details") or {}
+    reasoning_tokens = details.get("reasoning_tokens") if isinstance(details, dict) else None
     stop = choice.get("finish_reason")
     if message.get("refusal"):
         stop = "refusal"
@@ -111,14 +127,28 @@ def parse_completion(body: dict[str, Any], request_id: str | None = None) -> Cha
         refusal_category=None,
         usage=TokenUsage(
             input_tokens=int(prompt or 0),
-            output_tokens=int(usage.get("completion_tokens") or 0),
+            output_tokens=int(completion or 0),
         ),
         served_model=str(body.get("model", "")),
         request_id=request_id or body.get("id"),
-        provider_raw=(message,),
+        provider_raw=(clean,),  # reasoning removed: it is not sent back
         invalid_tool_calls=tuple(invalid),
         prompt_tokens=None if prompt is None else int(prompt),
+        context_tokens=None if prompt is None else int(prompt) + int(completion or 0),
+        reasoning_present=reasoning,
+        reasoning_tokens=None if reasoning_tokens is None else int(reasoning_tokens),
     )
+
+
+def strip_reasoning(message: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    """The message without reasoning, and whether it had any (either shape)."""
+    clean = {k: v for k, v in message.items() if k not in REASONING_FIELDS}
+    present = any(message.get(k) for k in REASONING_FIELDS)
+    content = message.get("content")
+    if isinstance(content, str) and "<think>" in content:
+        present = True
+        clean["content"] = _THINK.sub("", content).strip()
+    return clean, present
 
 
 def _parse_arguments(arguments: object) -> tuple[dict[str, Any] | None, str]:

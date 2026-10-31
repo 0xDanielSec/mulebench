@@ -146,6 +146,9 @@ class LLMAgent:
                     cost_usd=cost,
                     request_id=response.request_id,
                     prompt_tokens=response.prompt_tokens,
+                    context_tokens=response.context_tokens,
+                    reasoning_present=response.reasoning_present,
+                    reasoning_tokens=response.reasoning_tokens,
                 )
             )
             turns.append(Turn(kind="assistant", provider_raw=response.provider_raw))

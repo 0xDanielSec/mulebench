@@ -81,6 +81,9 @@ refused. The checkpoint is deleted once a run completes.
 | `server_meta.context_length` | the model's trained maximum (`model_info`) |
 | `seed`, `temperature` | as sent; trial `t` uses `seed + t` |
 | `model_calls[].prompt_tokens` | `usage.prompt_tokens` of each call |
+| `model_calls[].context_tokens` | prompt + completion tokens of each call (reasoning included) |
+| `model_calls[].reasoning_present` | the call returned reasoning, in either shape below |
+| `model_calls[].reasoning_tokens` | `usage.completion_tokens_details.reasoning_tokens`, if reported |
 
 Fields come from Ollama-only endpoints; other servers record them as `null`.
 The metadata is fetched once when recording and stored as
@@ -95,8 +98,24 @@ silently lose the tool definitions, the session note or the injected text.
 
 - `doctor` warns when the effective `num_ctx` is below 8192 or unknown.
 - A trial is flagged `context_near_limit` when any model call uses at least 90%
-  of `num_ctx` (prompt tokens as counted by the server). Such a row is marked
+  of `num_ctx`, counting prompt + completion tokens as reported by the server
+  (reasoning tokens are part of the completion). Such a row is marked
   `resistance_meaningful=false`.
+
+## Reasoning models (thinking)
+
+Models such as qwen3 can return reasoning before their answer, in one of two
+shapes: a separate `reasoning` or `reasoning_content` field on the message, or
+`<think>...</think>` inside `content` (unclosed when cut off by `--max-tokens`).
+`OpenAICompatChatModel` (`strip_reasoning` in `mulebench.agents.llm.openai_compat`):
+
+- never reads reasoning as final text or as tool calls; tool calls come only
+  from `message.tool_calls`, even if the reasoning contains tool-call-like JSON;
+- strips it from the assistant message sent back in the history;
+- keeps it out of reports: the raw response body, reasoning included, is stored
+  only in the cassette;
+- records `reasoning_present` (and `reasoning_tokens` when reported) per model
+  call, and counts the call's completion tokens toward context usage.
 - `--max-tokens` (default 2048) caps the output per call; output tokens share
   the same window.
 

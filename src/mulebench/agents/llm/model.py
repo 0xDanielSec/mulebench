@@ -81,6 +81,10 @@ class ChatResponse(_Model):
     # Calls the adapter could not parse (e.g. arguments that are not JSON).
     invalid_tool_calls: tuple[InvalidToolCall, ...] = ()
     prompt_tokens: int | None = None  # whole prompt as counted by the server, if reported
+    # Prompt + completion tokens of the call (completion includes any reasoning).
+    context_tokens: int | None = None
+    reasoning_present: bool | None = None  # None: the adapter does not detect reasoning
+    reasoning_tokens: int | None = None  # if the server reports it
 
 
 class ModelCallError(Exception):

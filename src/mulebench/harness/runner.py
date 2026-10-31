@@ -275,7 +275,10 @@ def run_trial(
         tool_calls_total=run.tool_calls_total,
         malformed_tool_calls=dict(run.malformed_tool_calls),
         context_near_limit=near_context_limit(
-            [c.prompt_tokens for c in run.model_calls],
+            [
+                c.prompt_tokens if c.context_tokens is None else c.context_tokens
+                for c in run.model_calls
+            ],
             None if run.server_meta is None else run.server_meta.num_ctx,
         ),
         model_calls=list(run.model_calls),

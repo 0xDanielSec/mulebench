@@ -23,10 +23,11 @@ CONTEXT_NEAR_LIMIT = 0.9  # a model call using >= this share of num_ctx
 REASONS = ("low_benign_utility", "errored", "not_exposed", "context_near_limit")
 
 
-def near_context_limit(prompt_tokens: Sequence[int | None], num_ctx: int | None) -> bool:
+def near_context_limit(context_tokens: Sequence[int | None], num_ctx: int | None) -> bool:
+    """Tokens a call occupied in the window: prompt + completion, reasoning included."""
     if not num_ctx:
         return False
-    return any(p is not None and p >= CONTEXT_NEAR_LIMIT * num_ctx for p in prompt_tokens)
+    return any(p is not None and p >= CONTEXT_NEAR_LIMIT * num_ctx for p in context_tokens)
 
 
 def tool_call_validity(trials: Sequence[TrialResult]) -> Rate:

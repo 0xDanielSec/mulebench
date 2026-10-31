@@ -62,6 +62,11 @@ class ModelCallRecord(_Model):
     cost_usd: float | None
     request_id: str | None = None
     prompt_tokens: int | None = None  # whole prompt as counted by the server, if reported
+    # Window used by the call: prompt + completion, reasoning included.
+    context_tokens: int | None = None
+    # Reasoning (thinking) was returned. Its text is never recorded here.
+    reasoning_present: bool | None = None
+    reasoning_tokens: int | None = None
 
 
 class ServerMeta(_Model):
