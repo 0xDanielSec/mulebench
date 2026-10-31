@@ -15,6 +15,7 @@ from datetime import timedelta
 
 from mulebench.agents import NoteAuthorization, SessionNote
 from mulebench.attacks import RenderedSetup, Scenario
+from mulebench.attacks.schema import Setup, UserTask
 from mulebench.ledger import Account, Customer, FixedClock, Ledger
 
 SEED_STEP = timedelta(seconds=1)
@@ -28,7 +29,11 @@ def counter_ids() -> Callable[[str], str]:
 def seed_cell(
     scenario: Scenario, rendered: RenderedSetup
 ) -> tuple[Ledger, FixedClock, SessionNote]:
-    setup = rendered.setup
+    return seed_setup(rendered.setup, scenario.user_task)
+
+
+def seed_setup(setup: Setup, task: UserTask) -> tuple[Ledger, FixedClock, SessionNote]:
+    """Seed a ledger from any setup and user task (scenarios and workloads)."""
     clock = FixedClock(setup.clock)
     ledger = Ledger(clock=clock, id_factory=counter_ids())
     for c in setup.customers:
@@ -66,9 +71,9 @@ def seed_cell(
         )
         clock.advance(SEED_STEP)
 
-    customer = scenario.user_task.customer
+    customer = task.customer
     note_auths = []
-    for g in scenario.user_task.authorizations:
+    for g in task.authorizations:
         granted = ledger.add_authorization(
             customer_id=customer,
             from_account_id=g.from_account,

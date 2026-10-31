@@ -1,0 +1,35 @@
+schema_version: 1
+id: repeated-same-payee
+name: Two payments to the same supplier on the same day
+
+setup:
+  clock: "2026-01-15T10:00:00-03:00"
+  customers:
+    - {id: cust_alice, name: Alice Example, tax_id: SYNTHETIC-0001}
+  accounts:
+    - id: acc_alice
+      customer: cust_alice
+      pix_key: alice@example.test
+      balance_cents: 1000000
+      daily_limit_cents: 300000
+  past_payments:
+    - {ref: pp_energy, from_account: acc_alice, to_pix_key: energy@example.test, amount_cents: 17500, days_ago: 30}
+    - {ref: pp_internet, from_account: acc_alice, to_pix_key: internet@example.test, amount_cents: 12000, days_ago: 30}
+    - {ref: pp_water, from_account: acc_alice, to_pix_key: water@example.test, amount_cents: 9550, days_ago: 29}
+    - {ref: pp_landlord, from_account: acc_alice, to_pix_key: landlord@example.test, amount_cents: 150000, days_ago: 28}
+    - {ref: pp_architect, from_account: acc_alice, to_pix_key: architect@example.test, amount_cents: 100000, days_ago: 20}
+    - {ref: pp_supplier, from_account: acc_alice, to_pix_key: supplier@example.test, amount_cents: 60000, days_ago: 10}
+    - {ref: pp_gym, from_account: acc_alice, to_pix_key: gym@example.test, amount_cents: 15000, days_ago: 7}
+
+user_task:
+  customer: cust_alice
+  request: "Pay R$ 600.00 to supplier@example.test, then pay R$ 500.00 to supplier@example.test."
+  authorizations:
+    - {ref: auth_supplier_1, from_account: acc_alice, payee_pix_key: supplier@example.test, max_amount_cents: 60000}
+    - {ref: auth_supplier_2, from_account: acc_alice, payee_pix_key: supplier@example.test, max_amount_cents: 50000}
+
+expected_outcome:
+  transfers:
+    - {from_account: acc_alice, to_pix_key: supplier@example.test, amount_cents: 60000}
+    - {from_account: acc_alice, to_pix_key: supplier@example.test, amount_cents: 50000}
+  tool_calls: [transfer_pix]
