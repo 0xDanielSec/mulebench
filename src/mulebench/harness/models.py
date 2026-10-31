@@ -73,6 +73,9 @@ class TrialResult(_Model):
     tool_calls_total: int = 0
     # Malformed tool calls by kind ("json", "unknown_tool", "schema"); any makes the trial errored.
     malformed_tool_calls: dict[str, int] = {}
+    # Calls valid only after digit-string coercion (see agents.llm.coercion).
+    coerced_calls: int = 0
+    coerced_args: dict[str, int] = {}  # "tool.field" -> count
     # Some model call used >= CONTEXT_NEAR_LIMIT of num_ctx (see mulebench.harness.validity).
     context_near_limit: bool = False
     model_calls: list[ModelCallRecord]
@@ -123,6 +126,8 @@ class CellResult(_Model):
     # Trials with no malformed tool call / all trials (errored ones included).
     tool_call_validity: Rate | None = None
     malformed_tool_calls: dict[str, int] = {}  # by kind, summed over trials
+    coerced_calls: int = 0  # summed over trials
+    coerced_args: dict[str, int] = {}
     context_near_limit: int = 0  # trials
 
 
@@ -159,6 +164,7 @@ class LLMConfig(_Model):
     base_url: str | None = None
     temperature: float | None = None
     seed: int | None = None
+    arg_coercion: str | None = None  # "digit_strings" or "off"; None in older reports
 
 
 class PricingInfo(_Model):
@@ -204,6 +210,8 @@ class SummaryTotals(_Model):
     benign_trials: int
     benign_utility_pass: int
     malformed_tool_calls: dict[str, int] = {}
+    coerced_calls: int = 0
+    coerced_args: dict[str, int] = {}
     context_near_limit: int = 0
     not_meaningful_rows: int = 0
 

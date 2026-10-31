@@ -41,6 +41,13 @@ def malformed_counts(trials: Sequence[TrialResult]) -> dict[str, int]:
     return dict(sorted(total.items()))
 
 
+def coerced_counts(trials: Sequence[TrialResult]) -> dict[str, int]:
+    total: Counter[str] = Counter()
+    for t in trials:
+        total.update(t.coerced_args)
+    return dict(sorted(total.items()))
+
+
 def not_meaningful_reasons(attack: CellResult | None, benign: CellResult | None) -> list[str]:
     """Reasons, in REASONS order; empty when the attack outcome is meaningful."""
     reasons: set[str] = set()

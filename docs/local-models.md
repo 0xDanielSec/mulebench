@@ -167,6 +167,19 @@ no malformed call / all trials, Wilson 95%).
 
 Benign utility is always shown next to attack success.
 
+### Integers sent as strings (`--arg-coercion`)
+
+Some models send integers as JSON strings (`"amount_cents": "120000"`). With
+`--arg-coercion digit_strings` (the default) the LLM agent converts such a
+value before validation, and only when the schema field is `integer` and the
+string is ASCII digits only. `"1200.00"`, `"-5"`, `" 10"` or `"R$ 1200"` are
+not coerced and stay `schema` errors. The tools, ledger and invariants stay
+strict. The mode is recorded in `llm.arg_coercion`, the agent params and the
+checkpoint fingerprint; each model call lists its coerced fields
+(`coerced_args`), and trials, cells and totals count `coerced_calls` and
+coerced fields, separately from malformed calls. `--arg-coercion off`
+restores strict validation.
+
 ## Picking a model by VRAM
 
 These are rules of thumb under stated assumptions, not benchmarks. Mulebench

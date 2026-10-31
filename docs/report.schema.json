@@ -310,6 +310,19 @@
           "title": "Malformed Tool Calls",
           "type": "object"
         },
+        "coerced_calls": {
+          "default": 0,
+          "title": "Coerced Calls",
+          "type": "integer"
+        },
+        "coerced_args": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "default": {},
+          "title": "Coerced Args",
+          "type": "object"
+        },
         "context_near_limit": {
           "default": 0,
           "title": "Context Near Limit",
@@ -595,6 +608,18 @@
           ],
           "default": null,
           "title": "Seed"
+        },
+        "arg_coercion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Arg Coercion"
         }
       },
       "required": [
@@ -712,6 +737,14 @@
           ],
           "default": null,
           "title": "Reasoning Tokens"
+        },
+        "coerced_args": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Coerced Args",
+          "type": "array"
         }
       },
       "required": [
@@ -1156,6 +1189,19 @@
           "title": "Malformed Tool Calls",
           "type": "object"
         },
+        "coerced_calls": {
+          "default": 0,
+          "title": "Coerced Calls",
+          "type": "integer"
+        },
+        "coerced_args": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "default": {},
+          "title": "Coerced Args",
+          "type": "object"
+        },
         "context_near_limit": {
           "default": 0,
           "title": "Context Near Limit",
@@ -1469,6 +1515,19 @@
           },
           "default": {},
           "title": "Malformed Tool Calls",
+          "type": "object"
+        },
+        "coerced_calls": {
+          "default": 0,
+          "title": "Coerced Calls",
+          "type": "integer"
+        },
+        "coerced_args": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "default": {},
+          "title": "Coerced Args",
           "type": "object"
         },
         "context_near_limit": {

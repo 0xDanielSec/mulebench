@@ -37,6 +37,7 @@ from mulebench.harness.presets import build_guard_set, preset_guard_names
 from mulebench.harness.seed import seed_cell
 from mulebench.harness.stats import wilson
 from mulebench.harness.validity import (
+    coerced_counts,
     malformed_counts,
     near_context_limit,
     tool_call_validity,
@@ -274,6 +275,8 @@ def run_trial(
         server_meta=run.server_meta,
         tool_calls_total=run.tool_calls_total,
         malformed_tool_calls=dict(run.malformed_tool_calls),
+        coerced_calls=run.coerced_calls,
+        coerced_args=dict(run.coerced_args),
         context_near_limit=near_context_limit(
             [
                 c.prompt_tokens if c.context_tokens is None else c.context_tokens
@@ -406,6 +409,8 @@ def _validity_fields(trials: list[TrialResult]) -> dict[str, Any]:
     return {
         "tool_call_validity": tool_call_validity(trials),
         "malformed_tool_calls": malformed_counts(trials),
+        "coerced_calls": sum(t.coerced_calls for t in trials),
+        "coerced_args": coerced_counts(trials),
         "context_near_limit": sum(t.context_near_limit for t in trials),
     }
 

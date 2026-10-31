@@ -6,7 +6,8 @@
                   [--model M] [--effort E] [--prompt-variants a,b]
                   [--cassettes DIR] [--record] [--max-cost-usd X]
                   [--base-url URL] [--allow-remote] [--seed S] [--temperature T]
-                  [--max-tokens N] [--checkpoint FILE] [--resume]
+                  [--max-tokens N] [--arg-coercion digit_strings|off]
+                  [--checkpoint FILE] [--resume]
     mulebench doctor --model TAG [--base-url URL] [--allow-remote]
     mulebench schema [--out report.schema.json]
 
@@ -110,6 +111,12 @@ def _parser() -> argparse.ArgumentParser:
     llm.add_argument("--seed", type=int, help="openai-compatible: base seed (trial t: seed + t)")
     llm.add_argument(
         "--temperature", type=float, help="openai-compatible: sampling temperature (default 0)"
+    )
+    llm.add_argument(
+        "--arg-coercion",
+        choices=("digit_strings", "off"),
+        default="digit_strings",
+        help="coerce integers sent as digit-only strings (default); off: strict",
     )
     llm.add_argument(
         "--max-tokens",
@@ -347,6 +354,7 @@ def _build_llm(
         effort=args.effort,
         max_steps=args.max_steps,
         meter=CostMeter(args.max_cost_usd),
+        arg_coercion=args.arg_coercion,
     )
     llm_config = LLMConfig(
         provider="anthropic",
@@ -355,6 +363,7 @@ def _build_llm(
         max_tokens=agent.max_tokens,
         refusal_fallbacks="off",
         prompt_sha256={p: prompt_sha256(p) for p in prompts},
+        arg_coercion=args.arg_coercion,
     )
     pricing = PricingInfo(
         as_of=PRICING_AS_OF,
@@ -439,6 +448,7 @@ def _build_local(
         meter=CostMeter(args.max_cost_usd),
         temperature=temperature,
         seed=seed,
+        arg_coercion=args.arg_coercion,
     )
     llm_config = LLMConfig(
         provider=PROVIDER,
@@ -450,6 +460,7 @@ def _build_local(
         base_url=base_url,
         temperature=temperature,
         seed=seed,
+        arg_coercion=args.arg_coercion,
     )
     pricing = PricingInfo(as_of="n/a", note="local model: not priced", per_mtok={})
     return agent, llm_config, pricing, prompts

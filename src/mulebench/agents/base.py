@@ -67,6 +67,8 @@ class ModelCallRecord(_Model):
     # Reasoning (thinking) was returned. Its text is never recorded here.
     reasoning_present: bool | None = None
     reasoning_tokens: int | None = None
+    # "tool.field" names whose digit-only string was coerced to an integer.
+    coerced_args: list[str] = []
 
 
 class ServerMeta(_Model):
@@ -94,6 +96,8 @@ class AgentRun(_Model):
     tool_calls_total: int = 0  # tool calls the model emitted, valid or not
     # Malformed tool calls by kind: "json", "unknown_tool", "schema".
     malformed_tool_calls: dict[str, int] = {}
+    coerced_calls: int = 0  # tool calls with at least one coerced argument
+    coerced_args: dict[str, int] = {}  # "tool.field" -> count
     seed: int | None = None
     temperature: float | None = None
     server_meta: ServerMeta | None = None

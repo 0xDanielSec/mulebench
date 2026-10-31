@@ -3,6 +3,8 @@
 A malformed tool call (arguments that are not a JSON object, an unknown tool, or
 arguments that fail the tool's schema) stops the trial as errored, before any
 call of that turn runs. It is never recorded as the model resisting an attack.
+Integers sent as digit-only strings are coerced first (see coercion.py) unless
+`arg_coercion="off"`; every coerced field is recorded.
 """
 
 from __future__ import annotations
@@ -19,6 +21,11 @@ from mulebench.agents.base import (
     StopReason,
 )
 from mulebench.agents.llm.budget import CostMeter
+from mulebench.agents.llm.coercion import (
+    DEFAULT_ARG_COERCION,
+    ArgCoercion,
+    coerce_args,
+)
 from mulebench.agents.llm.model import (
     ChatModel,
     ChatRequest,
@@ -60,6 +67,7 @@ class LLMAgent:
         meter: CostMeter | None = None,
         temperature: float | None = None,
         seed: int | None = None,
+        arg_coercion: ArgCoercion = DEFAULT_ARG_COERCION,
     ) -> None:
         self.chat = chat
         self.model = model
@@ -70,6 +78,7 @@ class LLMAgent:
         self.meter = meter or CostMeter()
         self.temperature = temperature
         self.seed = seed  # base seed; trial t uses seed + t
+        self.arg_coercion = arg_coercion
 
     @property
     def params(self) -> dict[str, object]:
@@ -81,6 +90,7 @@ class LLMAgent:
             "max_steps": self.max_steps,
             "max_turns": self.max_turns,
             "refusal_fallbacks": "off",
+            "arg_coercion": self.arg_coercion,
         }
         if self.temperature is not None:
             params["temperature"] = self.temperature
@@ -101,8 +111,11 @@ class LLMAgent:
         calls: list[ModelCallRecord] = []
         seed = None if self.seed is None else self.seed + task.trial
         meta: ServerMeta | None = getattr(self.chat, "server_meta", None)
+        schemas = {t.name: t.input_schema for t in tool_defs}
         emitted = 0
         malformed: Counter[str] = Counter()
+        coerced_fields: Counter[str] = Counter()  # "tool.field" -> count
+        coerced_calls = 0
 
         def finish(stopped: StopReason, error: str | None = None) -> AgentRun:
             return AgentRun(
@@ -113,6 +126,8 @@ class LLMAgent:
                 session_note_channel=channel,
                 tool_calls_total=emitted,
                 malformed_tool_calls=dict(sorted(malformed.items())),
+                coerced_calls=coerced_calls,
+                coerced_args=dict(sorted(coerced_fields.items())),
                 seed=seed,
                 temperature=self.temperature,
                 server_meta=meta,
@@ -137,6 +152,15 @@ class LLMAgent:
                 return finish("errored", exc.kind)
             cost = cost_usd(response.usage, response.served_model)
             self.meter.add(cost)
+            tool_calls = []
+            call_coerced: list[str] = []
+            for raw in response.tool_calls:
+                args, fields = coerce_args(raw.args, schemas.get(raw.name), self.arg_coercion)
+                tool_calls.append(raw.model_copy(update={"args": args}) if fields else raw)
+                if fields:
+                    coerced_calls += 1
+                    call_coerced += [f"{raw.name}.{f}" for f in fields]
+            coerced_fields.update(call_coerced)
             calls.append(
                 ModelCallRecord(
                     served_model=response.served_model,
@@ -149,12 +173,13 @@ class LLMAgent:
                     context_tokens=response.context_tokens,
                     reasoning_present=response.reasoning_present,
                     reasoning_tokens=response.reasoning_tokens,
+                    coerced_args=call_coerced,
                 )
             )
             turns.append(Turn(kind="assistant", provider_raw=response.provider_raw))
             emitted += len(response.tool_calls) + len(response.invalid_tool_calls)
             malformed.update(c.kind for c in response.invalid_tool_calls)
-            for call in response.tool_calls:
+            for call in tool_calls:
                 problem = tools.check_call(call.name, call.args)
                 if problem is not None:
                     malformed[problem[0]] += 1
@@ -162,11 +187,11 @@ class LLMAgent:
                 return finish("errored", "malformed_tool_call:" + ",".join(sorted(malformed)))
             if response.stop_reason == "refusal":
                 return finish("refused")
-            if not response.tool_calls:
+            if not tool_calls:
                 return finish("done")
 
             outcomes: list[ToolOutcome] = []
-            for call in response.tool_calls:
+            for call in tool_calls:
                 if len(steps) >= self.max_steps:
                     return finish("step_cap")
                 result = tools.call(call.name, call.args)

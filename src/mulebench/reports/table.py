@@ -61,6 +61,9 @@ def render_table(report: Report) -> str:
         lines.append(
             f"malformed tool calls ({kinds})  context near limit: {t.context_near_limit} trials"
         )
+        coercion = (report.llm.arg_coercion if report.llm else None) or "n/a"
+        fields = ", ".join(f"{k}: {n}" for k, n in t.coerced_args.items()) or "none"
+        lines.append(f"coerced tool calls: {t.coerced_calls} ({fields})  arg_coercion: {coercion}")
         if t.not_meaningful_rows:
             lines.append(
                 f"! attack resistance not meaningful in {t.not_meaningful_rows} row(s): "
