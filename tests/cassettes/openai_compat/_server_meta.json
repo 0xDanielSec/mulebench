@@ -1,0 +1,9 @@
+{
+  "model": "synthetic-tiny:1b",
+  "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "quantization": "Q4_K_M",
+  "server_version": "0.0.0-synthetic",
+  "num_ctx": 8192,
+  "num_ctx_source": "parameters",
+  "context_length": 32768
+}
