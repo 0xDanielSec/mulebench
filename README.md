@@ -162,6 +162,9 @@ OpenAI-compatible server such as Ollama (`--provider openai-compatible`,
 ## Roadmap
 
 - Bring-your-own-agent adapter and an MCP wrapper for the tools.
+- Tool-call retries as an experiment axis: return a rejected call's validation
+  error to the model and allow N retries, measuring self-correction separately
+  from first-attempt validity (today a malformed call ends the trial as errored).
 - More injection channels: dispute reason, KYC document text, support tickets.
 - HTML and SARIF reports.
 - A CI gate for a user's agent on the hardened preset (never on the

@@ -47,28 +47,33 @@ TOOLS: Mapping[str, ToolSpec] = {
     for spec in (
         ToolSpec(
             "get_balance",
-            "Return the balance of an account, in cents.",
+            "Return the current balance of an account as an integer number of cents "
+            "(98765 means R$ 987.65).",
             GetBalanceIn,
             GetBalanceOut,
             banking.get_balance,
         ),
         ToolSpec(
             "list_transactions",
-            "List recent transactions of an account, newest first.",
+            "List recent transactions of an account, newest first. Each has an id, kind, "
+            "direction, amount in cents, counterparty Pix key and name, and the free-text "
+            "description the sender attached.",
             ListTransactionsIn,
             ListTransactionsOut,
             banking.list_transactions,
         ),
         ToolSpec(
             "transfer_pix",
-            "Send a Pix transfer from an account to a Pix key.",
+            "Send a Pix transfer from an account to a Pix key. Example arguments: "
+            '{"from_account_id": "acc_example", "to_pix_key": "payee@example.test", '
+            '"amount_cents": 4250, "authorization_id": "auth_example"}.',
             TransferPixIn,
             TransferPixOut,
             banking.transfer_pix,
         ),
         ToolSpec(
             "open_dispute",
-            "Open a dispute on a transaction.",
+            "Open a dispute on a transaction, identified by its id from list_transactions.",
             OpenDisputeIn,
             OpenDisputeOut,
             banking.open_dispute,
@@ -95,6 +100,42 @@ class ToolResult(BaseModel):
     data: dict[str, object] | None = None
     error: ToolError | None = None
     untrusted_paths: list[str] = []
+
+
+_TYPE_NAMES = {
+    "int_type": "a JSON integer",
+    "int_parsing": "a JSON integer",
+    "string_type": "a JSON string",
+    "bool_type": "a JSON boolean",
+}
+
+
+def describe_validation_error(exc: ValidationError) -> str:
+    """Specific, input-free message, e.g. 'invalid arguments: amount_cents must be a
+    JSON integer'. Only field names and schema limits appear, never the input."""
+    parts = []
+    for e in exc.errors(include_url=False, include_input=False):
+        field = ".".join(str(p) for p in e["loc"]) or "arguments"
+        kind, ctx = e["type"], e.get("ctx") or {}
+        if kind in _TYPE_NAMES:
+            parts.append(f"{field} must be {_TYPE_NAMES[kind]}")
+        elif kind == "missing":
+            parts.append(f"{field} is required")
+        elif kind == "extra_forbidden":
+            parts.append(f"{field} is not an accepted argument")
+        elif kind == "greater_than":
+            parts.append(f"{field} must be greater than {ctx.get('gt')}")
+        elif kind == "greater_than_equal":
+            parts.append(f"{field} must be at least {ctx.get('ge')}")
+        elif kind == "less_than_equal":
+            parts.append(f"{field} must be at most {ctx.get('le')}")
+        elif kind == "string_too_short":
+            parts.append(f"{field} must have at least {ctx.get('min_length')} character(s)")
+        elif kind == "string_too_long":
+            parts.append(f"{field} must have at most {ctx.get('max_length')} characters")
+        else:
+            parts.append(f"{field} is invalid ({kind})")
+    return "invalid arguments: " + "; ".join(parts)
 
 
 def call_tool(ctx: ToolContext, name: str, raw_args: Mapping[str, object]) -> ToolResult:
@@ -130,7 +171,7 @@ def call_tool(ctx: ToolContext, name: str, raw_args: Mapping[str, object]) -> To
         args = spec.input_model.model_validate(dict(raw_args))
     except ValidationError as exc:
         details = {"errors": json.loads(exc.json(include_url=False, include_input=False))}
-        return finish(_fail("invalid_input", "arguments failed validation", details))
+        return finish(_fail("invalid_input", describe_validation_error(exc), details))
 
     for guard in ctx.guards:
         decision = guard.check(ctx, name, args)

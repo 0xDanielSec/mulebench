@@ -165,6 +165,8 @@ class LLMConfig(_Model):
     temperature: float | None = None
     seed: int | None = None
     arg_coercion: str | None = None  # "digit_strings" or "off"; None in older reports
+    # Version of the tool names, descriptions and input schemas the model saw.
+    tool_schema_sha256: str | None = None
 
 
 class PricingInfo(_Model):

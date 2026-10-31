@@ -180,6 +180,10 @@ checkpoint fingerprint; each model call lists its coerced fields
 coerced fields, separately from malformed calls. `--arg-coercion off`
 restores strict validation.
 
+Tool descriptions and field descriptions (units, examples, where ids come from)
+are versioned by `llm.tool_schema_sha256`; compare results only across runs
+with the same hash. See `docs/tools.md`.
+
 ## Picking a model by VRAM
 
 These are rules of thumb under stated assumptions, not benchmarks. Mulebench

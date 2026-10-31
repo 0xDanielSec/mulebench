@@ -620,6 +620,18 @@
           ],
           "default": null,
           "title": "Arg Coercion"
+        },
+        "tool_schema_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Schema Sha256"
         }
       },
       "required": [

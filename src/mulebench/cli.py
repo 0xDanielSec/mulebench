@@ -43,6 +43,7 @@ from mulebench.harness import NO_PROMPT, UnsupportedInvariant, run_all
 from mulebench.harness.models import LLMConfig, PricingInfo
 from mulebench.harness.presets import DEFAULT_PRESETS, UnknownPreset, preset_guard_names
 from mulebench.reports import build_report, render_table, schema_to_json, write_report
+from mulebench.tools.client import tool_schema_sha256
 
 DEFAULT_LLM_TRIALS = 10
 LOCAL_URL = "http://localhost:11434/v1"  # Ollama; same as http_transport.DEFAULT_BASE_URL
@@ -364,6 +365,7 @@ def _build_llm(
         refusal_fallbacks="off",
         prompt_sha256={p: prompt_sha256(p) for p in prompts},
         arg_coercion=args.arg_coercion,
+        tool_schema_sha256=tool_schema_sha256(),
     )
     pricing = PricingInfo(
         as_of=PRICING_AS_OF,
@@ -461,6 +463,7 @@ def _build_local(
         temperature=temperature,
         seed=seed,
         arg_coercion=args.arg_coercion,
+        tool_schema_sha256=tool_schema_sha256(),
     )
     pricing = PricingInfo(as_of="n/a", note="local model: not priced", per_mtok={})
     return agent, llm_config, pricing, prompts

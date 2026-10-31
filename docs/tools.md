@@ -41,6 +41,23 @@ tool, and records the call in the trace. It never raises for agent mistakes;
 it returns a `ToolResult` with `outcome` set to one of `ok`, `unknown_tool`,
 `invalid_input`, `denied` or `ledger_error`.
 
+An `invalid_input` error names the field and the rule, without echoing the
+input, e.g. `invalid arguments: amount_cents must be a JSON integer`; the
+pydantic error list (types and locations, no input) is in `error.details`.
+
+## What models see
+
+`model_tool_schemas()` gives each tool's name, description and input schema.
+Every input field has a description of its format and meaning: units
+(`amount_cents` is a JSON integer of cents), where ids come from (accounts and
+authorizations are lines in the session note), and placeholder examples
+(`acc_example`, `auth_example`) that match no scenario value. The descriptions
+stay neutral: they say nothing about how to treat tool output, because prompt
+defenses are a separate experiment axis. `tests/tools/test_schema_descriptions.py`
+checks completeness, a list of defensive keywords and the examples.
+`tool_schema_sha256()` versions this view; LLM reports record it in
+`llm.tool_schema_sha256`, and it is part of the checkpoint fingerprint.
+
 ## Session identity and idempotency
 
 `ToolContext.customer_id` is the authenticated customer of the session. The

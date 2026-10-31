@@ -6,16 +6,31 @@ ledger, the guards or the trace.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Mapping
 from typing import Any
 
 from pydantic import ValidationError
 
 from mulebench.tools.context import ToolContext
-from mulebench.tools.registry import TOOLS, ToolError, ToolResult, call_tool
+from mulebench.tools.registry import (
+    TOOLS,
+    ToolError,
+    ToolResult,
+    call_tool,
+    describe_validation_error,
+)
 from mulebench.tools.schemas import UNTRUSTED_KEY
 
-__all__ = ["ToolClient", "ToolError", "ToolResult", "strip_untrusted_markers"]
+__all__ = [
+    "ToolClient",
+    "ToolError",
+    "ToolResult",
+    "model_tool_schemas",
+    "strip_untrusted_markers",
+    "tool_schema_sha256",
+]
 
 
 def strip_untrusted_markers(schema: object) -> object:
@@ -25,6 +40,29 @@ def strip_untrusted_markers(schema: object) -> object:
     if isinstance(schema, list):
         return [strip_untrusted_markers(v) for v in schema]
     return schema
+
+
+def model_tool_schemas() -> list[dict[str, Any]]:
+    """Tool definitions for a model: name, description, input schema.
+
+    Sorted by name for a stable request prefix. No `x-untrusted` markers.
+    """
+    return [
+        {
+            "name": spec.name,
+            "description": spec.description,
+            "input_schema": strip_untrusted_markers(spec.input_schema()),  # dict in, dict out
+        }
+        for spec in sorted(TOOLS.values(), key=lambda s: s.name)
+    ]
+
+
+def tool_schema_sha256() -> str:
+    """Version of what models see of the tools (names, descriptions, schemas)."""
+    canonical = json.dumps(
+        model_tool_schemas(), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 class ToolClient:
@@ -45,22 +83,11 @@ class ToolClient:
         try:
             spec.input_model.model_validate(dict(args))
         except ValidationError as exc:
-            return "schema", f"{exc.error_count()} validation error(s)"
+            return "schema", describe_validation_error(exc)
         return None
 
     def tool_names(self) -> list[str]:
         return sorted(TOOLS)
 
     def model_tool_schemas(self) -> list[dict[str, Any]]:
-        """Tool definitions for a model: name, description, input schema.
-
-        Sorted by name for a stable request prefix. No `x-untrusted` markers.
-        """
-        return [
-            {
-                "name": spec.name,
-                "description": spec.description,
-                "input_schema": strip_untrusted_markers(spec.input_schema()),  # dict in, dict out
-            }
-            for spec in sorted(TOOLS.values(), key=lambda s: s.name)
-        ]
+        return model_tool_schemas()
