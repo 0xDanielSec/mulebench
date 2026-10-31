@@ -85,3 +85,7 @@ Generated from `mulebench ablate`; a test fails if it drifts
 
 Not measurable with this agent: untrusted_content_marking
 <!-- ablation:end -->
+
+False positives: none observed in the current controls (one benign task per
+scenario). This is not evidence that the guards add no friction; six benign
+tasks cover very little legitimate behavior.
