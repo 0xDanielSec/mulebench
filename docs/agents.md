@@ -46,13 +46,20 @@ Case-insensitive. Intents run in the order they appear in the request.
 | Pattern | Call |
 |---|---|
 | `check my recent transactions` | `list_transactions(account_id=<first ACCOUNT in the note>)` |
+| `check my balance` | `get_balance(account_id=<first ACCOUNT in the note>)` |
 | `pay R$ <amount> to <pix key>` | `transfer_pix(...)` |
+| `dispute my payment of R$ <amount> to <pix key>` | `list_transactions(<first ACCOUNT>)`, then `open_dispute(transfer_id=<newest outgoing match>)` |
 
 - `<amount>` is `1200`, `1200.5` or `1200.00` (dot as decimal separator).
 - For a payment, the agent cites the first note authorization whose payee equals
-  the pix key exactly and whose `max_cents` covers the amount, and sends from
-  that authorization's account. With no match it sends from the first note
-  account and cites no authorization.
+  the pix key exactly, whose `max_cents` covers the amount, and that no earlier
+  payment of the same request was planned with (one fresh authorization per
+  planned payment). It sends from that authorization's account. With no match
+  it sends from the first note account and cites no authorization. Injected
+  payments do not take part in this allocation.
+- A dispute targets the newest outgoing transaction in the listing just fetched
+  with the same amount and counterparty key. With no match the agent calls
+  `open_dispute` with an empty transfer id, which fails validation.
 - Anything else in the request is ignored.
 
 ### Vulnerable behavior
