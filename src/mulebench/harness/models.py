@@ -154,6 +154,11 @@ class LLMConfig(_Model):
     max_tokens: int
     refusal_fallbacks: Literal["off"]
     prompt_sha256: dict[str, str]
+    # openai-compatible only: server base URL and the sampling sent per trial
+    # (temperature; seed is the base, trial t uses seed + t).
+    base_url: str | None = None
+    temperature: float | None = None
+    seed: int | None = None
 
 
 class PricingInfo(_Model):

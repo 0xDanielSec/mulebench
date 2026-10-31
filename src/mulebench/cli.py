@@ -2,9 +2,12 @@
 
     mulebench run [<dir> | --builtin] [--out report.json]
                   [--agent scripted|llm] [--trials N] [--max-steps N]
+                  [--provider anthropic|openai-compatible]
                   [--model M] [--effort E] [--prompt-variants a,b]
                   [--cassettes DIR] [--record] [--max-cost-usd X]
-                  [--checkpoint FILE] [--resume]
+                  [--base-url URL] [--allow-remote] [--seed S] [--temperature T]
+                  [--max-tokens N] [--checkpoint FILE] [--resume]
+    mulebench doctor --model TAG [--base-url URL] [--allow-remote]
     mulebench schema [--out report.schema.json]
 
 Long runs write a per-trial checkpoint (JSON Lines): --checkpoint FILE, or by
@@ -13,7 +16,9 @@ trials already in it. Ctrl+C keeps the finished trials and writes a valid
 partial report. The checkpoint is deleted once a run completes.
 
 LLM runs replay recorded cassettes by default. `--record` makes live calls and
-stores them; it requires MB_LIVE=1, ANTHROPIC_API_KEY and --max-cost-usd.
+stores them. Anthropic: requires MB_LIVE=1, ANTHROPIC_API_KEY and
+--max-cost-usd. openai-compatible (Ollama, local): requires MB_LIVE=1 only; the
+base URL must be a loopback host unless --allow-remote. See docs/local-models.md.
 
 Exit codes for `run`: 0 = completed and every attack trial exposed the payload;
 1 = at least one attack trial was not_exposed (invalid scenario); 2 = usage,
@@ -39,6 +44,9 @@ from mulebench.harness.presets import DEFAULT_PRESETS, UnknownPreset, preset_gua
 from mulebench.reports import build_report, render_table, schema_to_json, write_report
 
 DEFAULT_LLM_TRIALS = 10
+LOCAL_URL = "http://localhost:11434/v1"  # Ollama; same as http_transport.DEFAULT_BASE_URL
+LOCAL_MAX_TOKENS = 2048  # output tokens also count toward a small local num_ctx
+SERVER_META_FILE = "_server_meta.json"  # in the cassette directory
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -97,10 +105,47 @@ def _parser() -> argparse.ArgumentParser:
     llm.add_argument("--cassettes", type=Path, help="cassette directory (replay by default)")
     llm.add_argument("--record", action="store_true", help="make live calls and record them")
     llm.add_argument("--max-cost-usd", type=float, help="whole-run cost cap")
+    llm.add_argument("--provider", choices=("anthropic", "openai-compatible"), default="anthropic")
+    _add_server_args(llm)
+    llm.add_argument("--seed", type=int, help="openai-compatible: base seed (trial t: seed + t)")
+    llm.add_argument(
+        "--temperature", type=float, help="openai-compatible: sampling temperature (default 0)"
+    )
+    llm.add_argument(
+        "--max-tokens",
+        type=int,
+        help=f"openai-compatible: output tokens per call (default {LOCAL_MAX_TOKENS})",
+    )
+
+    doctor = sub.add_parser(
+        "doctor", help="check a local OpenAI-compatible server (Ollama) before a run"
+    )
+    doctor.add_argument("--model", required=True, help="model tag, e.g. qwen3:8b")
+    _add_server_args(doctor)
 
     schema = sub.add_parser("schema", help="print the report JSON Schema")
     schema.add_argument("--out", type=Path, help="write the schema here instead")
     return parser
+
+
+def _add_server_args(group: argparse._ActionsContainer) -> None:
+    group.add_argument("--base-url", help=f"openai-compatible base URL (default {LOCAL_URL})")
+    group.add_argument(
+        "--allow-remote", action="store_true", help="allow a base URL that is not loopback"
+    )
+
+
+def _doctor(args: argparse.Namespace) -> int:
+    try:
+        from mulebench.agents.llm.http_transport import RemoteHostRefused
+        from mulebench.doctor import print_checks, run_doctor
+    except ImportError:
+        return _error("doctor needs the local extra: pip install mulebench[local]")
+    try:
+        checks = run_doctor(args.model, args.base_url or LOCAL_URL, allow_remote=args.allow_remote)
+    except (RemoteHostRefused, ValueError) as exc:
+        return _error(str(exc))
+    return print_checks(checks)
 
 
 def _error(message: str) -> int:
@@ -146,6 +191,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "ablate":
         return _ablate(args.directory, args.out)
+
+    if args.command == "doctor":
+        return _doctor(args)
 
     directory: Path | None = args.directory
     if directory is not None and not directory.is_dir():
@@ -248,6 +296,18 @@ def _build_llm(
 ) -> tuple[Agent, LLMConfig, PricingInfo, list[str]] | int:
     if not args.model:
         return _error("--agent llm requires --model")
+    if args.provider == "openai-compatible":
+        return _build_local(args)
+    local_only = {
+        "--base-url": args.base_url,
+        "--allow-remote": args.allow_remote or None,
+        "--seed": args.seed,
+        "--temperature": args.temperature,
+        "--max-tokens": args.max_tokens,
+    }
+    used = [flag for flag, value in local_only.items() if value is not None]
+    if used:
+        return _error(f"{', '.join(used)} only apply to --provider openai-compatible")
     try:
         from mulebench.agents.llm import CostMeter, LLMAgent
         from mulebench.agents.llm.anthropic_model import AnthropicChatModel
@@ -311,6 +371,87 @@ def _build_llm(
             }
         },
     )
+    return agent, llm_config, pricing, prompts
+
+
+def _build_local(
+    args: argparse.Namespace,
+) -> tuple[Agent, LLMConfig, PricingInfo, list[str]] | int:
+    try:
+        from mulebench.agents.base import ServerMeta
+        from mulebench.agents.llm import CostMeter, LLMAgent
+        from mulebench.agents.llm.http_transport import (
+            LocalServerClient,
+            OpenAICompatTransport,
+            RemoteHostRefused,
+            ServerUnreachable,
+            check_base_url,
+        )
+        from mulebench.agents.llm.openai_compat import PROVIDER, OpenAICompatChatModel
+        from mulebench.agents.llm.prompts import PROMPTS, prompt_sha256
+        from mulebench.agents.llm.transport import CassetteTransport, LiveCallsDisabled, Transport
+    except ImportError:
+        return _error(
+            "--provider openai-compatible needs the local extra: pip install mulebench[local]"
+        )
+
+    prompts = [p.strip() for p in args.prompt_variants.split(",") if p.strip()]
+    unknown = [p for p in prompts if p not in PROMPTS]
+    if unknown or not prompts:
+        return _error(f"unknown prompt variants {unknown}; known: {sorted(PROMPTS)}")
+    if args.cassettes is None:
+        return _error("--agent llm needs --cassettes DIR (replay, or --record into it)")
+    try:
+        base_url = check_base_url(args.base_url or LOCAL_URL, allow_remote=args.allow_remote)
+    except (RemoteHostRefused, ValueError) as exc:
+        return _error(str(exc))
+    meta_path: Path = args.cassettes / SERVER_META_FILE
+    transport: Transport
+    meta: ServerMeta | None
+    if args.record:
+        try:
+            upstream = OpenAICompatTransport(base_url, allow_remote=args.allow_remote)
+            client = LocalServerClient(base_url, allow_remote=args.allow_remote)
+            meta = client.server_meta(args.model)
+        except LiveCallsDisabled as exc:
+            return _error(str(exc))
+        except ServerUnreachable as exc:
+            return _error(f"server not reachable ({exc}); try `mulebench doctor`")
+        args.cassettes.mkdir(parents=True, exist_ok=True)
+        meta_path.write_bytes(meta.model_dump_json(indent=2).encode("utf-8") + b"\n")
+        transport = CassetteTransport(args.cassettes, "record", upstream)
+    else:
+        meta = (
+            ServerMeta.model_validate_json(meta_path.read_text(encoding="utf-8"))
+            if meta_path.exists()
+            else None
+        )
+        transport = CassetteTransport(args.cassettes, "replay")
+
+    temperature = 0.0 if args.temperature is None else args.temperature
+    seed = 0 if args.seed is None else args.seed
+    agent = LLMAgent(
+        OpenAICompatChatModel(transport, meta),
+        model=args.model,
+        effort="none",
+        max_tokens=args.max_tokens or LOCAL_MAX_TOKENS,
+        max_steps=args.max_steps,
+        meter=CostMeter(args.max_cost_usd),
+        temperature=temperature,
+        seed=seed,
+    )
+    llm_config = LLMConfig(
+        provider=PROVIDER,
+        model=args.model,
+        effort="none",
+        max_tokens=agent.max_tokens,
+        refusal_fallbacks="off",
+        prompt_sha256={p: prompt_sha256(p) for p in prompts},
+        base_url=base_url,
+        temperature=temperature,
+        seed=seed,
+    )
+    pricing = PricingInfo(as_of="n/a", note="local model: not priced", per_mtok={})
     return agent, llm_config, pricing, prompts
 
 
