@@ -346,3 +346,50 @@ def test_unreachable_server() -> None:
 def test_metadata_client_refuses_remote() -> None:
     with pytest.raises(RemoteHostRefused):
         LocalServerClient(f"http://{ip(203, 0, 113, 9)}:11434/v1")
+
+
+# --------------------------------------- derived models (ollama create)
+
+
+def test_digest_for_a_derived_model_listed_as_latest() -> None:
+    """`ollama create llama31-8b-8k -f Modelfile` is listed as `llama31-8b-8k:latest`;
+    /api/show has no digest. The digest comes from /api/tags."""
+    client = LocalServerClient(
+        client=ollama(
+            {
+                "GET /api/version": {"version": "0.40.13"},
+                "GET /api/tags": {
+                    "models": [
+                        {"name": "llama3.1:8b", "digest": "sha256:base"},
+                        {"name": "llama31-8b-8k:latest", "digest": "sha256:derived"},
+                    ]
+                },
+                "POST /api/show": {
+                    "details": {"quantization_level": "Q4_K_M"},
+                    "parameters": "num_ctx 8192",
+                },
+            }
+        )
+    )
+    meta = client.server_meta("llama31-8b-8k")
+    assert (meta.digest, meta.num_ctx, meta.quantization) == ("sha256:derived", 8192, "Q4_K_M")
+
+
+def test_explicit_tags_match_exactly_and_ps_matches_latest() -> None:
+    from mulebench.agents.llm.http_transport import same_model
+
+    assert same_model({"name": "m:latest"}, "m")
+    assert same_model({"model": "m:latest"}, "m")
+    assert not same_model({"name": "m:8b"}, "m")
+    assert not same_model({"name": "m:latest"}, "m:8b")
+    client = LocalServerClient(
+        client=ollama(
+            {
+                "GET /api/version": {"version": "0.40.13"},
+                "POST /api/show": {"parameters": "stop x"},
+                "GET /api/ps": {"models": [{"name": "m:latest", "context_length": 8192}]},
+            }
+        )
+    )
+    meta = client.server_meta("m")
+    assert (meta.num_ctx, meta.num_ctx_source) == (8192, "ps")

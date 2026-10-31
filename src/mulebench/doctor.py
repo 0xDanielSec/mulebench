@@ -25,6 +25,7 @@ from mulebench.agents.llm.http_transport import (
     LocalServerClient,
     OpenAICompatTransport,
     ServerUnreachable,
+    same_model,
 )
 from mulebench.agents.llm.model import ChatResponse, ModelCallError, ModelRequestInvalid
 from mulebench.agents.llm.openai_compat import ResponseShapeError, parse_completion
@@ -82,7 +83,7 @@ def run_doctor(
     )
 
     names = server.models()
-    if model not in names and f"{model}:latest" not in names:
+    if not any(same_model({"name": n}, model) for n in names):
         hint = f"run `ollama pull {model}`" if version else "load it in the server"
         checks.append(Check("fail", "model", f"{model!r} is not available; {hint}"))
         return checks

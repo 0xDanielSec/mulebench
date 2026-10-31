@@ -176,12 +176,16 @@ class LocalServerClient:
             context_length = next(
                 (int(v) for k, v in info.items() if k.endswith(".context_length")), None
             )
-        for m in _entries(self._get(f"{self.root}/api/tags"), "models"):
-            if m.get("name") == model:
-                digest = m.get("digest")
+        if isinstance(show, dict) and isinstance(show.get("digest"), str):
+            digest = show["digest"]
+        if digest is None:  # /api/show usually has none: fall back to /api/tags
+            for m in _entries(self._get(f"{self.root}/api/tags"), "models"):
+                if same_model(m, model) and isinstance(m.get("digest"), str):
+                    digest = m["digest"]
+                    break
         if num_ctx is None:
             for m in _entries(self._get(f"{self.root}/api/ps"), "models"):
-                if m.get("name") == model and m.get("context_length"):
+                if same_model(m, model) and m.get("context_length"):
                     num_ctx, source = int(m["context_length"]), "ps"
         return ServerMeta(
             model=model,
@@ -192,6 +196,13 @@ class LocalServerClient:
             num_ctx_source=source,
             context_length=context_length,
         )
+
+
+def same_model(entry: dict[str, Any], model: str) -> bool:
+    """Ollama lists `ollama create my-model` (no tag) as `my-model:latest`."""
+    names = {entry.get("name"), entry.get("model")}
+    wanted = {model} if ":" in model else {model, f"{model}:latest"}
+    return bool(names & wanted)
 
 
 def _entries(data: object, key: str) -> list[dict[str, Any]]:

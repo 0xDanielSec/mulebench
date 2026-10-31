@@ -258,3 +258,10 @@ def test_plain_text_answer_diagnostic(monkeypatch: pytest.MonkeyPatch) -> None:
     probe = run_doctor("tiny:1b", URL, client=server(chat=chat)[0])[-1]
     assert probe.detail.endswith("finish_reason=stop reasoning_present=no content_empty=no")
     assert "pong" not in probe.detail
+
+
+def test_doctor_shows_digest_of_a_derived_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("MB_LIVE", raising=False)
+    client, _ = server(tags={"models": [{"name": "llama31-8b-8k:latest", "digest": "sha256:d"}]})
+    model = [c for c in run_doctor("llama31-8b-8k", URL, client=client) if c.name == "model"]
+    assert model[0].detail == "llama31-8b-8k digest=sha256:d quantization=Q4_K_M"
