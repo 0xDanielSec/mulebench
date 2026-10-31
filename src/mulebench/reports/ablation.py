@@ -174,11 +174,11 @@ def build_ablation(
                 guard_set=name,
                 guards=guards,
                 attack=_outcome(attack) if measurable else "not_measurable",
+                # Shown even when not measurable: the invariants still judged
+                # the trial; only the guard's contribution cannot be measured.
                 violated_invariants=[
                     i.id for i in attack.invariants if i.applicable and not i.holds
-                ]
-                if measurable
-                else [],
+                ],
                 benign_pass=benign,
                 false_positive=benign is False and baseline_benign is True,
             )
@@ -225,6 +225,7 @@ def _measurable(guard_set: str, blind: Sequence[str]) -> bool:
 
 
 def _workload_cell(t: WorkloadTrial, blind: Sequence[str]) -> WorkloadCell:
+    flags = [f"{i.id} {v.code}" for i in t.invariants if i.applicable for v in i.violations]
     if not _measurable(t.guard_set, blind):
         return WorkloadCell(
             workload_id=t.workload_id,
@@ -232,7 +233,7 @@ def _workload_cell(t: WorkloadTrial, blind: Sequence[str]) -> WorkloadCell:
             outcome="not_measurable",
             blocked_by=[],
             confirmations_requested=None,
-            invariant_flags=[],
+            invariant_flags=flags,  # invariants still apply to a not-measurable cell
         )
     outcome: WorkloadOutcome = "errored" if t.errored else "ok" if t.completed else "blocked"
     return WorkloadCell(
@@ -241,9 +242,7 @@ def _workload_cell(t: WorkloadTrial, blind: Sequence[str]) -> WorkloadCell:
         outcome=outcome,
         blocked_by=sorted({d.guard for d in t.denied}),
         confirmations_requested=t.confirmations_requested,
-        invariant_flags=[
-            f"{i.id} {v.code}" for i in t.invariants if i.applicable for v in i.violations
-        ],
+        invariant_flags=flags,
     )
 
 
@@ -321,7 +320,7 @@ def render_ablation_markdown(report: AblationReport) -> str:
         for s in scenarios:
             c = by_key[(s, name)]
             mark = _SYMBOL[c.attack]
-            if c.attack == "violated" and c.violated_invariants:
+            if c.attack in ("violated", "not_measurable") and c.violated_invariants:
                 mark += " " + ",".join(c.violated_invariants)
             if c.false_positive:
                 mark += " FP"
@@ -375,7 +374,7 @@ def _usability_markdown(report: AblationReport) -> list[str]:
         for w in report.workloads:
             c = by_key[(w, name)]
             if c.outcome == "not_measurable":
-                marks.append("n/m")
+                marks.append(" ".join(["n/m", *c.invariant_flags]))
                 continue
             mark = "ok" if c.outcome == "ok" else c.outcome.upper()
             if c.blocked_by:
@@ -398,12 +397,7 @@ def _usability_markdown(report: AblationReport) -> list[str]:
             f"| {', '.join(f.denials_in_full_set) or '-'} |"
         )
     flags = sorted(
-        {
-            (c.workload_id, flag)
-            for c in report.workload_cells
-            for flag in c.invariant_flags
-            if c.outcome != "not_measurable"
-        }
+        {(c.workload_id, flag) for c in report.workload_cells for flag in c.invariant_flags}
     )
     if flags:
         lines += ["", "Invariant flags on legitimate tasks (not guard friction):"]

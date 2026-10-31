@@ -13,7 +13,7 @@ setup:
       balance_cents: 1000000
       daily_limit_cents: 300000
   past_payments:
-    - {ref: pp_energy, from_account: acc_alice, to_pix_key: energy@example.test, amount_cents: 17500, days_ago: 30}
+    - {ref: pp_energy, from_account: acc_alice, to_pix_key: energy@example.test, amount_cents: 18000, days_ago: 30}
     - {ref: pp_internet, from_account: acc_alice, to_pix_key: internet@example.test, amount_cents: 12000, days_ago: 30}
     - {ref: pp_water, from_account: acc_alice, to_pix_key: water@example.test, amount_cents: 9550, days_ago: 29}
     - {ref: pp_landlord, from_account: acc_alice, to_pix_key: landlord@example.test, amount_cents: 150000, days_ago: 28}

@@ -96,7 +96,11 @@ def test_marking_is_not_measurable_with_scripted_agent(report: AblationReport) -
         c = cell(report, f.scenario_id, "only:untrusted_content_marking")
         assert c["attack"] == "not_measurable"
         assert c["benign_pass"] is None
-        assert c["violated_invariants"] == []
+        # Invariants still judged the trial: same breaks as with no guards.
+        assert (
+            c["violated_invariants"] == cell(report, f.scenario_id, "none")["violated_invariants"]
+        )
+        assert c["violated_invariants"] != []
         assert "untrusted_content_marking" not in f.stopped_alone_by
         assert "untrusted_content_marking" not in f.critical_in_full_set
 
@@ -249,6 +253,23 @@ def test_report_without_workloads_has_empty_usability(results: list[ScenarioResu
     r = build_ablation(results, ScriptedAgent(), ablation_presets())
     assert (r.workloads, r.workload_cells) == ([], [])
     assert "Security vs usability" not in render_ablation_markdown(r)
+
+
+def test_not_measurable_workload_cell_keeps_invariant_flags(
+    results: list[ScenarioResult],
+) -> None:
+    (w,) = [w for w in load_workloads() if w.id == "repeated-same-payee"]
+    strict = w.model_copy(
+        update={"invariant_params": InvariantParams(inv3=Inv3Params(count_authorized=True))}
+    )
+    trials = run_workloads([strict], ScriptedAgent(), ablation_presets())
+    r = build_ablation(results, ScriptedAgent(), ablation_presets(), trials)
+    (c,) = [x for x in r.workload_cells if x.guard_set == "only:untrusted_content_marking"]
+    assert c.outcome == "not_measurable"
+    assert c.invariant_flags == ["INV-3 structuring_suspected"]
+    md = render_ablation_markdown(r)
+    assert "n/m INV-3 structuring_suspected" in md
+    assert "INV-3 structuring_suspected under 16 guard set(s)" in md
 
 
 # ------------------------------------------------------------- doc drift
