@@ -290,6 +290,30 @@
           "default": 0,
           "title": "Unauthorized Outflow Cents",
           "type": "integer"
+        },
+        "tool_call_validity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "malformed_tool_calls": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "default": {},
+          "title": "Malformed Tool Calls",
+          "type": "object"
+        },
+        "context_near_limit": {
+          "default": 0,
+          "title": "Context Near Limit",
+          "type": "integer"
         }
       },
       "required": [
@@ -604,6 +628,18 @@
           ],
           "default": null,
           "title": "Request Id"
+        },
+        "prompt_tokens": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prompt Tokens"
         }
       },
       "required": [
@@ -823,6 +859,93 @@
       "title": "ScenarioResult",
       "type": "object"
     },
+    "ServerMeta": {
+      "additionalProperties": false,
+      "description": "What a local model server reports about the model under test.\n\nFields a server does not expose are None (digest, quantization and version\ncome from Ollama-only endpoints).",
+      "properties": {
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "digest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Digest"
+        },
+        "quantization": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quantization"
+        },
+        "server_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Server Version"
+        },
+        "num_ctx": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Num Ctx"
+        },
+        "num_ctx_source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Num Ctx Source"
+        },
+        "context_length": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context Length"
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "title": "ServerMeta",
+      "type": "object"
+    },
     "Summary": {
       "additionalProperties": false,
       "properties": {
@@ -878,6 +1001,30 @@
               "type": "null"
             }
           ]
+        },
+        "tool_call_validity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "resistance_meaningful": {
+          "default": true,
+          "title": "Resistance Meaningful",
+          "type": "boolean"
+        },
+        "not_meaningful_reasons": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Not Meaningful Reasons",
+          "type": "array"
         }
       },
       "required": [
@@ -927,6 +1074,24 @@
         },
         "benign_utility_pass": {
           "title": "Benign Utility Pass",
+          "type": "integer"
+        },
+        "malformed_tool_calls": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "default": {},
+          "title": "Malformed Tool Calls",
+          "type": "object"
+        },
+        "context_near_limit": {
+          "default": 0,
+          "title": "Context Near Limit",
+          "type": "integer"
+        },
+        "not_meaningful_rows": {
+          "default": 0,
+          "title": "Not Meaningful Rows",
           "type": "integer"
         }
       },
@@ -1187,9 +1352,57 @@
           "title": "Session Note Channel"
         },
         "temperature": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
           "default": null,
-          "title": "Temperature",
-          "type": "null"
+          "title": "Temperature"
+        },
+        "seed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seed"
+        },
+        "server_meta": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ServerMeta"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tool_calls_total": {
+          "default": 0,
+          "title": "Tool Calls Total",
+          "type": "integer"
+        },
+        "malformed_tool_calls": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "default": {},
+          "title": "Malformed Tool Calls",
+          "type": "object"
+        },
+        "context_near_limit": {
+          "default": false,
+          "title": "Context Near Limit",
+          "type": "boolean"
         },
         "model_calls": {
           "items": {
@@ -1389,7 +1602,7 @@
   "additionalProperties": false,
   "properties": {
     "schema_version": {
-      "const": 2,
+      "const": 3,
       "title": "Schema Version",
       "type": "integer"
     },

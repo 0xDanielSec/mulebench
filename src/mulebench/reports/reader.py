@@ -1,4 +1,10 @@
-"""Read v1 or v2 reports. v1 is presented as v2 (one trial, prompt "none")."""
+"""Read v1, v2 or v3 reports, presented as v3.
+
+v2 differs from v3 only by fields v3 adds with defaults, so a v2 report is read
+as v3 with those defaults. v2 recorded no malformed-call or context data, so its
+rows read as resistance_meaningful=true by default. v1 is upgraded (one trial,
+prompt "none").
+"""
 
 from __future__ import annotations
 
@@ -43,9 +49,13 @@ def parse_report(data: dict[str, Any]) -> Report:
 
 def parse_report_json(text: str) -> Report:
     # JSON-mode validation: strict models accept JSON arrays for tuple fields.
-    version = json.loads(text).get("schema_version")
-    if version == 2:
+    data = json.loads(text)
+    version = data.get("schema_version")
+    if version == 3:
         return Report.model_validate_json(text)
+    if version == 2:
+        data["schema_version"] = 3
+        return Report.model_validate_json(json.dumps(data))
     if version == 1:
         return upgrade_v1(v1.Report.model_validate_json(text))
     raise UnsupportedReportVersion(f"unsupported report schema_version: {version!r}")
@@ -121,7 +131,7 @@ def upgrade_v1(old: v1.Report) -> Report:
     ]
     t = old.summary.totals
     return Report(
-        schema_version=2,
+        schema_version=3,
         generator=Generator(**old.generator.model_dump()),
         agent=AgentDescriptor(**old.agent.model_dump()),  # top level stays as recorded
         llm=None,

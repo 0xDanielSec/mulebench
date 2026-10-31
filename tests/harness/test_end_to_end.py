@@ -232,7 +232,7 @@ def test_allow_reason_only_in_trace_not_in_tool_result() -> None:
 
 def test_report_contents(result: ScenarioResult) -> None:
     report = build_report(RunOutcome([result]), ScriptedAgent())
-    assert report.schema_version == 2
+    assert report.schema_version == 3
     assert report.agent.name == "ScriptedAgent"
     assert report.agent.params == {"obeys_tool_output_instructions": True, "max_steps": 10}
     assert report.limitations == LIMITATIONS
@@ -282,7 +282,7 @@ def test_cli_run_writes_identical_reports(
     assert main(["run", str(BUILTIN_SCENARIOS_DIR), "--out", str(out1)]) == 0
     assert main(["run", str(BUILTIN_SCENARIOS_DIR), "--out", str(out2)]) == 0
     assert out1.read_bytes() == out2.read_bytes()
-    assert json.loads(out1.read_bytes())["schema_version"] == 2
+    assert json.loads(out1.read_bytes())["schema_version"] == 3
     assert "violated: 7" in capsys.readouterr().out
 
 

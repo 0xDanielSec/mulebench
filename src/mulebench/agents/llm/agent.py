@@ -1,10 +1,23 @@
-"""LLM-backed agent. Implements the Agent protocol over a provider-agnostic ChatModel."""
+"""LLM-backed agent. Implements the Agent protocol over a provider-agnostic ChatModel.
+
+A malformed tool call (arguments that are not a JSON object, an unknown tool, or
+arguments that fail the tool's schema) stops the trial as errored, before any
+call of that turn runs. It is never recorded as the model resisting an attack.
+"""
 
 from __future__ import annotations
 
 import json
+from collections import Counter
 
-from mulebench.agents.base import AgentRun, AgentStep, AgentTask, ModelCallRecord, StopReason
+from mulebench.agents.base import (
+    AgentRun,
+    AgentStep,
+    AgentTask,
+    ModelCallRecord,
+    ServerMeta,
+    StopReason,
+)
 from mulebench.agents.llm.budget import CostMeter
 from mulebench.agents.llm.model import (
     ChatModel,
@@ -45,6 +58,8 @@ class LLMAgent:
         max_steps: int = DEFAULT_MAX_STEPS,
         max_turns: int = DEFAULT_MAX_TURNS,
         meter: CostMeter | None = None,
+        temperature: float | None = None,
+        seed: int | None = None,
     ) -> None:
         self.chat = chat
         self.model = model
@@ -53,10 +68,12 @@ class LLMAgent:
         self.max_steps = max_steps
         self.max_turns = max_turns
         self.meter = meter or CostMeter()
+        self.temperature = temperature
+        self.seed = seed  # base seed; trial t uses seed + t
 
     @property
     def params(self) -> dict[str, object]:
-        return {
+        params: dict[str, object] = {
             "provider": self.chat.provider,
             "model": self.model,
             "effort": self.effort,
@@ -65,6 +82,11 @@ class LLMAgent:
             "max_turns": self.max_turns,
             "refusal_fallbacks": "off",
         }
+        if self.temperature is not None:
+            params["temperature"] = self.temperature
+        if self.seed is not None:
+            params["seed"] = self.seed
+        return params
 
     def run(self, task: AgentTask, tools: ToolClient) -> AgentRun:
         if task.prompt_variant not in PROMPTS:
@@ -77,6 +99,10 @@ class LLMAgent:
         ]
         steps: list[AgentStep] = []
         calls: list[ModelCallRecord] = []
+        seed = None if self.seed is None else self.seed + task.trial
+        meta: ServerMeta | None = getattr(self.chat, "server_meta", None)
+        emitted = 0
+        malformed: Counter[str] = Counter()
 
         def finish(stopped: StopReason, error: str | None = None) -> AgentRun:
             return AgentRun(
@@ -85,6 +111,11 @@ class LLMAgent:
                 model_calls=tuple(calls),
                 error=error,
                 session_note_channel=channel,
+                tool_calls_total=emitted,
+                malformed_tool_calls=dict(sorted(malformed.items())),
+                seed=seed,
+                temperature=self.temperature,
+                server_meta=meta,
             )
 
         for _ in range(self.max_turns):
@@ -97,6 +128,8 @@ class LLMAgent:
                 max_tokens=self.max_tokens,
                 effort=self.effort,
                 trial_key=task.trial_key,
+                temperature=self.temperature,
+                seed=seed,
             )
             try:
                 response = self.chat.complete(request)
@@ -112,9 +145,18 @@ class LLMAgent:
                     usage=response.usage,
                     cost_usd=cost,
                     request_id=response.request_id,
+                    prompt_tokens=response.prompt_tokens,
                 )
             )
             turns.append(Turn(kind="assistant", provider_raw=response.provider_raw))
+            emitted += len(response.tool_calls) + len(response.invalid_tool_calls)
+            malformed.update(c.kind for c in response.invalid_tool_calls)
+            for call in response.tool_calls:
+                problem = tools.check_call(call.name, call.args)
+                if problem is not None:
+                    malformed[problem[0]] += 1
+            if malformed:
+                return finish("errored", "malformed_tool_call:" + ",".join(sorted(malformed)))
             if response.stop_reason == "refusal":
                 return finish("refused")
             if not response.tool_calls:

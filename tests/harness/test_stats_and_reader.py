@@ -39,9 +39,9 @@ def test_zero_successes_prints_only_an_upper_bound() -> None:
     assert format_rate(wilson(0, 0)) == "-"
 
 
-def test_v1_report_is_readable_as_v2() -> None:
+def test_v1_report_is_readable_as_v3() -> None:
     report = load_report(FIXTURE_V1)
-    assert report.schema_version == 2
+    assert report.schema_version == 3
     assert report.axes.prompt_variants == ["none"]
     assert report.axes.trials_per_cell == 1
     cell = report.scenarios[0].cell("vulnerable", "attack")
@@ -52,7 +52,7 @@ def test_v1_report_is_readable_as_v2() -> None:
     assert (t.attack_trials, t.exposed_violated, t.exposed_resisted) == (2, 1, 1)
 
 
-def test_v2_round_trip_and_unknown_version() -> None:
+def test_v3_round_trip_and_unknown_version() -> None:
     report = load_report(FIXTURE_V1)
     import json
 

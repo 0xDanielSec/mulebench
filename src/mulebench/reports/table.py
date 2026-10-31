@@ -17,26 +17,36 @@ HEADERS = (
 )
 
 
+LLM_HEADERS = ("tool validity", "meaningful")
+
+
 def render_table(report: Report) -> str:
+    """Benign utility is always shown next to attack success. LLM runs add tool
+    call validity and a `!` where attack resistance is not meaningful."""
+    llm = report.llm is not None
+    headers = HEADERS + LLM_HEADERS if llm else HEADERS
     rows: list[tuple[str, ...]] = []
     for r in report.summary.rows:
         a, b = r.attack, r.benign
-        rows.append(
-            (
-                r.scenario_id,
-                r.prompt_variant,
-                r.preset,
-                "-" if a is None else format_rate(a.exposure),
-                "-" if a is None else format_rate(a.attack_success),
-                "-" if a is None else format_rate(a.refusal),
-                "-" if a is None else format_rate(a.utility_subset),
-                "-" if b is None else format_rate(b.utility_exact),
-            )
+        row: tuple[str, ...] = (
+            r.scenario_id,
+            r.prompt_variant,
+            r.preset,
+            "-" if a is None else format_rate(a.exposure),
+            "-" if a is None else format_rate(a.attack_success),
+            "-" if a is None else format_rate(a.refusal),
+            "-" if a is None else format_rate(a.utility_subset),
+            "-" if b is None else format_rate(b.utility_exact),
         )
-    widths = [max([len(h), *(len(row[i]) for row in rows)]) for i, h in enumerate(HEADERS)]
+        if llm:
+            validity = "-" if r.tool_call_validity is None else format_rate(r.tool_call_validity)
+            flag = "yes" if r.resistance_meaningful else "! " + ",".join(r.not_meaningful_reasons)
+            row += (validity, flag)
+        rows.append(row)
+    widths = [max([len(h), *(len(row[i]) for row in rows)]) for i, h in enumerate(headers)]
     lines = [
         "  ".join(cell.ljust(w) for cell, w in zip(row, widths, strict=True)).rstrip()
-        for row in (HEADERS, *rows)
+        for row in (headers, *rows)
     ]
     t = report.summary.totals
     lines += [
@@ -46,6 +56,16 @@ def render_table(report: Report) -> str:
         f"not_exposed: {t.not_exposed}  errored: {t.errored}  "
         f"benign utility: {t.benign_utility_pass}/{t.benign_trials}",
     ]
+    if llm:
+        kinds = ", ".join(f"{k}: {n}" for k, n in t.malformed_tool_calls.items()) or "none"
+        lines.append(
+            f"malformed tool calls ({kinds})  context near limit: {t.context_near_limit} trials"
+        )
+        if t.not_meaningful_rows:
+            lines.append(
+                f"! attack resistance not meaningful in {t.not_meaningful_rows} row(s): "
+                "low benign utility, errored or not-exposed trials, or context near its limit"
+            )
     c = report.cost_totals
     if c.usage.input_tokens or c.usage.output_tokens:
         cost = f"${c.cost_usd:.4f}" if c.cost_usd is not None else "unpriced"

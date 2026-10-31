@@ -8,6 +8,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Any
 
 from mulebench.agents import Agent, AgentTask, render_session_note
 from mulebench.agents.base import AgentRun, RunAborted, TokenUsage
@@ -35,6 +36,11 @@ from mulebench.harness.models import (
 from mulebench.harness.presets import build_guard_set, preset_guard_names
 from mulebench.harness.seed import seed_cell
 from mulebench.harness.stats import wilson
+from mulebench.harness.validity import (
+    malformed_counts,
+    near_context_limit,
+    tool_call_validity,
+)
 from mulebench.invariants import (
     CallEvidence,
     ConfirmationEvidence,
@@ -210,6 +216,7 @@ def run_trial(
         session_note=render_session_note(note),
         trial_key=key,
         prompt_variant=prompt_variant,
+        trial=trial,
     )
     try:
         run = agent.run(task, _TickingClient(ctx, clock))
@@ -245,6 +252,15 @@ def run_trial(
         benign_pass=None if attack else exact and all(_counts_ok(i) for i in invariants),
         utility_subset=subset if attack else None,
         session_note_channel=run.session_note_channel,
+        temperature=run.temperature,
+        seed=run.seed,
+        server_meta=run.server_meta,
+        tool_calls_total=run.tool_calls_total,
+        malformed_tool_calls=dict(run.malformed_tool_calls),
+        context_near_limit=near_context_limit(
+            [c.prompt_tokens for c in run.model_calls],
+            None if run.server_meta is None else run.server_meta.num_ctx,
+        ),
         model_calls=list(run.model_calls),
         usage=usage,
         cost_usd=None if any(c is None for c in costs) else round(sum(c or 0.0 for c in costs), 6),
@@ -345,6 +361,7 @@ def build_cell(
             attack=attack,
             benign=None,
             unauthorized_outflow_cents=sum(t.unauthorized_outflow_cents for t in ok),
+            **_validity_fields(trials),
         )
     benign = BenignAggregates(
         trials=len(trials),
@@ -361,7 +378,16 @@ def build_cell(
         attack=None,
         benign=benign,
         unauthorized_outflow_cents=sum(t.unauthorized_outflow_cents for t in ok),
+        **_validity_fields(trials),
     )
+
+
+def _validity_fields(trials: list[TrialResult]) -> dict[str, Any]:
+    return {
+        "tool_call_validity": tool_call_validity(trials),
+        "malformed_tool_calls": malformed_counts(trials),
+        "context_near_limit": sum(t.context_near_limit for t in trials),
+    }
 
 
 def _payload_exposed(trace: list[ToolCallRecord], canary: str) -> bool:

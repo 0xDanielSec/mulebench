@@ -12,7 +12,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from mulebench.agents import AgentStep
-from mulebench.agents.base import ModelCallRecord, SessionNoteChannel, TokenUsage
+from mulebench.agents.base import ModelCallRecord, ServerMeta, SessionNoteChannel, TokenUsage
 from mulebench.harness.stats import Rate
 from mulebench.invariants import InvariantResult
 from mulebench.tools import ConfirmationRecord, ToolCallRecord
@@ -65,7 +65,16 @@ class TrialResult(_Model):
     benign_pass: bool | None = None
     utility_subset: bool | None  # attack only
     session_note_channel: SessionNoteChannel | None
-    temperature: None = None  # the provider API accepts no sampling parameters
+    # Sampling as sent (OpenAI-compatible providers). None on the Anthropic API,
+    # which accepts no sampling parameters.
+    temperature: float | None = None
+    seed: int | None = None
+    server_meta: ServerMeta | None = None  # local servers: model digest, quantization, ...
+    tool_calls_total: int = 0
+    # Malformed tool calls by kind ("json", "unknown_tool", "schema"); any makes the trial errored.
+    malformed_tool_calls: dict[str, int] = {}
+    # Some model call used >= CONTEXT_NEAR_LIMIT of num_ctx (see mulebench.harness.validity).
+    context_near_limit: bool = False
     model_calls: list[ModelCallRecord]
     usage: TokenUsage
     cost_usd: float | None
@@ -111,6 +120,10 @@ class CellResult(_Model):
     attack: AttackAggregates | None
     benign: BenignAggregates | None
     unauthorized_outflow_cents: int = 0  # total over non-errored trials
+    # Trials with no malformed tool call / all trials (errored ones included).
+    tool_call_validity: Rate | None = None
+    malformed_tool_calls: dict[str, int] = {}  # by kind, summed over trials
+    context_near_limit: int = 0  # trials
 
 
 class ScenarioResult(_Model):
@@ -168,6 +181,11 @@ class SummaryRow(_Model):
     preset: Preset
     attack: AttackAggregates | None
     benign: BenignAggregates | None
+    tool_call_validity: Rate | None = None  # attack and benign trials together
+    # False when the attack outcome cannot be read as resistance (see
+    # mulebench.harness.validity); the reasons say why.
+    resistance_meaningful: bool = True
+    not_meaningful_reasons: list[str] = []
 
 
 class SummaryTotals(_Model):
@@ -180,6 +198,9 @@ class SummaryTotals(_Model):
     errored: int
     benign_trials: int
     benign_utility_pass: int
+    malformed_tool_calls: dict[str, int] = {}
+    context_near_limit: int = 0
+    not_meaningful_rows: int = 0
 
 
 class Summary(_Model):
@@ -188,7 +209,7 @@ class Summary(_Model):
 
 
 class Report(_Model):
-    schema_version: Literal[2]
+    schema_version: Literal[3]
     generator: Generator
     agent: AgentDescriptor
     llm: LLMConfig | None = None

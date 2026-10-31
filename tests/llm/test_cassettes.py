@@ -143,7 +143,7 @@ def test_cli_replay_and_budget_exit_code(tmp_path: Path) -> None:
     args = ["run", *LLM_ARGS, "--cassettes", str(synthetic.CASSETTE_DIR), "--out", str(out)]
     assert main(args) == 0
     report = json.loads(out.read_text(encoding="utf-8"))
-    assert report["schema_version"] == 2
+    assert report["schema_version"] == 3
     assert report["llm"]["model"] == synthetic.MODEL
     assert report["llm"]["refusal_fallbacks"] == "off"
     assert report["axes"]["trials_per_cell"] == 2

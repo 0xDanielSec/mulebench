@@ -9,6 +9,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from pydantic import ValidationError
+
 from mulebench.tools.context import ToolContext
 from mulebench.tools.registry import TOOLS, ToolError, ToolResult, call_tool
 from mulebench.tools.schemas import UNTRUSTED_KEY
@@ -31,6 +33,20 @@ class ToolClient:
 
     def call(self, tool: str, args: Mapping[str, object]) -> ToolResult:
         return call_tool(self._ctx, tool, args)
+
+    def check_call(self, tool: str, args: Mapping[str, object]) -> tuple[str, str] | None:
+        """(kind, detail) if the call cannot be executed as given, else None.
+
+        Kinds: "unknown_tool", "schema". Nothing is executed or traced.
+        """
+        spec = TOOLS.get(tool)
+        if spec is None:
+            return "unknown_tool", f"unknown tool: {tool!r}"
+        try:
+            spec.input_model.model_validate(dict(args))
+        except ValidationError as exc:
+            return "schema", f"{exc.error_count()} validation error(s)"
+        return None
 
     def tool_names(self) -> list[str]:
         return sorted(TOOLS)

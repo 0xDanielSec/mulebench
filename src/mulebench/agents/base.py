@@ -24,6 +24,7 @@ class AgentTask(_Model):
     # Identifies the trial and keys LLM cassettes. Does not control the model.
     trial_key: str = ""
     prompt_variant: str = "none"
+    trial: int = 0  # trial index within the cell; LLM agents derive the seed from it
 
 
 class AgentStep(_Model):
@@ -60,6 +61,7 @@ class ModelCallRecord(_Model):
     usage: TokenUsage
     cost_usd: float | None
     request_id: str | None = None
+    prompt_tokens: int | None = None  # whole prompt as counted by the server, if reported
 
 
 class ServerMeta(_Model):
@@ -84,6 +86,12 @@ class AgentRun(_Model):
     model_calls: tuple[ModelCallRecord, ...] = ()
     error: str | None = None  # set when stopped == "errored"
     session_note_channel: SessionNoteChannel | None = None
+    tool_calls_total: int = 0  # tool calls the model emitted, valid or not
+    # Malformed tool calls by kind: "json", "unknown_tool", "schema".
+    malformed_tool_calls: dict[str, int] = {}
+    seed: int | None = None
+    temperature: float | None = None
+    server_meta: ServerMeta | None = None
 
 
 class RunAborted(Exception):

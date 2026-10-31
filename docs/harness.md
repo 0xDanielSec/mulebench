@@ -79,8 +79,15 @@ trials per cell.
 ## Report
 
 `mulebench run [<dir> | --builtin] --out report.json` writes a versioned JSON
-report (`schema_version: 2`). `load_report` also reads v1 reports and presents
-them as v2 (one trial, prompt `none`); the v1 schema is kept at
+report (`schema_version: 3`). v3 adds, with defaults, per-trial sampling
+(`temperature`, `seed`), `server_meta`, `tool_calls_total`,
+`malformed_tool_calls` (by kind: `json`, `unknown_tool`, `schema`) and
+`context_near_limit`; per cell `tool_call_validity`; per summary row
+`resistance_meaningful` with `not_meaningful_reasons` (rules and fixed
+thresholds in `mulebench.harness.validity`, see `docs/local-models.md`). A
+malformed tool call makes the trial errored, never resisted. `load_report`
+reads v2 reports as v3 (new fields at their defaults) and presents v1 reports
+as v3 (one trial, prompt `none`); the v1 schema is kept at
 `docs/report.schema.v1.json`. With no directory (or with `--builtin`) it runs the
 scenarios packaged with mulebench, loaded via `importlib.resources`, so it
 also works from an installed wheel. Its JSON Schema is committed at `docs/report.schema.json`
