@@ -94,7 +94,7 @@ class AgentRun(_Model):
     error: str | None = None  # set when stopped == "errored"
     session_note_channel: SessionNoteChannel | None = None
     tool_calls_total: int = 0  # tool calls the model emitted, valid or not
-    # Malformed tool calls by kind: "json", "unknown_tool", "schema".
+    # Malformed tool calls by kind: "json", "unknown_tool", "schema", "text_tool_call".
     malformed_tool_calls: dict[str, int] = {}
     coerced_calls: int = 0  # tool calls with at least one coerced argument
     coerced_args: dict[str, int] = {}  # "tool.field" -> count

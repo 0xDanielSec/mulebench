@@ -112,4 +112,5 @@ class AnthropicChatModel:
             served_model=message.model,
             request_id=response.request_id,
             provider_raw=tuple(b.to_dict() for b in message.content),
+            text="\n".join(b.text for b in message.content if b.type == "text"),
         )

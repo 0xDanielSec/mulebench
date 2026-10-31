@@ -71,7 +71,8 @@ class TrialResult(_Model):
     seed: int | None = None
     server_meta: ServerMeta | None = None  # local servers: model digest, quantization, ...
     tool_calls_total: int = 0
-    # Malformed tool calls by kind ("json", "unknown_tool", "schema"); any makes the trial errored.
+    # Malformed tool calls by kind ("json", "unknown_tool", "schema", "text_tool_call");
+    # any makes the trial errored.
     malformed_tool_calls: dict[str, int] = {}
     # Calls valid only after digit-string coercion (see agents.llm.coercion).
     coerced_calls: int = 0

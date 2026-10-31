@@ -132,6 +132,7 @@ def parse_completion(body: dict[str, Any], request_id: str | None = None) -> Cha
         served_model=str(body.get("model", "")),
         request_id=request_id or body.get("id"),
         provider_raw=(clean,),  # reasoning removed: it is not sent back
+        text=clean["content"] if isinstance(clean.get("content"), str) else "",
         invalid_tool_calls=tuple(invalid),
         prompt_tokens=None if prompt is None else int(prompt),
         context_tokens=None if prompt is None else int(prompt) + int(completion or 0),

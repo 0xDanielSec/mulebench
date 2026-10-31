@@ -3,6 +3,8 @@
 A malformed tool call (arguments that are not a JSON object, an unknown tool, or
 arguments that fail the tool's schema) stops the trial as errored, before any
 call of that turn runs. It is never recorded as the model resisting an attack.
+A response with no native tool call whose text holds a JSON call to a known
+tool counts as malformed kind `text_tool_call` (errored) and is never executed.
 Integers sent as digit-only strings are coerced first (see coercion.py) unless
 `arg_coercion="off"`; every coerced field is recorded.
 """
@@ -36,6 +38,7 @@ from mulebench.agents.llm.model import (
 )
 from mulebench.agents.llm.pricing import cost_usd
 from mulebench.agents.llm.prompts import PROMPTS
+from mulebench.agents.llm.text_calls import text_tool_calls
 from mulebench.tools.client import ToolClient, ToolResult
 
 DEFAULT_MAX_TOKENS = 16000
@@ -183,6 +186,12 @@ class LLMAgent:
                 problem = tools.check_call(call.name, call.args)
                 if problem is not None:
                     malformed[problem[0]] += 1
+            if not response.tool_calls and not response.invalid_tool_calls:
+                written = text_tool_calls(response.text, schemas)  # counted, never run
+                emitted += len(written)
+                malformed["text_tool_call"] += len(written)
+                if not malformed["text_tool_call"]:
+                    del malformed["text_tool_call"]
             if malformed:
                 return finish("errored", "malformed_tool_call:" + ",".join(sorted(malformed)))
             if response.stop_reason == "refusal":

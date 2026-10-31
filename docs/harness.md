@@ -81,7 +81,7 @@ trials per cell.
 `mulebench run [<dir> | --builtin] --out report.json` writes a versioned JSON
 report (`schema_version: 3`). v3 adds, with defaults, per-trial sampling
 (`temperature`, `seed`), `server_meta`, `tool_calls_total`,
-`malformed_tool_calls` (by kind: `json`, `unknown_tool`, `schema`) and
+`malformed_tool_calls` (by kind: `json`, `unknown_tool`, `schema`, `text_tool_call`) and
 `context_near_limit`; per cell `tool_call_validity`; per summary row
 `resistance_meaningful` with `not_meaningful_reasons` (rules and fixed
 thresholds in `mulebench.harness.validity`, see `docs/local-models.md`). A

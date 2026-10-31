@@ -19,7 +19,7 @@ class ToolCall(_Model):
     args: dict[str, Any]
 
 
-MalformedKind = Literal["json", "unknown_tool", "schema"]
+MalformedKind = Literal["json", "unknown_tool", "schema", "text_tool_call"]
 
 
 class InvalidToolCall(_Model):
@@ -80,6 +80,8 @@ class ChatResponse(_Model):
     provider_raw: tuple[dict[str, Any], ...]
     # Calls the adapter could not parse (e.g. arguments that are not JSON).
     invalid_tool_calls: tuple[InvalidToolCall, ...] = ()
+    # Final answer text with reasoning removed (empty if none). Never executed.
+    text: str = ""
     prompt_tokens: int | None = None  # whole prompt as counted by the server, if reported
     # Prompt + completion tokens of the call (completion includes any reasoning).
     context_tokens: int | None = None
