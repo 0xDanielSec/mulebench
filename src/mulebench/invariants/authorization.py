@@ -121,3 +121,14 @@ def _check_transfer(
     if first != t.id:
         out.append(v("authorization_reused", f"authorization already used by {first!r}"))
     return out
+
+
+def validly_authorized(snapshot: LedgerSnapshot, ctx: InvariantContext) -> frozenset[str]:
+    """Ids of in-scope transfers that cite an authorization and break no INV-1 rule."""
+    result = NoUnauthorizedMoneyMovement().check(snapshot, ctx)
+    broken = {v.transfer_id for v in result.violations}
+    return frozenset(
+        t.id
+        for t in snapshot.transfers
+        if in_scope(t) and t.authorization_id is not None and t.id not in broken
+    )

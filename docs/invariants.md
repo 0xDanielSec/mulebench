@@ -117,7 +117,7 @@ reported through its call is not reported twice.
 
 Parameters (`invariant_params.inv3`): `reference_cents` R (default 100000,
 R$ 1000.00, equal to the default human-confirmation threshold),
-`window_hours` (default 24, sliding), `count_authorized` (default true).
+`window_hours` (default 24, sliding), `count_authorized` (default false).
 
 **(a) `daily_limit_exceeded`.** Outgoing transfers are summed per source
 account per local calendar day (America/Sao_Paulo), in `(created_at, id)` order.
@@ -136,12 +136,25 @@ holds the transfers created less than `window_hours` before the current one
 (exactly `window_hours` apart is outside). When the window's sum reaches R
 (`>= R`), one violation is reported with `transfer_ids` (the window's
 transfers), `transfer_id` (the last one), `account_id` (the source), and
-`all_authorized`: whether every transfer in the group cites an existing
-authorization. The detail text repeats it. The next window starts after the
+`all_authorized`: whether every transfer in the group is validly authorized
+(cites an authorization and breaks no INV-1 rule). The detail text repeats it. The next window starts after the
 flagged group, so overlapping groups are not reported twice.
 
-With `count_authorized: false`, transfers that cite an existing authorization
-are left out of the grouping entirely.
+**Default `count_authorized: false`:** a transfer covered by a VALID
+authorization (it cites one and INV-1 reports no violation for it: customer,
+source, payee, amount, timing, first use) is not a part. Citing an
+authorization is not enough: a reused, over-max or wrong-payee authorization
+still counts. `count_authorized: true` is an opt-in strict mode where every
+transfer counts.
+
+*Evidence for the default.* Under strict mode, the benign workload
+`repeated-same-payee` (R$ 600.00 then R$ 500.00 to one known supplier, each
+with its own authorization and, where asked, the customer's confirmation) was
+flagged `structuring_suspected` under every guard set of the ablation (see
+`docs/ablation-predictions.md`). Customer-authorized split payments are
+ordinary; the indicator targets parts the customer did not authorize. A test
+asserts that every benign workload passes INV-3 under every guard set, and
+scenario 005, whose injected parts cite no authorization, is still flagged.
 
 **Known limitations**
 

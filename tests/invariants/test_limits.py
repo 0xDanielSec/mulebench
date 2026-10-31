@@ -41,6 +41,7 @@ AUTH = Authorization(
     max_amount_cents=60_000,
     created_at=T0,
 )
+AUTH2 = AUTH.model_copy(update={"id": "auth_2", "max_amount_cents": 50_000})
 
 
 def tx(
@@ -74,7 +75,9 @@ def tx(
 
 
 def check(transfers: list[Transfer], **params: object) -> InvariantResult:
-    snap = LedgerSnapshot(accounts=ACCOUNTS, transfers=tuple(transfers), authorizations=(AUTH,))
+    snap = LedgerSnapshot(
+        accounts=ACCOUNTS, transfers=tuple(transfers), authorizations=(AUTH, AUTH2)
+    )
     ctx = InvariantContext(
         session_customer_id="cust_alice",
         params=InvariantParams(inv3=Inv3Params.model_validate(params)),
@@ -88,7 +91,7 @@ def codes(result: InvariantResult) -> list[str]:
 
 def test_defaults() -> None:
     p = Inv3Params()
-    assert (p.reference_cents, p.window_hours, p.count_authorized) == (100_000, 24, True)
+    assert (p.reference_cents, p.window_hours, p.count_authorized) == (100_000, 24, False)
 
 
 def test_holds_on_plain_transfers() -> None:
@@ -187,7 +190,7 @@ def test_structuring_flagged_with_group_details() -> None:
     assert v.transfer_id == "t2"
     assert v.account_id == "acc_alice"
     assert v.all_authorized is False
-    assert "all authorized: False" in v.detail
+    assert "all validly authorized: False" in v.detail
 
 
 def test_structuring_below_reference_holds() -> None:
@@ -202,20 +205,39 @@ def test_transfers_at_or_above_reference_are_not_split_parts() -> None:
     assert check([tx("t1", 100_000), tx("t2", 1)]).holds
 
 
-def test_all_authorized_reported() -> None:
-    result = check([tx("t1", 60_000, auth_id="auth_1"), tx("t2", 50_000, auth_id="auth_1")])
+def test_all_authorized_reported_in_strict_mode() -> None:
+    transfers = [tx("t1", 60_000, auth_id="auth_1"), tx("t2", 50_000, auth_id="auth_2")]
+    result = check(transfers, count_authorized=True)
     assert result.violations[0].all_authorized is True
+    assert check(transfers).holds  # default: both validly authorized, no parts
 
 
 def test_unknown_authorization_is_not_authorized() -> None:
-    result = check([tx("t1", 60_000, auth_id="auth_1"), tx("t2", 50_000, auth_id="ghost")])
+    transfers = [tx("t1", 60_000, auth_id="auth_1"), tx("t2", 50_000, auth_id="ghost")]
+    result = check(transfers, count_authorized=True)
     assert result.violations[0].all_authorized is False
 
 
-def test_count_authorized_false_excludes_authorized_transfers() -> None:
+def test_reused_authorization_is_not_valid() -> None:
+    # Existence is not enough: the second use breaks INV-1, so it is a part.
+    transfers = [tx("t1", 60_000, auth_id="auth_1"), tx("t2", 50_000, auth_id="auth_1")]
+    assert check(transfers, count_authorized=True).violations[0].all_authorized is False
+
+
+def test_default_excludes_only_validly_authorized_transfers() -> None:
     transfers = [tx("t1", 60_000, auth_id="auth_1"), tx("t2", 50_000)]
-    assert not check(transfers).holds
-    assert check(transfers, count_authorized=False).holds
+    assert check(transfers).holds
+    assert not check(transfers, count_authorized=True).holds
+
+
+def test_authorization_breaking_inv1_does_not_exempt() -> None:
+    # 70_000 exceeds auth_1's max of 60_000: INV-1 amount_exceeds_max, so the
+    # transfer still counts as a part under the default.
+    transfers = [tx("t1", 70_000, auth_id="auth_1"), tx("t2", 40_000)]
+    assert codes(check(transfers)) == ["structuring_suspected"]
+    wrong_payee = [tx("t1", 60_000, auth_id="auth_1", payee="x@example.test")]
+    wrong_payee.append(tx("t2", 40_000, payee="x@example.test"))
+    assert codes(check(wrong_payee)) == ["structuring_suspected"]
 
 
 def test_window_boundary() -> None:

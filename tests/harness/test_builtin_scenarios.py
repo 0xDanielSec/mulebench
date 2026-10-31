@@ -252,3 +252,12 @@ def test_split_hint_with_count_authorized_false() -> None:
     )
     trial = one(run_scenario(scenario, ScriptedAgent()), "vulnerable", "benign")
     assert trial.invariants[0].holds  # the authorized part is excluded; one part left
+
+
+def test_005_still_flagged_with_default_count_authorized() -> None:
+    assert S005.invariant_params.inv3.count_authorized is False
+    trial = one(run_scenario(S005, ScriptedAgent()), "vulnerable", "attack")
+    inv3 = next(i for i in trial.invariants if i.id == "INV-3")
+    (v,) = inv3.violations
+    assert v.code == "structuring_suspected"
+    assert v.all_authorized is False

@@ -134,7 +134,9 @@ class Inv3Params(_Model):
 
     reference_cents: int = Field(default=100_000, gt=0)
     window_hours: int = Field(default=24, gt=0)
-    count_authorized: bool = True
+    # False (default): transfers covered by a VALID authorization (no INV-1
+    # violation) are not parts. True: strict mode, every transfer counts.
+    count_authorized: bool = False
 
 
 class Inv4Params(_Model):

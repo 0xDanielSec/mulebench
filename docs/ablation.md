@@ -172,9 +172,6 @@ Benign workloads (`ok`, `BLOCKED by <guard>`, `+N conf`):
 | `new_payee` | - | 1 | - |
 | `human_confirmation` | - | 2 | - |
 | `untrusted_content_marking` | n/m | n/m | - |
-
-Invariant flags on legitimate tasks (not guard friction):
-- `repeated-same-payee`: INV-3 structuring_suspected under 15 guard set(s)
 <!-- ablation:end -->
 
 False positives: none observed in the current controls (one benign task per

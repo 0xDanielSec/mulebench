@@ -119,3 +119,11 @@ None in observed outcomes. Notes:
    split payment (R$ 600 + R$ 500, both authorized and confirmed) under every
    guard set. This is a property of the indicator with
    `count_authorized: true`, not of any guard.
+
+## Follow-up after the comparison
+
+INV-3's default changed to `count_authorized: false` (only parts not covered by
+a valid authorization count), based on note 3 above. With the new default, no
+benign workload is flagged under any guard set. The predictions and the
+comparison above describe the run under the old default and are left as
+written.

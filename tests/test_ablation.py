@@ -18,6 +18,7 @@ from mulebench.cli import main
 from mulebench.harness import GUARD_NAMES, ablation_presets, run_all
 from mulebench.harness.models import ScenarioResult
 from mulebench.harness.workloads import WorkloadTrial, run_workloads
+from mulebench.invariants import Inv3Params, InvariantParams
 from mulebench.reports.ablation import (
     AblationReport,
     build_ablation,
@@ -214,20 +215,34 @@ def test_blocked_cell_names_the_denying_guard(report: AblationReport) -> None:
     )
 
 
-def test_invariant_flags_are_separate_from_friction(report: AblationReport) -> None:
-    flagged = {
-        (c.workload_id, f)
+def test_no_invariant_flags_on_benign_workloads(report: AblationReport) -> None:
+    assert [
+        (c.workload_id, c.guard_set, c.invariant_flags)
         for c in report.workload_cells
-        if c.outcome != "not_measurable"
-        for f in c.invariant_flags
-    }
-    assert flagged == {("repeated-same-payee", "INV-3 structuring_suspected")}
-    (cell,) = [
-        c
-        for c in report.workload_cells
-        if c.workload_id == "repeated-same-payee" and c.guard_set == "none"
-    ]
-    assert cell.outcome == "ok"
+        if c.invariant_flags
+    ] == []
+
+
+def test_benign_workloads_pass_inv3_under_every_guard_set(
+    workload_trials: list[WorkloadTrial],
+) -> None:
+    # Evidence for the count_authorized=false default: under strict mode the
+    # legitimate R$ 600 + R$ 500 split was flagged under every guard set.
+    assert len(workload_trials) == 8 * len(ablation_presets())
+    for t in workload_trials:
+        inv3 = next(i for i in t.invariants if i.id == "INV-3")
+        assert inv3.holds, (t.workload_id, t.guard_set, inv3.violations)
+
+
+def test_strict_inv3_still_flags_the_legitimate_split() -> None:
+    (w,) = [w for w in load_workloads() if w.id == "repeated-same-payee"]
+    strict = w.model_copy(
+        update={"invariant_params": InvariantParams(inv3=Inv3Params(count_authorized=True))}
+    )
+    (trial,) = run_workloads([strict], ScriptedAgent(), ["none"])
+    inv3 = next(i for i in trial.invariants if i.id == "INV-3")
+    assert [v.code for v in inv3.violations] == ["structuring_suspected"]
+    assert inv3.violations[0].all_authorized is True
 
 
 def test_report_without_workloads_has_empty_usability(results: list[ScenarioResult]) -> None:

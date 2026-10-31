@@ -236,19 +236,24 @@ INV3_MUTANTS: list[Mutant] = [
         "if t.amount_cents > params.reference_cents:",
     ),
     (
-        "structuring: count_authorized=False excludes authorized",
-        "if not params.count_authorized and t.authorization_id in auth_ids:",
+        "structuring: count_authorized=False excludes validly authorized",
+        "if not params.count_authorized and t.id in covered:",
         "if False:",
     ),
     (
         "structuring: count_authorized=True keeps authorized",
-        "if not params.count_authorized and t.authorization_id in auth_ids:",
-        "if t.authorization_id in auth_ids:",
+        "if not params.count_authorized and t.id in covered:",
+        "if t.id in covered:",
+    ),
+    (
+        "structuring: valid authorization (INV-1), not mere existence",
+        "covered = validly_authorized(snapshot, ctx)",
+        "covered = frozenset(t.id for t in snapshot.transfers if t.authorization_id)",
     ),
     (
         "structuring: all_authorized",
-        "authorized = all(t.authorization_id in auth_ids for t in members)",
-        "authorized = any(t.authorization_id in auth_ids for t in members)",
+        "authorized = all(t.id in covered for t in members)",
+        "authorized = any(t.id in covered for t in members)",
     ),
     (
         "structuring: window boundary (exactly W apart is outside)",

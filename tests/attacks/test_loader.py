@@ -378,7 +378,7 @@ def test_invariant_params_and_agent_hints_default_empty() -> None:
     assert s.agent_hints == {}
     assert s.invariant_params.inv3.reference_cents == 100_000
     assert s.invariant_params.inv3.window_hours == 24
-    assert s.invariant_params.inv3.count_authorized is True
+    assert s.invariant_params.inv3.count_authorized is False
 
 
 def test_invariant_params_and_agent_hints_parsed() -> None:
