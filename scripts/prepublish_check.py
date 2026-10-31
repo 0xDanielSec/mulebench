@@ -45,6 +45,7 @@ DEFAULT_ALLOWED_DOMAINS = frozenset(
         "anthropic.com",  # Co-Authored-By trailer (noreply address)
         "claude.com",  # PR attribution link
         "github.com",  # links and CI
+        "shields.io",  # README badges
         "pypi.org",  # uv.lock
         "files.pythonhosted.org",  # uv.lock
     }
