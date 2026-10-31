@@ -52,7 +52,7 @@ pip install "mulebench[local]"   # or, in a checkout: uv sync (the dev group inc
 
 ```bash
 uv run mulebench doctor --model <tag>               # server, model, num_ctx; no inference
-MB_LIVE=1 uv run mulebench doctor --model <tag>     # plus ONE tiny tool-calling probe
+MB_LIVE=1 uv run mulebench doctor --model <tag>     # plus ONE tool-calling probe
 
 # Record (live, local): cassettes and server metadata go to the directory.
 MB_LIVE=1 uv run mulebench run --agent llm --provider openai-compatible \
@@ -101,6 +101,8 @@ silently lose the tool definitions, the session note or the injected text.
   of `num_ctx`, counting prompt + completion tokens as reported by the server
   (reasoning tokens are part of the completion). Such a row is marked
   `resistance_meaningful=false`.
+- `--max-tokens` (default 2048) caps the output per call; output tokens share
+  the same window.
 
 ## Reasoning models (thinking)
 
@@ -116,8 +118,13 @@ shapes: a separate `reasoning` or `reasoning_content` field on the message, or
   only in the cassette;
 - records `reasoning_present` (and `reasoning_tokens` when reported) per model
   call, and counts the call's completion tokens toward context usage.
-- `--max-tokens` (default 2048) caps the output per call; output tokens share
-  the same window.
+
+Reasoning spends output tokens before any tool call. The `doctor` probe allows
+2048 (`PROBE_MAX_TOKENS`); with a small budget a reasoning model ends with
+`finish_reason=length` and no tool call. A failed probe prints
+`finish_reason`, `reasoning_present` and `content_empty` (no model text). In
+runs, a trial cut off the same way ends without the tool call and lowers benign
+utility; raise `--max-tokens` if `num_ctx` leaves room.
 
 ## Sampling and reproducibility
 

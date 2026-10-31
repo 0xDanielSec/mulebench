@@ -4,7 +4,9 @@ Checks, in order:
 1. the server answers (Ollama /api/version, else /v1/models);
 2. the model is pulled, and its metadata (digest, quantization, num_ctx);
 3. the effective num_ctx is at least MIN_NUM_CTX (warning otherwise);
-4. tool calling works: ONE tiny probe chat call, only with MB_LIVE=1.
+4. tool calling works: ONE probe chat call, only with MB_LIVE=1. On failure it
+   prints finish_reason, whether reasoning was present and whether the content
+   was empty; never model text or headers.
 
 Checks 1-3 make no inference call and run without MB_LIVE, against loopback
 hosts only unless --allow-remote.
@@ -24,11 +26,14 @@ from mulebench.agents.llm.http_transport import (
     OpenAICompatTransport,
     ServerUnreachable,
 )
-from mulebench.agents.llm.model import ModelCallError, ModelRequestInvalid
+from mulebench.agents.llm.model import ChatResponse, ModelCallError, ModelRequestInvalid
 from mulebench.agents.llm.openai_compat import ResponseShapeError, parse_completion
 from mulebench.agents.llm.transport import LIVE_ENV
 
 MIN_NUM_CTX = 8192
+# Reasoning models (e.g. qwen3) think before they call a tool; a small budget
+# ends the probe with finish_reason=length and no tool call.
+PROBE_MAX_TOKENS = 2048
 Level = Literal["ok", "warn", "fail", "skip"]
 
 PROBE_TOOL = {
@@ -109,7 +114,7 @@ def run_doctor(
 
 def _probe(model: str, base_url: str, allow_remote: bool, client: httpx.Client | None) -> Check:
     if os.environ.get(LIVE_ENV) != "1":
-        return Check("skip", "tool calling", f"probe needs {LIVE_ENV}=1 (one tiny chat call)")
+        return Check("skip", "tool calling", f"probe needs {LIVE_ENV}=1 (one chat call)")
     transport = OpenAICompatTransport(base_url, allow_remote=allow_remote, client=client)
     params = {
         "model": model,
@@ -121,7 +126,7 @@ def _probe(model: str, base_url: str, allow_remote: bool, client: httpx.Client |
         "tool_choice": "auto",
         "temperature": 0.0,
         "seed": 0,
-        "max_tokens": 64,
+        "max_tokens": PROBE_MAX_TOKENS,
         "stream": False,
     }
     try:
@@ -130,10 +135,37 @@ def _probe(model: str, base_url: str, allow_remote: bool, client: httpx.Client |
         return Check("fail", "tool calling", f"probe failed: {exc}")
     if response.invalid_tool_calls:
         bad = response.invalid_tool_calls[0]
-        return Check("fail", "tool calling", f"malformed tool call ({bad.kind}): {bad.detail}")
+        return Check(
+            "fail",
+            "tool calling",
+            f"malformed tool call ({bad.kind}): {bad.detail}; {probe_diagnostic(response)}",
+        )
     if not any(c.name == "ping" for c in response.tool_calls):
-        return Check("fail", "tool calling", "the model answered without calling the tool")
+        return Check(
+            "fail",
+            "tool calling",
+            f"the model answered without calling the tool; {probe_diagnostic(response)}",
+        )
     return Check("ok", "tool calling", "the model returned a valid tool call")
+
+
+def probe_diagnostic(response: ChatResponse) -> str:
+    """Short and key-free: finish_reason, reasoning present, content empty. No model text."""
+    (message,) = response.provider_raw  # reasoning already stripped
+    content = message.get("content")
+    empty = not (isinstance(content, str) and content.strip())
+    text = (
+        f"finish_reason={response.stop_reason} "
+        f"reasoning_present={'yes' if response.reasoning_present else 'no'} "
+        f"content_empty={'yes' if empty else 'no'}"
+    )
+    if response.stop_reason == "length":
+        text += (
+            f" (the output hit max_tokens={PROBE_MAX_TOKENS} before a tool call"
+            + ("; reasoning used the budget" if response.reasoning_present else "")
+            + ")"
+        )
+    return text
 
 
 def print_checks(checks: list[Check], out: Callable[[str], None] = print) -> int:

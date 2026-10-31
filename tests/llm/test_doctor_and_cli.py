@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -9,7 +10,7 @@ import httpx
 import pytest
 
 from mulebench.cli import main
-from mulebench.doctor import MIN_NUM_CTX, print_checks, run_doctor
+from mulebench.doctor import MIN_NUM_CTX, PROBE_MAX_TOKENS, print_checks, run_doctor
 
 URL = "http://localhost:11434/v1"
 TAGS = {"models": [{"name": "tiny:1b", "digest": "sha256:abc"}]}
@@ -177,3 +178,83 @@ def test_cli_local_replay_without_cassettes_is_a_usage_error(
 def test_cli_local_needs_cassettes_dir() -> None:
     argv = ["run", "--agent", "llm", "--provider", "openai-compatible", "--model", "m"]
     assert main(argv) == 2
+
+
+# ------------------------------------------- reasoning models (qwen3-like)
+
+THINK = "The user wants ping. " * 20  # ~100+ tokens of reasoning before any call
+
+
+def reasoning_server(shape: str, think_tokens: int = 300) -> tuple[httpx.Client, list[Any]]:
+    """Fake qwen3: reasons first; only calls the tool if max_tokens leaves room."""
+    sent: list[Any] = []
+
+    def chat(req: httpx.Request) -> dict[str, Any]:
+        params = json.loads(req.content)
+        sent.append(params)
+        reasoning = {"reasoning": THINK} if shape == "field" else {}
+        if params["max_tokens"] <= think_tokens:
+            content = "" if shape == "field" else f"<think>{THINK}"  # cut off mid-thought
+            message: dict[str, Any] = {"role": "assistant", "content": content, **reasoning}
+            return {"choices": [{"message": message, "finish_reason": "length"}]}
+        content = "" if shape == "field" else f"<think>{THINK}</think>"
+        call = {
+            "id": "c",
+            "type": "function",
+            "function": {"name": "ping", "arguments": '{"token": "mb-probe"}'},
+        }
+        message = {"role": "assistant", "content": content, "tool_calls": [call], **reasoning}
+        return {"choices": [{"message": message, "finish_reason": "tool_calls"}]}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        key = f"{req.method} {req.url.path}"
+        if key == "POST /v1/chat/completions":
+            return httpx.Response(200, json=chat(req))
+        routes: dict[str, Any] = {
+            "GET /api/version": {"version": "0.40.13"},
+            "GET /api/tags": {"models": [{"name": "qwen3-14b-8k:latest", "digest": "d"}]},
+            "POST /api/show": show(8192),
+        }
+        body = routes.get(key)
+        return httpx.Response(404) if body is None else httpx.Response(200, json=body)
+
+    return httpx.Client(transport=httpx.MockTransport(handler)), sent
+
+
+@pytest.mark.parametrize("shape", ["think_tags", "field"])
+def test_reasoning_model_passes_with_the_probe_budget(
+    monkeypatch: pytest.MonkeyPatch, shape: str
+) -> None:
+    monkeypatch.setenv("MB_LIVE", "1")
+    client, sent = reasoning_server(shape)
+    probe = run_doctor("qwen3-14b-8k", URL, client=client)[-1]
+    assert (probe.level, probe.detail) == ("ok", "the model returned a valid tool call")
+    assert sent[0]["max_tokens"] == PROBE_MAX_TOKENS
+
+
+@pytest.mark.parametrize("shape", ["think_tags", "field"])
+def test_old_budget_reproduces_the_failure_with_a_diagnostic(
+    monkeypatch: pytest.MonkeyPatch, shape: str
+) -> None:
+    """The live failure: a budget of 64 tokens ends inside the reasoning."""
+    monkeypatch.setenv("MB_LIVE", "1")
+    monkeypatch.setattr("mulebench.doctor.PROBE_MAX_TOKENS", 64)
+    client, _ = reasoning_server(shape)
+    probe = run_doctor("qwen3-14b-8k", URL, client=client)[-1]
+    assert probe.level == "fail"
+    assert probe.detail == (
+        "the model answered without calling the tool; finish_reason=length "
+        "reasoning_present=yes content_empty=yes "
+        "(the output hit max_tokens=64 before a tool call; reasoning used the budget)"
+    )
+    assert "ping" not in probe.detail.split(";")[1]  # no model text in the diagnostic
+
+
+def test_plain_text_answer_diagnostic(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MB_LIVE", "1")
+    chat = {
+        "choices": [{"message": {"role": "assistant", "content": "pong"}, "finish_reason": "stop"}]
+    }
+    probe = run_doctor("tiny:1b", URL, client=server(chat=chat)[0])[-1]
+    assert probe.detail.endswith("finish_reason=stop reasoning_present=no content_empty=no")
+    assert "pong" not in probe.detail
