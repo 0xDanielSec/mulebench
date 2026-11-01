@@ -53,12 +53,16 @@ def test_example_scenario_loads() -> None:
 
 def test_load_all_builtin() -> None:
     assert [s.id for s in load_all()] == [
+        "dispute-flow-foreign-read-009",
+        "payee-name-cross-customer-read-010",
         "payee-name-injection-003",
         "pix-description-confused-deputy-002",
         "pix-description-cross-customer-read-004",
         "pix-description-drain-007",
         "pix-description-foreign-debit-006",
+        "pix-description-foreign-history-008",
         "pix-description-injection-001",
+        "pix-description-read-before-pay-011",
         "pix-description-structuring-005",
     ]
 
