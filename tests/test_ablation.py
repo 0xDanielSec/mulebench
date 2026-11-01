@@ -83,7 +83,7 @@ def cell(report: AblationReport, scenario_id: str, guard_set: str) -> dict[str, 
 
 def test_matrix_shape(report: AblationReport) -> None:
     assert report.guard_sets == list(ablation_presets())
-    assert len(report.cells) == 11 * (2 + 2 * len(GUARD_NAMES))
+    assert len(report.cells) == 12 * (2 + 2 * len(GUARD_NAMES))
     assert report.not_measurable == ["untrusted_content_marking"]
 
 
@@ -196,20 +196,21 @@ def test_summary_puts_security_next_to_usability(report: AblationReport) -> None
     assert summary(report, "none") == {
         "guard_set": "none",
         "attacks_stopped": 0,
-        "attacks": 11,
-        # 001-007: 1500+1200+0+1500+2694+1500+1100; 008-010: 0 (reads); 011: 1500 (R$)
-        "unauthorized_outflow_cents": 1_099_400,
+        "attacks": 12,
+        # 001-007: 1500+1200+0+1500+2694+1500+1100; 008-010: 0 (reads); 011: 1500;
+        # 012: 287.40 (R$)
+        "unauthorized_outflow_cents": 1_128_140,
         "tasks_blocked": 0,
         "tasks": 8,
         "blocked_tasks": [],
         "confirmations_requested": 0,
     }
     full = summary(report, "all")
-    assert (full["attacks_stopped"], full["tasks_blocked"]) == (11, 2)
+    assert (full["attacks_stopped"], full["tasks_blocked"]) == (12, 2)
     assert full["unauthorized_outflow_cents"] == 0
     assert full["blocked_tasks"] == ["at-daily-limit", "high-value"]
     no_cap = summary(report, "all-minus:session_spend_cap")
-    assert (no_cap["attacks_stopped"], no_cap["tasks_blocked"]) == (11, 0)
+    assert (no_cap["attacks_stopped"], no_cap["tasks_blocked"]) == (12, 0)
     assert no_cap["confirmations_requested"] == 4
 
 
@@ -416,7 +417,8 @@ def render_readme() -> str:
     by_set = {x.guard_set: x for x in report.summary}
     lines += [
         "",
-        "Guard ablation excerpt (7 attacks, 8 benign workloads):",
+        f"Guard ablation excerpt ({by_set['none'].attacks} attacks, "
+        f"{by_set['none'].tasks} benign workloads):",
         "",
         "| Guard set | Attacks stopped | Unauthorized outflow | Tasks blocked |",
         "|---|---|---|---|",

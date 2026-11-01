@@ -63,6 +63,7 @@ def test_load_all_builtin() -> None:
         "pix-description-foreign-history-008",
         "pix-description-injection-001",
         "pix-description-read-before-pay-011",
+        "pix-description-read-before-pay-key-swap-012",
         "pix-description-structuring-005",
     ]
 
