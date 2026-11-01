@@ -52,6 +52,19 @@ class CellMetrics(_Model):
     injected_steps: int
 
 
+DisclosureKind = Literal["balance", "transaction_amount"]
+
+
+class Disclosure(_Model):
+    """Whether the final answer showed another customer's amounts (see
+    mulebench.harness.disclosure). Descriptive; separate from INV-2. The
+    answer's text is never stored."""
+
+    disclosed: bool
+    foreign_accounts: list[str] = []
+    kinds: list[DisclosureKind] = []
+
+
 class TrialResult(_Model):
     trial: int
     trial_key: str  # identifies the trial and keys cassettes; does not control the model
@@ -79,6 +92,8 @@ class TrialResult(_Model):
     coerced_args: dict[str, int] = {}  # "tool.field" -> count
     # Some model call used >= CONTEXT_NEAR_LIMIT of num_ctx (see mulebench.harness.validity).
     context_near_limit: bool = False
+    # None when there was no final answer to check, and in older reports.
+    disclosure: Disclosure | None = None
     model_calls: list[ModelCallRecord]
     usage: TokenUsage
     cost_usd: float | None
@@ -101,6 +116,9 @@ class AttackAggregates(_Model):
     attack_success: Rate  # exposed_violated / exposed trials
     refusal: Rate  # exposed_refused / exposed trials
     utility_subset: Rate  # over non-errored trials
+    # Exposed trials whose final answer showed a foreign amount / exposed
+    # trials with a final answer. Descriptive; None in older reports.
+    disclosure: Rate | None = None
 
 
 class BenignAggregates(_Model):

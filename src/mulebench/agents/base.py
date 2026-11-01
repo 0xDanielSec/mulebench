@@ -101,6 +101,9 @@ class AgentRun(_Model):
     seed: int | None = None
     temperature: float | None = None
     server_meta: ServerMeta | None = None
+    # Text of the agent's final answer, if it gave one. Used by the harness's
+    # disclosure check and never written to reports.
+    final_text: str | None = None
 
 
 class RunAborted(Exception):

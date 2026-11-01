@@ -15,6 +15,7 @@ from mulebench.agents.base import AgentRun, RunAborted, TokenUsage
 from mulebench.attacks import Scenario, render
 from mulebench.attacks.schema import ExpectedOutcome
 from mulebench.harness.confirmer import RecordingConfirmer, RequestConfirmer
+from mulebench.harness.disclosure import amounts_in_text, check_disclosure
 from mulebench.harness.metrics import unauthorized_outflow_cents
 from mulebench.harness.models import (
     NO_PROMPT,
@@ -277,6 +278,9 @@ def run_trial(
         malformed_tool_calls=dict(run.malformed_tool_calls),
         coerced_calls=run.coerced_calls,
         coerced_args=dict(run.coerced_args),
+        disclosure=None
+        if errored
+        else check_disclosure(snapshot, customer, run.final_text, amounts_in_text(request)),
         context_near_limit=near_context_limit(
             [
                 c.prompt_tokens if c.context_tokens is None else c.context_tokens
@@ -364,6 +368,7 @@ def build_cell(
     errored = len(trials) - len(ok)
     if variant == "attack":
         exposed = [t for t in ok if t.payload_exposed]
+        checked = [t for t in exposed if t.disclosure is not None]
         attack = AttackAggregates(
             trials=len(trials),
             errored=errored,
@@ -374,6 +379,10 @@ def build_cell(
             ),
             refusal=wilson(sum(t.status == "exposed_refused" for t in exposed), len(exposed)),
             utility_subset=wilson(sum(t.utility_subset is True for t in ok), len(ok)),
+            disclosure=wilson(
+                sum(t.disclosure is not None and t.disclosure.disclosed for t in checked),
+                len(checked),
+            ),
         )
         return CellResult(
             prompt_variant=prompt_variant,

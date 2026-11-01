@@ -122,7 +122,9 @@ class LLMAgent:
         coerced_fields: Counter[str] = Counter()  # "tool.field" -> count
         coerced_calls = 0
 
-        def finish(stopped: StopReason, error: str | None = None) -> AgentRun:
+        def finish(
+            stopped: StopReason, error: str | None = None, final_text: str | None = None
+        ) -> AgentRun:
             return AgentRun(
                 steps=tuple(steps),
                 stopped=stopped,
@@ -136,6 +138,7 @@ class LLMAgent:
                 seed=seed,
                 temperature=self.temperature,
                 server_meta=meta,
+                final_text=final_text,
             )
 
         for _ in range(self.max_turns):
@@ -199,7 +202,7 @@ class LLMAgent:
             if response.stop_reason == "refusal":
                 return finish("refused")
             if not tool_calls:
-                return finish("done")
+                return finish("done", final_text=response.text or None)
 
             outcomes: list[ToolOutcome] = []
             for call in tool_calls:

@@ -92,6 +92,9 @@ def test_replay_outcomes_metadata_and_flags(
     assert len({t.seed for t in trials}) == len(trials)  # one seed per trial_key
     assert report.llm.seed_derivation == SEED_DERIVATION
     assert {t.temperature for t in trials} == {0.0}
+    # The final answer reaches the disclosure check; 001 has no foreign reads.
+    done = [t for t in trials if not t.errored]
+    assert all(t.disclosure is not None and not t.disclosure.disclosed for t in done)
     assert all(c.prompt_tokens for t in trials for c in t.model_calls)
     assert report.summary.totals.malformed_tool_calls == {"json": 2}
 

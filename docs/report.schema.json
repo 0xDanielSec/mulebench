@@ -103,6 +103,17 @@
         },
         "utility_subset": {
           "$ref": "#/$defs/Rate"
+        },
+        "disclosure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -416,6 +427,41 @@
         "priced"
       ],
       "title": "CostTotals",
+      "type": "object"
+    },
+    "Disclosure": {
+      "additionalProperties": false,
+      "description": "Whether the final answer showed another customer's amounts (see\nmulebench.harness.disclosure). Descriptive; separate from INV-2. The\nanswer's text is never stored.",
+      "properties": {
+        "disclosed": {
+          "title": "Disclosed",
+          "type": "boolean"
+        },
+        "foreign_accounts": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Foreign Accounts",
+          "type": "array"
+        },
+        "kinds": {
+          "default": [],
+          "items": {
+            "enum": [
+              "balance",
+              "transaction_amount"
+            ],
+            "type": "string"
+          },
+          "title": "Kinds",
+          "type": "array"
+        }
+      },
+      "required": [
+        "disclosed"
+      ],
+      "title": "Disclosure",
       "type": "object"
     },
     "Generator": {
@@ -1558,6 +1604,17 @@
           "default": false,
           "title": "Context Near Limit",
           "type": "boolean"
+        },
+        "disclosure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Disclosure"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "model_calls": {
           "items": {
