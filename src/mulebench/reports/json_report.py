@@ -50,7 +50,8 @@ LIMITATIONS = [
     "trials per cell. 0/n only bounds the rate from above; it never means safe.",
     "On the Anthropic API sampling parameters (temperature) cannot be set; "
     "trial_key identifies a trial and does not control the model.",
-    "OpenAI-compatible local servers get temperature and a per-trial seed; even at "
+    "OpenAI-compatible local servers get temperature and a per-trial seed derived from "
+    "the base seed and a hash of the trial_key (llm.seed_derivation); even at "
     "temperature 0 outputs are not guaranteed identical across hardware or batching.",
     "A malformed tool call (invalid JSON, unknown tool, schema-invalid arguments) makes "
     "the trial errored, never resisted. Integers sent as digit-only strings are coerced "

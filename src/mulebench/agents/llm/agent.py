@@ -38,6 +38,7 @@ from mulebench.agents.llm.model import (
 )
 from mulebench.agents.llm.pricing import cost_usd
 from mulebench.agents.llm.prompts import PROMPTS
+from mulebench.agents.llm.seeds import SEED_DERIVATION, derive_seed
 from mulebench.agents.llm.text_calls import text_tool_calls
 from mulebench.tools.client import ToolClient, ToolResult
 
@@ -80,7 +81,7 @@ class LLMAgent:
         self.max_turns = max_turns
         self.meter = meter or CostMeter()
         self.temperature = temperature
-        self.seed = seed  # base seed; trial t uses seed + t
+        self.seed = seed  # base seed; per-trial seed from derive_seed (seeds.py)
         self.arg_coercion = arg_coercion
 
     @property
@@ -99,6 +100,7 @@ class LLMAgent:
             params["temperature"] = self.temperature
         if self.seed is not None:
             params["seed"] = self.seed
+            params["seed_derivation"] = SEED_DERIVATION
         return params
 
     def run(self, task: AgentTask, tools: ToolClient) -> AgentRun:
@@ -112,7 +114,7 @@ class LLMAgent:
         ]
         steps: list[AgentStep] = []
         calls: list[ModelCallRecord] = []
-        seed = None if self.seed is None else self.seed + task.trial
+        seed = None if self.seed is None else derive_seed(self.seed, task.trial_key)
         meta: ServerMeta | None = getattr(self.chat, "server_meta", None)
         schemas = {t.name: t.input_schema for t in tool_defs}
         emitted = 0

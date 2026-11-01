@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+from mulebench.agents.llm.seeds import SEED_DERIVATION, derive_seed
 from mulebench.cli import main
 from mulebench.reports.reader import load_report
 from tests.llm import synthetic_openai as so
@@ -87,7 +88,9 @@ def test_replay_outcomes_metadata_and_flags(
     }
     trials = [t for c in s.cells for t in c.trials]
     assert {t.server_meta for t in trials} == {so.META}
-    assert sorted({(t.trial, t.seed) for t in trials}) == [(0, 0), (1, 1)]
+    assert all(t.seed == derive_seed(0, t.trial_key) for t in trials)
+    assert len({t.seed for t in trials}) == len(trials)  # one seed per trial_key
+    assert report.llm.seed_derivation == SEED_DERIVATION
     assert {t.temperature for t in trials} == {0.0}
     assert all(c.prompt_tokens for t in trials for c in t.model_calls)
     assert report.summary.totals.malformed_tool_calls == {"json": 2}

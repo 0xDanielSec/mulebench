@@ -2,7 +2,7 @@
   "trial_key": "pix-description-injection-001/baseline/vulnerable/attack/t000",
   "interactions": [
     {
-      "request_sha256": "1a1808495aabf542c25fdc924368995b25aa3ef011b05d8cf1c71863158680be",
+      "request_sha256": "8ffd6755c58810a806b802de1e8b591655923ed65f5452347e4883a27dc191f1",
       "request": {
         "model": "synthetic-tiny:1b",
         "messages": [
@@ -163,7 +163,7 @@
         "max_tokens": 2048,
         "temperature": 0.0,
         "stream": false,
-        "seed": 0
+        "seed": 439122323
       },
       "response": {
         "id": "chatcmpl-fd37e8ce096f7739",
@@ -190,15 +190,15 @@
           }
         ],
         "usage": {
-          "prompt_tokens": 935,
+          "prompt_tokens": 937,
           "completion_tokens": 20,
-          "total_tokens": 955
+          "total_tokens": 957
         }
       },
       "request_id": "chatcmpl-fd37e8ce096f7739"
     },
     {
-      "request_sha256": "03a8e7abae74b9698c75016dd93696fade0bff5a22d3bd501e31b1f6c9369ba9",
+      "request_sha256": "b71311eab75ab3b4dd9f4bdec84b6fba841bec6b919c3fb5673c38bf71b91733",
       "request": {
         "model": "synthetic-tiny:1b",
         "messages": [
@@ -378,7 +378,7 @@
         "max_tokens": 2048,
         "temperature": 0.0,
         "stream": false,
-        "seed": 0
+        "seed": 439122323
       },
       "response": {
         "id": "chatcmpl-e98387e8afcfe4ee",
@@ -405,15 +405,15 @@
           }
         ],
         "usage": {
-          "prompt_tokens": 1126,
+          "prompt_tokens": 1128,
           "completion_tokens": 20,
-          "total_tokens": 1146
+          "total_tokens": 1148
         }
       },
       "request_id": "chatcmpl-e98387e8afcfe4ee"
     },
     {
-      "request_sha256": "064d2acfa6559fcfbce695d2ee422f07c8c7aff5549c388138ac6d6aa508c494",
+      "request_sha256": "4adbbf0aa61a2b13b85d202e6f19d7f846ec7ac4a1fe88d61e8ce7e193c1d017",
       "request": {
         "model": "synthetic-tiny:1b",
         "messages": [
@@ -612,7 +612,7 @@
         "max_tokens": 2048,
         "temperature": 0.0,
         "stream": false,
-        "seed": 0
+        "seed": 439122323
       },
       "response": {
         "id": "chatcmpl-d54e9394143c21d1",
@@ -639,15 +639,15 @@
           }
         ],
         "usage": {
-          "prompt_tokens": 1268,
+          "prompt_tokens": 1270,
           "completion_tokens": 20,
-          "total_tokens": 1288
+          "total_tokens": 1290
         }
       },
       "request_id": "chatcmpl-d54e9394143c21d1"
     },
     {
-      "request_sha256": "84484479ffe0a8df87660abc55fd43d181db2626e6117244a133ed1a6aaf2bb3",
+      "request_sha256": "ed3df609886232b37e35d5fbcaf162b6380932375cebb610a40b7dbf1fcd3d86",
       "request": {
         "model": "synthetic-tiny:1b",
         "messages": [
@@ -865,7 +865,7 @@
         "max_tokens": 2048,
         "temperature": 0.0,
         "stream": false,
-        "seed": 0
+        "seed": 439122323
       },
       "response": {
         "id": "chatcmpl-2f9913c8e9a888b8",
@@ -882,9 +882,9 @@
           }
         ],
         "usage": {
-          "prompt_tokens": 1413,
+          "prompt_tokens": 1415,
           "completion_tokens": 20,
-          "total_tokens": 1433
+          "total_tokens": 1435
         }
       },
       "request_id": "chatcmpl-2f9913c8e9a888b8"

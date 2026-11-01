@@ -11,6 +11,7 @@ import pytest
 from mulebench.agents.base import ServerMeta
 from mulebench.agents.llm import LLMAgent
 from mulebench.agents.llm.openai_compat import OpenAICompatChatModel
+from mulebench.agents.llm.seeds import derive_seed
 from mulebench.agents.llm.transport import FakeTransport
 from mulebench.attacks import load_builtin
 from mulebench.harness import run_all
@@ -96,7 +97,8 @@ def test_valid_run_records_sampling_and_meta(scenario: Any) -> None:
     meta = ServerMeta(model="tiny:1b", digest="sha256:d", num_ctx=8192)
     transport_agent = agent(text_only(), meta, temperature=0.7, seed=40)
     t = run_trial(scenario, "baseline", "vulnerable", "benign", 2, transport_agent)
-    assert (t.seed, t.temperature, t.server_meta) == (42, 0.7, meta)
+    expected = derive_seed(40, t.trial_key)
+    assert (t.seed, t.temperature, t.server_meta) == (expected, 0.7, meta)
     assert t.malformed_tool_calls == {}
     assert t.context_near_limit is False
     chat = transport_agent.chat
@@ -104,7 +106,7 @@ def test_valid_run_records_sampling_and_meta(scenario: Any) -> None:
     fake = chat.transport
     assert isinstance(fake, FakeTransport)
     sent = fake.requests[0][1]
-    assert (sent["seed"], sent["temperature"]) == (42, 0.7)
+    assert (sent["seed"], sent["temperature"]) == (expected, 0.7)
 
 
 def test_context_near_limit_flag(scenario: Any) -> None:

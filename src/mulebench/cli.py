@@ -116,7 +116,11 @@ def _parser() -> argparse.ArgumentParser:
     llm.add_argument("--max-cost-usd", type=float, help="whole-run cost cap")
     llm.add_argument("--provider", choices=("anthropic", "openai-compatible"), default="anthropic")
     _add_server_args(llm)
-    llm.add_argument("--seed", type=int, help="openai-compatible: base seed (trial t: seed + t)")
+    llm.add_argument(
+        "--seed",
+        type=int,
+        help="openai-compatible: base seed (per-trial seed: base + sha256(trial_key))",
+    )
     llm.add_argument(
         "--temperature", type=float, help="openai-compatible: sampling temperature (default 0)"
     )
@@ -413,6 +417,7 @@ def _build_local(
         )
         from mulebench.agents.llm.openai_compat import PROVIDER, OpenAICompatChatModel
         from mulebench.agents.llm.prompts import PROMPTS, prompt_sha256
+        from mulebench.agents.llm.seeds import SEED_DERIVATION
         from mulebench.agents.llm.transport import CassetteTransport, LiveCallsDisabled, Transport
     except ImportError:
         return _error(
@@ -475,6 +480,7 @@ def _build_local(
         base_url=base_url,
         temperature=temperature,
         seed=seed,
+        seed_derivation=SEED_DERIVATION,
         arg_coercion=args.arg_coercion,
         tool_schema_sha256=tool_schema_sha256(),
     )

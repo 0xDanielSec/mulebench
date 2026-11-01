@@ -609,6 +609,18 @@
           "default": null,
           "title": "Seed"
         },
+        "seed_derivation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seed Derivation"
+        },
         "arg_coercion": {
           "anyOf": [
             {

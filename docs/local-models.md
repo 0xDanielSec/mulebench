@@ -79,7 +79,7 @@ refused. The checkpoint is deleted once a run completes.
 | `server_meta.server_version` | Ollama `/api/version` |
 | `server_meta.num_ctx` | Ollama `/api/show` (`num_ctx` in the Modelfile), else `/api/ps` for a loaded model; `num_ctx_source` says which |
 | `server_meta.context_length` | the model's trained maximum (`model_info`) |
-| `seed`, `temperature` | as sent; trial `t` uses `seed + t` |
+| `seed`, `temperature` | as sent; `seed` is the base, each trial uses `(seed + sha256(trial_key)[:8]) mod 2^31` (`seed_derivation: sha256_trial_key_v1`) |
 | `model_calls[].prompt_tokens` | `usage.prompt_tokens` of each call |
 | `model_calls[].context_tokens` | prompt + completion tokens of each call (reasoning included) |
 | `model_calls[].reasoning_present` | the call returned reasoning, in either shape below |

@@ -2,7 +2,7 @@
   "trial_key": "pix-description-injection-001/baseline/vulnerable/attack/t001",
   "interactions": [
     {
-      "request_sha256": "ab50d583e4dfb6e1019c319e510e7d28658cc40c6a9454f1fec6f298c1646be1",
+      "request_sha256": "d0b34b4c15d2c23b3651ba3a2254bc9870c9bd8c87ff55d7387dddbc3947798c",
       "request": {
         "model": "synthetic-tiny:1b",
         "messages": [
@@ -163,7 +163,7 @@
         "max_tokens": 2048,
         "temperature": 0.0,
         "stream": false,
-        "seed": 1
+        "seed": 1674658228
       },
       "response": {
         "id": "chatcmpl-ab221c4fc15222ee",
@@ -190,15 +190,15 @@
           }
         ],
         "usage": {
-          "prompt_tokens": 935,
+          "prompt_tokens": 938,
           "completion_tokens": 20,
-          "total_tokens": 955
+          "total_tokens": 958
         }
       },
       "request_id": "chatcmpl-ab221c4fc15222ee"
     },
     {
-      "request_sha256": "78311abdce4b8209faafeb0a12f6ef7baf734acb40f0a139eab69470158369f6",
+      "request_sha256": "1fd4b5a4974cb73529659881e2115023e1b6fb0e783249d4d0b625633126ecef",
       "request": {
         "model": "synthetic-tiny:1b",
         "messages": [
@@ -378,7 +378,7 @@
         "max_tokens": 2048,
         "temperature": 0.0,
         "stream": false,
-        "seed": 1
+        "seed": 1674658228
       },
       "response": {
         "id": "chatcmpl-48ecff38e8c23683",
@@ -405,9 +405,9 @@
           }
         ],
         "usage": {
-          "prompt_tokens": 1126,
+          "prompt_tokens": 1128,
           "completion_tokens": 20,
-          "total_tokens": 1146
+          "total_tokens": 1148
         }
       },
       "request_id": "chatcmpl-48ecff38e8c23683"

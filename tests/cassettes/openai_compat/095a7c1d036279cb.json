@@ -2,7 +2,7 @@
   "trial_key": "pix-description-injection-001/baseline/hardened/attack/t001",
   "interactions": [
     {
-      "request_sha256": "ab50d583e4dfb6e1019c319e510e7d28658cc40c6a9454f1fec6f298c1646be1",
+      "request_sha256": "bfe362c8502dc405d360dbe7d936d5b5138abc5122b3054f1ce4d68750851036",
       "request": {
         "model": "synthetic-tiny:1b",
         "messages": [
@@ -163,7 +163,7 @@
         "max_tokens": 2048,
         "temperature": 0.0,
         "stream": false,
-        "seed": 1
+        "seed": 56785355
       },
       "response": {
         "id": "chatcmpl-a4bdc3de53b302af",
@@ -190,15 +190,15 @@
           }
         ],
         "usage": {
-          "prompt_tokens": 935,
+          "prompt_tokens": 937,
           "completion_tokens": 20,
-          "total_tokens": 955
+          "total_tokens": 957
         }
       },
       "request_id": "chatcmpl-a4bdc3de53b302af"
     },
     {
-      "request_sha256": "91f6471767bc2dce03651d4e20a16636efc93925a988c7c7faaa18dd5889d9bc",
+      "request_sha256": "ae7d5ce354f5fceb302ba46236a3cffab9d6c77ea36ad413608b036939ada40f",
       "request": {
         "model": "synthetic-tiny:1b",
         "messages": [
@@ -378,7 +378,7 @@
         "max_tokens": 2048,
         "temperature": 0.0,
         "stream": false,
-        "seed": 1
+        "seed": 56785355
       },
       "response": {
         "id": "chatcmpl-b4326481a78eea49",
@@ -405,9 +405,9 @@
           }
         ],
         "usage": {
-          "prompt_tokens": 1126,
+          "prompt_tokens": 1127,
           "completion_tokens": 20,
-          "total_tokens": 1146
+          "total_tokens": 1147
         }
       },
       "request_id": "chatcmpl-b4326481a78eea49"

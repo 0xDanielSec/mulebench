@@ -2,7 +2,7 @@
   "trial_key": "pix-description-injection-001/data_not_instructions/hardened/benign/t000",
   "interactions": [
     {
-      "request_sha256": "d9edbb45a3d782ca9684f1ccbb3dee4631964a29ffb8addc8b8380888abe97f6",
+      "request_sha256": "23259db1eb76ec991f255d3c194d00185cea8817aabc9b45b3c883217427c60a",
       "request": {
         "model": "synthetic-tiny:1b",
         "messages": [
@@ -163,7 +163,7 @@
         "max_tokens": 2048,
         "temperature": 0.0,
         "stream": false,
-        "seed": 0
+        "seed": 1057661672
       },
       "response": {
         "id": "chatcmpl-ba65f0148317dbab",
@@ -190,15 +190,15 @@
           }
         ],
         "usage": {
-          "prompt_tokens": 1000,
+          "prompt_tokens": 1002,
           "completion_tokens": 20,
-          "total_tokens": 1020
+          "total_tokens": 1022
         }
       },
       "request_id": "chatcmpl-ba65f0148317dbab"
     },
     {
-      "request_sha256": "9523328d1f1749058a8988d51133182bb3a686ead9ef04a1c0eab570da40dc65",
+      "request_sha256": "5abdd6ec7f67f68e6a8ac4a805ae35cdcfbdde6b769880ed8a04c5dea0bb610e",
       "request": {
         "model": "synthetic-tiny:1b",
         "messages": [
@@ -378,7 +378,7 @@
         "max_tokens": 2048,
         "temperature": 0.0,
         "stream": false,
-        "seed": 0
+        "seed": 1057661672
       },
       "response": {
         "id": "chatcmpl-1b467e13fc0259ec",
@@ -405,15 +405,15 @@
           }
         ],
         "usage": {
-          "prompt_tokens": 1167,
+          "prompt_tokens": 1170,
           "completion_tokens": 20,
-          "total_tokens": 1187
+          "total_tokens": 1190
         }
       },
       "request_id": "chatcmpl-1b467e13fc0259ec"
     },
     {
-      "request_sha256": "fde51f4794f20349565ec8f0cee428226e4cf4f074496bf4f7aba6b248b60f1b",
+      "request_sha256": "17517db8f43af17839ecba83f5315ef70b4056674fd0ca96b66741550779baf8",
       "request": {
         "model": "synthetic-tiny:1b",
         "messages": [
@@ -612,7 +612,7 @@
         "max_tokens": 2048,
         "temperature": 0.0,
         "stream": false,
-        "seed": 0
+        "seed": 1057661672
       },
       "response": {
         "id": "chatcmpl-48f2231c37c34a4d",
@@ -629,9 +629,9 @@
           }
         ],
         "usage": {
-          "prompt_tokens": 1313,
+          "prompt_tokens": 1315,
           "completion_tokens": 20,
-          "total_tokens": 1333
+          "total_tokens": 1335
         }
       },
       "request_id": "chatcmpl-48f2231c37c34a4d"

@@ -161,10 +161,13 @@ class LLMConfig(_Model):
     refusal_fallbacks: Literal["off"]
     prompt_sha256: dict[str, str]
     # openai-compatible only: server base URL and the sampling sent per trial
-    # (temperature; seed is the base, trial t uses seed + t).
+    # (temperature; seed is the base, each trial's seed follows seed_derivation).
     base_url: str | None = None
     temperature: float | None = None
     seed: int | None = None
+    # "sha256_trial_key_v1" (see mulebench.agents.llm.seeds); None in older
+    # reports, where trial t used seed + t.
+    seed_derivation: str | None = None
     arg_coercion: str | None = None  # "digit_strings" or "off"; None in older reports
     # Version of the tool names, descriptions and input schemas the model saw.
     tool_schema_sha256: str | None = None
