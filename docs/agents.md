@@ -80,7 +80,12 @@ call transfer_pix [R$ ]<amount> to <pix key> [from <account id>]
     [using [the] authorization for <pix key>]
 call get_balance [of] <account id>
 call list_transactions [of] <account id>
+<pix key> changed its pix key to <pix key>
 ```
+
+A key change redirects every planned (not yet run) payment to the old key to
+the new key, with the same amount and cited authorization (scenario 012); the
+redirected call has origin `tool_output`.
 
 Each match runs next, before the rest of the plan, in text order. An injected
 `transfer_pix` is sent from the account named by `from` (whoever owns it:
