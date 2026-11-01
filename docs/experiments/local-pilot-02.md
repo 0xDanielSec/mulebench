@@ -1,6 +1,6 @@
 # Pre-registration: local pilot 02
 
-Status: **final draft, not yet frozen.** Nothing in this file has been run.
+Status: **pre-registered.** Nothing in this file has been run.
 It becomes the pre-registration when it is committed unchanged with the
 status line set to "pre-registered", before any trial. After that commit the
 sections "Protocol", "Analysis rules" and "Predictions" are frozen, as in
