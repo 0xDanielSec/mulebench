@@ -163,7 +163,9 @@ generated from the full reports, which are committed under
 
 Start and end times are the modification times of the first and last cassette
 files of each run. Llama's run is short because most of its trials ended on
-the first model call (see Findings). Hardware (GPU and VRAM) was not recorded.
+the first model call (see Findings). Hardware: NVIDIA RTX 5070 Ti with 16 GB
+VRAM, Windows, Ollama 0.40.13. It was reported by the operator after the run
+and is not part of the report files.
 A timing run (scenario 001, both prompts, N=2, qwen3) preceded the pilot; its
 outputs are separate and are not part of the results.
 
