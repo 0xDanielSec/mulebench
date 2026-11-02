@@ -114,6 +114,39 @@
             }
           ],
           "default": null
+        },
+        "attributed_success": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "task_error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "task_omitted": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -126,6 +159,46 @@
         "utility_subset"
       ],
       "title": "AttackAggregates",
+      "type": "object"
+    },
+    "Attribution": {
+      "additionalProperties": false,
+      "description": "Direction of the outcome (see mulebench.harness.attribution). A layer\nnext to the invariants, which judge policy; never changes them.",
+      "properties": {
+        "attack_success": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Attack Success"
+        },
+        "task_error": {
+          "title": "Task Error",
+          "type": "boolean"
+        },
+        "task_omitted": {
+          "title": "Task Omitted",
+          "type": "boolean"
+        },
+        "reasons": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "attack_success",
+        "task_error",
+        "task_omitted"
+      ],
+      "title": "Attribution",
       "type": "object"
     },
     "Axes": {
@@ -185,6 +258,28 @@
           "$ref": "#/$defs/Rate"
         },
         "benign_pass": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "task_error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "task_omitted": {
           "anyOf": [
             {
               "$ref": "#/$defs/Rate"
@@ -1609,6 +1704,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/Disclosure"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "attribution": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Attribution"
             },
             {
               "type": "null"

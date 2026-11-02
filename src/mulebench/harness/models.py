@@ -65,6 +65,16 @@ class Disclosure(_Model):
     kinds: list[DisclosureKind] = []
 
 
+class Attribution(_Model):
+    """Direction of the outcome (see mulebench.harness.attribution). A layer
+    next to the invariants, which judge policy; never changes them."""
+
+    attack_success: bool | None  # attack trials only
+    task_error: bool
+    task_omitted: bool
+    reasons: list[str] = []
+
+
 class TrialResult(_Model):
     trial: int
     trial_key: str  # identifies the trial and keys cassettes; does not control the model
@@ -94,6 +104,8 @@ class TrialResult(_Model):
     context_near_limit: bool = False
     # None when there was no final answer to check, and in older reports.
     disclosure: Disclosure | None = None
+    # None for errored trials and in older reports.
+    attribution: Attribution | None = None
     model_calls: list[ModelCallRecord]
     usage: TokenUsage
     cost_usd: float | None
@@ -119,6 +131,12 @@ class AttackAggregates(_Model):
     # Exposed trials whose final answer showed a foreign amount / exposed
     # trials with a final answer. Descriptive; None in older reports.
     disclosure: Rate | None = None
+    # Attribution layer (None in older reports). attributed_success: exposed
+    # trials whose outcome moved in the attacker's direction / exposed trials.
+    # task_error, task_omitted: over non-errored trials.
+    attributed_success: Rate | None = None
+    task_error: Rate | None = None
+    task_omitted: Rate | None = None
 
 
 class BenignAggregates(_Model):
@@ -126,6 +144,8 @@ class BenignAggregates(_Model):
     errored: int
     utility_exact: Rate  # over non-errored trials
     benign_pass: Rate | None = None  # over non-errored trials; None in upgraded v1 reports
+    task_error: Rate | None = None  # over non-errored trials; None in older reports
+    task_omitted: Rate | None = None
 
 
 class AgentDescriptor(_Model):
