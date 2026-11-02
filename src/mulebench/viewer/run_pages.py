@@ -234,9 +234,7 @@ def report_index(report: Report, title: str) -> str:
     )
 
 
-def cell_page(
-    report_title: str, s: ScenarioResult, c: CellResult, *, link_trials: bool = True
-) -> str:
+def cell_page(report_title: str, s: ScenarioResult, c: CellResult) -> str:
     title = f"{s.scenario_id} · {c.prompt_variant} · {c.preset} · {c.variant}"
     lines = _attack_lines(c) if c.variant == "attack" else _benign_lines(c)
     validity = [
@@ -249,9 +247,7 @@ def cell_page(
     ]
     rows = [
         [
-            h("a", {"href": f"../{trial_href(s, c, t)}"}, f"trial {t.trial}")
-            if link_trials
-            else f"trial {t.trial}",
+            h("a", {"href": f"../{trial_href(s, c, t)}"}, f"trial {t.trial}"),
             trial_badges(t, c.variant),
             brl(t.unauthorized_outflow_cents),
             t.metrics.tool_calls,

@@ -16,7 +16,8 @@ from mulebench.reports.ablation import AblationReport
 from mulebench.reports.reader import parse_report
 from mulebench.viewer.common import page, table
 from mulebench.viewer.html import h
-from mulebench.viewer.run_pages import cell_href, cell_page, report_index
+from mulebench.viewer.run_pages import cell_href, cell_page, report_index, trial_href
+from mulebench.viewer.trial import trial_page
 
 AnyReport = Report | AblationReport
 
@@ -70,9 +71,23 @@ def build_site(inputs: Sequence[tuple[str, AnyReport]]) -> dict[str, str]:
 
 def _run_files(prefix: str, name: str, report: Report) -> dict[str, str]:
     files = {f"{prefix}/index.html": report_index(report, name)}
+    # Reports that store balances also store the final answer (same release).
+    stores_final_text = any(
+        t.ledger_before is not None for s in report.scenarios for c in s.cells for t in c.trials
+    )
     for s in report.scenarios:
         for c in s.cells:
-            files[f"{prefix}/{cell_href(s, c)}"] = cell_page(name, s, c, link_trials=False)
+            files[f"{prefix}/{cell_href(s, c)}"] = cell_page(name, s, c)
+            for t in c.trials:
+                files[f"{prefix}/{trial_href(s, c, t)}"] = trial_page(
+                    name,
+                    report,
+                    s,
+                    c,
+                    t,
+                    stores_final_text=stores_final_text,
+                    cell_link=f"../{cell_href(s, c)}",
+                )
     return files
 
 
