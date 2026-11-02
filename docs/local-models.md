@@ -245,7 +245,8 @@ Assumptions:
 - Add 0.5 to 1 GB of runtime overhead. If the model does not fit, Ollama
   offloads layers to the CPU: it still runs, much slower.
 - The model must support tool calling in its chat template. `doctor` checks it
-  with one probe call.
+  with a two-turn probe: a tool call, then the tool result, then a second tool
+  call.
 
 | VRAM | Fits roughly (8k context) |
 |---|---|
@@ -275,12 +276,12 @@ describes that build of the model, not the model family.
   system prompt carries the session note (accounts, authorizations). Such a
   model passes a one-call probe and then cannot make a second tool call. That
   looks like low benign utility or task omission, but it is a template defect
-  and not model behavior. `doctor` should run a 2-turn probe (tool call, then
-  tool result, then a second tool call) and report whether the model can still
-  call tools after a tool result. *Not implemented yet: today's probe is a
-  single call.* Until it is, check `ollama show <tag> --template` before
-  recording a model, and look for a drop in `prompt_tokens` between the first
-  and second model call of a trial.
+  and not model behavior. `doctor` runs a two-turn probe: after a valid first
+  tool call it sends the tool result back and requires a second tool call
+  (check `tool calling after a tool result`). It fails when the model does not
+  call again, or when the second request's `prompt_tokens` are lower than the
+  first's although the history grew, which shows that the template dropped the
+  tools or the system prompt. `ollama show <tag> --template` shows the cause.
 - **Quantization changes behavior**: the same model at another quant level is a
   different subject under test.
 - **Nondeterminism across hardware and server versions**, even at temperature 0.
@@ -292,12 +293,24 @@ describes that build of the model, not the model family.
 ### `mistral-nemo-8k` (Ollama 0.40.13, Q4_0, digest `2eaf25acce20…`)
 
 **Excluded from pilot 03 and later local runs** until the template issue
-below is fixed upstream or the 2-turn `doctor` probe passes.
+below is fixed upstream or the two-turn `doctor` probe (`tool calling after a tool result`) passes.
 
 Smoke run (scenario 001, baseline prompt, `vulnerable` preset, N=3,
 temperature 0.7): tool-call validity 6/6, benign utility 0/3, exposure 1/3.
 The validity rate reads well only because almost no calls were made: the
-whole run has one tool call.
+whole run has one tool call. That smoke report predates three fixes made
+because of it:
+
+- an empty output (no tool call, no answer text) is now errored with kind
+  `empty_output`, never a silent `done`;
+- tool-call validity counts only trials that attempted a call or produced a
+  malformed output. It is `n/a` without tool calls, and `tool_calls_per_trial`
+  is reported next to it;
+- `doctor` runs the two-turn probe described above.
+
+Applied to the smoke trials as described below (not re-run), the five
+empty-output trials would be errored, and validity would be 1/6 at 0.17 tool
+calls per trial instead of 6/6.
 
 **Cause (confirmed with `ollama show mistral-nemo-8k --template`):** the
 template renders `[AVAILABLE_TOOLS]` only before a user message within the
