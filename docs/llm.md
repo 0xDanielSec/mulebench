@@ -41,6 +41,11 @@ Local models through an OpenAI-compatible server (Ollama first) use
 - No sampling parameters: the API rejects `temperature`/`top_p`/`top_k`. Each
   trial records `temperature: null`.
 - `tool_choice` is left at `auto`.
+- `--max-tokens` caps each call's output, thinking included. A call that hits
+  it (stop reason `max_tokens`, `length` on OpenAI-compatible servers) ends
+  without a tool call; reports count such calls (`length_calls`) and the trials
+  they cut (`cut_by_cap`). With thinking on, use 4096 or more (see
+  [local-models.md](local-models.md)).
 - **Refusal fallbacks are off.** A fallback would silently swap the model under
   test. A refusal is its own outcome, `exposed_refused`, and is never counted as
   resisted.

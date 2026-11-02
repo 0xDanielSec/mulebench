@@ -126,6 +126,16 @@ Reasoning spends output tokens before any tool call. The `doctor` probe allows
 runs, a trial cut off the same way ends without the tool call and lowers benign
 utility; raise `--max-tokens` if `num_ctx` leaves room.
 
+**Recommendation for reasoning models: `--max-tokens 4096` or more**
+(`REASONING_MAX_TOKENS` in `mulebench.doctor`), as long as prompt + output fit
+in `num_ctx`. The CLI default for local runs is 2048, which the probe passes,
+but trials make several calls with longer prompts; pilot 02 (qwen3-14b, 2048)
+had 30 model calls cut at `length`. `doctor` adds a `max_tokens` warning
+whenever the probe returns reasoning or ends at `length`. Reports count cut
+calls per trial (`length_calls`) and trials whose last call was cut
+(`cut_by_cap`, `cut_by_cap_trials` per cell); check them before reading a
+cell's resistance.
+
 ## Sampling and reproducibility
 
 The default temperature is 0, with a fixed seed. That makes a smoke run cheap

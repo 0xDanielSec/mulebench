@@ -10,7 +10,15 @@ import httpx
 import pytest
 
 from mulebench.cli import main
-from mulebench.doctor import MIN_NUM_CTX, PROBE_MAX_TOKENS, print_checks, run_doctor
+from mulebench.doctor import (
+    MAX_TOKENS_HELP,
+    MIN_NUM_CTX,
+    PROBE_MAX_TOKENS,
+    REASONING_MAX_TOKENS,
+    Check,
+    print_checks,
+    run_doctor,
+)
 
 URL = "http://localhost:11434/v1"
 TAGS = {"models": [{"name": "tiny:1b", "digest": "sha256:abc"}]}
@@ -227,9 +235,29 @@ def test_reasoning_model_passes_with_the_probe_budget(
 ) -> None:
     monkeypatch.setenv("MB_LIVE", "1")
     client, sent = reasoning_server(shape)
-    probe = run_doctor("qwen3-14b-8k", URL, client=client)[-1]
+    checks = run_doctor("qwen3-14b-8k", URL, client=client)
+    probe = next(c for c in checks if c.name == "tool calling")
     assert (probe.level, probe.detail) == ("ok", "the model returned a valid tool call")
     assert sent[0]["max_tokens"] == PROBE_MAX_TOKENS
+    # A passing probe still recommends a larger budget for runs.
+    assert checks[-1] == Check("warn", "max_tokens", MAX_TOKENS_HELP)
+    assert f"--max-tokens {REASONING_MAX_TOKENS}" in MAX_TOKENS_HELP
+
+
+def test_plain_model_gets_no_max_tokens_warning(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MB_LIVE", "1")
+    call = {"id": "c", "type": "function", "function": {"name": "ping", "arguments": "{}"}}
+    chat = {
+        "choices": [
+            {
+                "message": {"role": "assistant", "content": "", "tool_calls": [call]},
+                "finish_reason": "tool_calls",
+            }
+        ]
+    }
+    checks = run_doctor("tiny:1b", URL, client=server(chat=chat)[0])
+    assert checks[-1].name == "tool calling"
+    assert all(c.name != "max_tokens" for c in checks)
 
 
 @pytest.mark.parametrize("shape", ["think_tags", "field"])
@@ -240,7 +268,9 @@ def test_old_budget_reproduces_the_failure_with_a_diagnostic(
     monkeypatch.setenv("MB_LIVE", "1")
     monkeypatch.setattr("mulebench.doctor.PROBE_MAX_TOKENS", 64)
     client, _ = reasoning_server(shape)
-    probe = run_doctor("qwen3-14b-8k", URL, client=client)[-1]
+    checks = run_doctor("qwen3-14b-8k", URL, client=client)
+    assert checks[-1].name == "max_tokens"
+    probe = checks[-2]
     assert probe.level == "fail"
     assert probe.detail == (
         "the model answered without calling the tool; finish_reason=length "
