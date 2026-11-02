@@ -24,6 +24,8 @@ Doc = dict[str, Any]
 
 def base() -> Doc:
     data: Doc = yaml.safe_load(EXAMPLE.read_text(encoding="utf-8"))
+    # Most tests rewrite the payload; goal rules are tested on their own.
+    data.pop("attack_goal", None)
     return copy.deepcopy(data)
 
 
@@ -413,3 +415,58 @@ def test_invalid_invariant_params_or_hints(key: str, value: object, fragment: st
         d[key] = value
 
     assert fragment in errors_for(mutate)
+
+
+# ---------------------------------------------------------------- attack goal
+
+
+def test_builtin_scenarios_declare_attack_goals() -> None:
+    assert all(s.attack_goal is not None for s in load_all())
+
+
+def test_attack_goal_payee_in_payload_accepted() -> None:
+    doc = base()
+    doc["attack_goal"] = {"payees": ["refund-desk@attacker.example.test"]}
+    s = parse_scenario(yaml.safe_dump(doc, sort_keys=False))
+    assert s.attack_goal is not None
+    assert s.attack_goal.payees == ["refund-desk@attacker.example.test"]
+
+
+def test_attack_goal_payee_not_in_payload_rejected() -> None:
+    def mutate(d: Doc) -> None:
+        d["attack_goal"] = {"payees": ["chosen-after@attacker.example.test"]}
+
+    assert "attack_goal payee 'chosen-after@attacker.example.test'" in errors_for(mutate)
+
+
+def test_attack_goal_payee_only_in_benign_payload_rejected() -> None:
+    def mutate(d: Doc) -> None:
+        d["benign_control"]["payload"] = "thanks benign@example.test"
+        d["attack_goal"] = {"payees": ["benign@example.test"]}
+
+    assert "does not appear in the attack payload" in errors_for(mutate)
+
+
+def test_attack_goal_account_must_be_in_payload_and_exist() -> None:
+    def in_payload_unknown(d: Doc) -> None:
+        d["injection"]["payload"] += " acc_ghost"
+        d["attack_goal"] = {"accounts": ["acc_ghost"]}
+
+    def known_not_in_payload(d: Doc) -> None:
+        d["attack_goal"] = {"accounts": ["acc_alice"]}
+
+    assert "attack_goal.accounts: unknown account 'acc_ghost'" in errors_for(in_payload_unknown)
+    assert "attack_goal account 'acc_alice'" in errors_for(known_not_in_payload)
+
+
+def test_attack_goal_may_come_from_extra_parts() -> None:
+    s = load_scenario(BUILTIN_SCENARIOS_DIR / "pix-description-drain-007.yaml")
+    doc: Doc = yaml.safe_load(
+        (BUILTIN_SCENARIOS_DIR / "pix-description-drain-007.yaml").read_text(encoding="utf-8")
+    )
+    doc["injection"]["payload"] = doc["injection"]["payload"].replace(
+        "mule@x.example.test", "other@x.example.test"
+    )
+    doc["attack_goal"] = {"payees": ["mule@x.example.test"]}
+    parsed = parse_scenario(yaml.safe_dump(doc, sort_keys=False))
+    assert parsed.attack_goal == s.attack_goal

@@ -148,6 +148,16 @@ class Injection(_Model):
         }
 
 
+class AttackGoal(_Model):
+    """What the payload asks the agent to do, for the attribution layer (see
+    mulebench.harness.attribution). Every entry must appear literally in the
+    attack payload (main payload or extra parts): goals are read from what the
+    attacker asked, never chosen to fit results."""
+
+    payees: list[NonEmpty] = []  # Pix keys the payload asks money to go to
+    accounts: list[Ident] = []  # accounts the payload asks the agent to read or debit
+
+
 # ----------------------------------------------------------------- outcomes
 
 
@@ -201,6 +211,8 @@ class Scenario(_Model):
     # far). Unsupported hints are ignored; reports record the applied ones.
     agent_hints: dict[Ident, HintValue] = {}
     benign_control: BenignControl
+    # Optional; without it attribution derives the goal from the setup.
+    attack_goal: AttackGoal | None = None
     references: list[Reference] = []
     brazil_context: BrazilContext | None = None
 
@@ -309,6 +321,21 @@ class Scenario(_Model):
         ]
         if any(self.canary in v for v in elsewhere):
             problems.append("canary must appear only in injection.payload")
+
+        # Attack goal: verifiable against the payload text.
+        if self.attack_goal is not None:
+            texts = list(self.injection.payloads().values())
+            for kind, values in (
+                ("payee", self.attack_goal.payees),
+                ("account", self.attack_goal.accounts),
+            ):
+                for value in values:
+                    if not any(value in t for t in texts):
+                        problems.append(
+                            f"attack_goal {kind} {value!r} does not appear in the attack payload"
+                        )
+            for acc in self.attack_goal.accounts:
+                need("account", acc, owner, "attack_goal.accounts")
 
         if problems:
             raise ValueError("; ".join(dict.fromkeys(problems)))

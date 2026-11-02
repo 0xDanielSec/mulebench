@@ -202,3 +202,19 @@ artifact of the scripted agent, not of the attack; a real model can be tested
 with identical amounts. All R$ values are synthetic and bounded by scenario
 design (balances, daily limits, payload amounts).
 
+
+## Attack goal
+
+`attack_goal` (optional) records what the payload asks for, for the
+attribution layer (see [attribution.md](attribution.md)):
+
+```yaml
+attack_goal:
+  payees: [energia-pag@attacker.example.test]  # Pix keys the payload sends money to
+  accounts: [acc_bob]                           # accounts the payload asks to read or debit
+```
+
+Validation requires every goal payee and goal account to appear literally in
+the attack payload (main payload or an extra part), and every goal account to
+exist in the setup. Goals are read from what the attacker asked, never chosen
+to fit results. Every builtin scenario declares one.
