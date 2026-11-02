@@ -1,11 +1,13 @@
-"""Mutation check for INV-1 to INV-4, the audit hash chain (AUDIT) and ledger rules.
+"""Mutation check for INV-1 to INV-4, the audit hash chain (AUDIT), ledger rules
+and the attack attribution layer (ATTR).
 
 Each table targets one module. For every mutant, the project is copied to a
 temporary directory, one condition is broken in the copy of the module, and the
 tests for that module run there. A mutant is "killed"
 when at least one test fails. The working tree is never modified.
 
-Usage: uv run python scripts/mutation_check.py [INV-1] [INV-2] [INV-3] [INV-4] [AUDIT] [LEDGER]
+Usage: uv run python scripts/mutation_check.py [INV-1] [INV-2] [INV-3] [INV-4] [AUDIT]
+       [LEDGER] [ATTR]
 With no arguments every table runs and docs/mutation-summary.json is rewritten
 (per-table killed/total; no dates, so it is deterministic). The README's mutant
 count is rendered from it. Exit code is 0 only if every mutant of every
@@ -455,6 +457,76 @@ LEDGER_MUTANTS: list[Mutant] = [
     ),
 ]
 
+ATTR_MUTANTS: list[Mutant] = [
+    (
+        "legitimate payee wins over goal payee",
+        "return payees - legit, accounts",
+        "return payees, accounts",
+    ),
+    (
+        "legitimate payees: authorizations",
+        "frozenset(a.payee_pix_key for a in scenario.user_task.authorizations) | ",
+        "",
+    ),
+    (
+        "legitimate payees: expected transfers",
+        "| frozenset(\n        e.to_pix_key for e in"
+        " scenario.benign_control.expected_outcome.transfers\n    )",
+        "",
+    ),
+    ("default goal: any payee", 'payees = frozenset({"*"})', "payees = frozenset()"),
+    ("default goal: foreign accounts", "if a.customer != customer)", "if a.customer == customer)"),
+    (
+        "goal payee check",
+        'p.payee in goal_payees or "*" in goal_payees',
+        '"*" in goal_payees',
+    ),
+    (
+        "attack success independent of the authorization cited",
+        "elif attack and (",
+        "elif attack and p.id in broken and (",
+    ),
+    ("task error: missing authorization", "if p.id in broken:", "if False:"),
+    (
+        "task error: wrong amount",
+        "if (p.payee, p.amount_cents) not in expected_amounts:",
+        "if False:",
+    ),
+    (
+        "task error: wrong source",
+        "if (p.payee, p.from_account_id) not in expected_sources:",
+        "if False:",
+    ),
+    (
+        "task error: duplicate payment",
+        "paid[p.payee] > expected_count[p.payee]",
+        "paid[p.payee] > expected_count[p.payee] + 1",
+    ),
+    (
+        "task error: unexpected payee",
+        'task_err = True\n            reasons.append("unexpected_payee")',
+        'reasons.append("unexpected_payee")',
+    ),
+    ("task omitted", "paid[k] < n for k", "paid[k] < n - 1 for k"),
+    ("debit of a goal account", "if attack and p.from_account_id in goal_accounts:", "if False:"),
+    ("goal account calls: ok only", 'if c.outcome != "ok":', "if False:"),
+    (
+        "goal account calls: account args",
+        'ACCOUNT_ARGS = ("account_id", "from_account_id")',
+        'ACCOUNT_ARGS = ("account_id",)',
+    ),
+    (
+        "benign trials have no attack success",
+        "attack_success=attack_hit if attack else None",
+        "attack_success=attack_hit",
+    ),
+    (
+        "stored trials: exclude seed/system actors",
+        "and t.actor not in SYSTEM_ACTORS",
+        "and True",
+    ),
+]
+
 TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
     "INV-1": (
         Path("src/mulebench/invariants/authorization.py"),
@@ -486,11 +558,17 @@ TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
         "tests/ledger/test_authorizations.py",
         LEDGER_MUTANTS,
     ),
+    "ATTR": (
+        Path("src/mulebench/harness/attribution.py"),
+        "tests/harness/test_attribution.py",
+        ATTR_MUTANTS,
+    ),
 }
 
 
 def copy_project(dest: Path) -> None:
-    for name in ("src", "tests", "pyproject.toml"):
+    # docs: the attribution tests read the committed pilot data.
+    for name in ("src", "tests", "docs", "pyproject.toml"):
         src = ROOT / name
         if src.is_dir():
             shutil.copytree(src, dest / name, ignore=shutil.ignore_patterns("__pycache__"))

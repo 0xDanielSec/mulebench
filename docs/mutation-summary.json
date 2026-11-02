@@ -1,6 +1,10 @@
 {
-  "killed": 82,
+  "killed": 100,
   "tables": {
+    "ATTR": {
+      "killed": 18,
+      "total": 18
+    },
     "AUDIT": {
       "killed": 10,
       "total": 10
@@ -26,5 +30,5 @@
       "total": 1
     }
   },
-  "total": 82
+  "total": 100
 }
