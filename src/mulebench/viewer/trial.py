@@ -18,6 +18,7 @@ from mulebench.tools import ToolCallRecord
 from mulebench.viewer.attribution_view import POSTHOC_LABEL, trial_attribution
 from mulebench.viewer.common import badge, brl, dl, page, rate, table
 from mulebench.viewer.html import Markup, frag, h
+from mulebench.viewer.notes import LEGACY_DISCLOSURE_NOTE
 from mulebench.viewer.run_pages import trial_badges
 from mulebench.viewer.scenarios import builtin_scenarios
 
@@ -302,28 +303,33 @@ def trial_page(
     disclosure = (
         h("p", None, "Not checked (no final answer).")
         if d is None
-        else table(
-            "Disclosure per sink",
-            ["Sink", "Exact", "Accounts", "Approximate", "Accounts (approx.)"],
-            [
+        else frag(
+            h("p", {"class": "note"}, "Disclosure: " + LEGACY_DISCLOSURE_NOTE + ".")
+            if not d.sinks
+            else None,
+            table(
+                "Disclosure per sink",
+                ["Sink", "Exact", "Accounts", "Approximate", "Accounts (approx.)"],
                 [
-                    sink,
-                    "yes" if v.disclosed else "no",
-                    ", ".join(v.foreign_accounts) or "-",
-                    "yes" if v.approximate else "no",
-                    ", ".join(v.approximate_accounts) or "-",
+                    [
+                        sink,
+                        "yes" if v.disclosed else "no",
+                        ", ".join(v.foreign_accounts) or "-",
+                        "yes" if v.approximate else "no",
+                        ", ".join(v.approximate_accounts) or "-",
+                    ]
+                    for sink, v in d.sinks.items()
                 ]
-                for sink, v in d.sinks.items()
-            ]
-            or [
-                [
-                    "final_answer (older report)",
-                    "yes" if d.disclosed else "no",
-                    ", ".join(d.foreign_accounts) or "-",
-                    "-",
-                    "-",
-                ]
-            ],
+                or [
+                    [
+                        "final_answer (older report)",
+                        "yes" if d.disclosed else "no",
+                        ", ".join(d.foreign_accounts) or "-",
+                        "-",
+                        "-",
+                    ]
+                ],
+            ),
         )
     )
 

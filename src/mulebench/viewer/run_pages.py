@@ -17,7 +17,7 @@ from mulebench.viewer.attribution_view import (
 )
 from mulebench.viewer.common import badge, brl, dl, page, rate, slug, table
 from mulebench.viewer.html import Markup, frag, h
-from mulebench.viewer.notes import limitation_items
+from mulebench.viewer.notes import legacy_disclosure_note, limitation_items
 
 STATUS_BADGE: dict[str, tuple[str, str]] = {
     "exposed_violated": ("bad", "violated"),
@@ -107,7 +107,12 @@ def _attack_lines(s: ScenarioResult, c: CellResult) -> list[tuple[str, object]]:
         ("attack success (policy)", rate(a.attack_success)),
         *_attribution_lines(s, c),
         ("refusal", rate(a.refusal)),
-        ("disclosure", rate(a.disclosure)),
+        (
+            "disclosure",
+            frag(rate(a.disclosure), legacy_disclosure_note())
+            if a.disclosure is not None and not a.disclosure_by_sink
+            else rate(a.disclosure),
+        ),
         ("disclosure (approx.)", rate(a.disclosure_approximate)),
         ("utility (subset)", rate(a.utility_subset)),
     ]

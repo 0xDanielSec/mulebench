@@ -37,3 +37,13 @@ def limitation_items(limitations: list[str]) -> list[Markup]:
         )
         items.append(h("li", None, text, note))
     return items
+
+
+LEGACY_DISCLOSURE_NOTE = (
+    "exact matches in the final answer only; approximate and tool-argument "
+    "disclosure not available for this report"
+)
+
+
+def legacy_disclosure_note() -> Markup:
+    return h("span", {"class": "muted"}, f" ({LEGACY_DISCLOSURE_NOTE})")

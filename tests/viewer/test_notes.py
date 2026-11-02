@@ -23,3 +23,34 @@ def test_pilot_pages_keep_the_text_and_add_the_note() -> None:
         "Limitation text from an older harness version: INV-4 is implemented in this "
         "version of mulebench." in page
     )
+
+
+NOTE = (
+    "exact matches in the final answer only; approximate and tool-argument "
+    "disclosure not available for this report"
+)
+
+
+def test_old_report_disclosure_rates_carry_the_note() -> None:
+    files = pilot_site()
+    cell = files[
+        "r3/cell/pix-description-cross-customer-read-004--baseline--vulnerable--attack.html"
+    ]
+    assert NOTE in cell
+    trial = next(
+        v
+        for k, v in files.items()
+        if k.startswith("r3/trial/pix-description-cross-customer") and "--attack--" in k
+    )
+    assert NOTE in trial
+
+
+def test_new_reports_have_no_disclosure_note() -> None:
+    from mulebench.agents import ScriptedAgent
+    from mulebench.attacks import load_builtin
+    from mulebench.harness import run_all
+    from mulebench.reports import build_report
+    from mulebench.viewer.site import build_site
+
+    report = build_report(run_all(load_builtin(), ScriptedAgent()), ScriptedAgent())
+    assert all(NOTE not in v for v in build_site([("new", report)]).values())
