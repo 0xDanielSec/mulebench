@@ -15,6 +15,7 @@ from mulebench.doctor import (
     MIN_NUM_CTX,
     PROBE_MAX_TOKENS,
     REASONING_MAX_TOKENS,
+    TWO_TURN_CHECK,
     Check,
     print_checks,
     run_doctor,
@@ -131,10 +132,11 @@ def test_probe_with_mb_live(
 ) -> None:
     monkeypatch.setenv("MB_LIVE", "1")
     client, hits = server(chat=chat)
-    probe = run_doctor("tiny:1b", URL, client=client)[-1]
+    probe = next(c for c in run_doctor("tiny:1b", URL, client=client) if c.name == "tool calling")
     assert (probe.name, probe.level) == ("tool calling", level)
     assert detail in probe.detail
-    assert hits.count("POST /v1/chat/completions") == 1  # exactly one probe call
+    # One call; a second only after a valid first tool call (two-turn probe).
+    assert hits.count("POST /v1/chat/completions") == (2 if level == "ok" else 1)
 
 
 # ------------------------------------------------------------------ CLI
@@ -256,7 +258,7 @@ def test_plain_model_gets_no_max_tokens_warning(monkeypatch: pytest.MonkeyPatch)
         ]
     }
     checks = run_doctor("tiny:1b", URL, client=server(chat=chat)[0])
-    assert checks[-1].name == "tool calling"
+    assert checks[-1].name == "tool calling after a tool result"
     assert all(c.name != "max_tokens" for c in checks)
 
 
@@ -295,3 +297,85 @@ def test_doctor_shows_digest_of_a_derived_model(monkeypatch: pytest.MonkeyPatch)
     client, _ = server(tags={"models": [{"name": "llama31-8b-8k:latest", "digest": "sha256:d"}]})
     model = [c for c in run_doctor("llama31-8b-8k", URL, client=client) if c.name == "model"]
     assert model[0].detail == "llama31-8b-8k digest=sha256:d quantization=Q4_K_M"
+
+
+# ------------------------------------------------------- two-turn probe
+
+
+def two_turn_server(
+    second: dict[str, Any], prompt_tokens: tuple[int, int] = (100, 140)
+) -> tuple[httpx.Client, list[Any]]:
+    """First chat call returns a ping; the second returns `second`."""
+    sent: list[Any] = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        key = f"{req.method} {req.url.path}"
+        if key == "POST /v1/chat/completions":
+            params = json.loads(req.content)
+            sent.append(params)
+            body = ping() if len(sent) == 1 else second
+            body = {
+                **body,
+                "usage": {"prompt_tokens": prompt_tokens[len(sent) - 1], "completion_tokens": 5},
+            }
+            return httpx.Response(200, json=body)
+        routes: dict[str, Any] = {
+            "GET /api/version": {"version": "0.12.0"},
+            "GET /api/tags": TAGS,
+            "POST /api/show": show(MIN_NUM_CTX),
+        }
+        route = routes.get(key)
+        return httpx.Response(404) if route is None else httpx.Response(200, json=route)
+
+    return httpx.Client(transport=httpx.MockTransport(handler)), sent
+
+
+def second_turn(checks: list[Any]) -> Any:
+    return next(c for c in checks if c.name == TWO_TURN_CHECK)
+
+
+def test_two_turn_probe_passes_and_sends_the_tool_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MB_LIVE", "1")
+    client, sent = two_turn_server(ping('{"token": "mb-probe-2"}'))
+    check = second_turn(run_doctor("tiny:1b", URL, client=client))
+    assert (check.level, check.detail) == (
+        "ok",
+        "the model called a tool again after a tool result",
+    )
+    assert len(sent) == 2
+    roles = [m["role"] for m in sent[1]["messages"]]
+    assert roles == ["system", "user", "assistant", "tool"]
+    assert sent[1]["messages"][3]["tool_call_id"] == "c"
+    assert sent[1]["tools"] == sent[0]["tools"]
+
+
+def test_two_turn_probe_fails_when_no_second_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MB_LIVE", "1")
+    empty = {
+        "choices": [{"message": {"role": "assistant", "content": ""}, "finish_reason": "stop"}]
+    }
+    client, _ = two_turn_server(empty)
+    checks = run_doctor("tiny:1b", URL, client=client)
+    assert levels(checks)["tool calling"] == "ok"
+    check = second_turn(checks)
+    assert check.level == "fail"
+    assert "without calling the tool" in check.detail
+    assert print_checks(checks, out=lambda _: None) == 1
+
+
+def test_two_turn_probe_detects_a_template_that_drops_the_prompt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The mistral-nemo pattern: prompt_tokens fall after a tool result."""
+    monkeypatch.setenv("MB_LIVE", "1")
+    client, _ = two_turn_server(ping('{"token": "mb-probe-2"}'), prompt_tokens=(790, 230))
+    check = second_turn(run_doctor("tiny:1b", URL, client=client))
+    assert check.level == "fail"
+    assert "shrank from 790 to 230 tokens" in check.detail
+
+
+def test_no_second_turn_after_a_failed_first_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("MB_LIVE", "1")
+    chat = {"choices": [{"message": {"role": "assistant", "content": "pong"}}]}
+    checks = run_doctor("tiny:1b", URL, client=server(chat=chat)[0])
+    assert all(c.name != TWO_TURN_CHECK for c in checks)

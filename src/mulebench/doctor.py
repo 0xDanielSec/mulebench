@@ -35,6 +35,7 @@ MIN_NUM_CTX = 8192
 # Reasoning models (e.g. qwen3) think before they call a tool; a small budget
 # ends the probe with finish_reason=length and no tool call.
 PROBE_MAX_TOKENS = 2048
+TWO_TURN_CHECK = "tool calling after a tool result"
 # Recommended --max-tokens for runs with a reasoning model. A probe passing at
 # 2048 does not mean a trial fits: trials need several calls with longer
 # prompts, and pilot 02 (qwen3-14b, 2048) had model calls cut at `length`.
@@ -118,8 +119,10 @@ def run_doctor(
     else:
         checks.append(Check("ok", "num_ctx", f"{meta.num_ctx} ({meta.num_ctx_source})"))
 
-    probe, response = _probe(model, base_url, allow_remote, client)
+    probe, response, second = _probe(model, base_url, allow_remote, client)
     checks.append(probe)
+    if second is not None:
+        checks.append(second)
     if response is not None and (response.reasoning_present or response.stop_reason == "length"):
         checks.append(Check("warn", "max_tokens", MAX_TOKENS_HELP))
     return checks
@@ -127,16 +130,23 @@ def run_doctor(
 
 def _probe(
     model: str, base_url: str, allow_remote: bool, client: httpx.Client | None
-) -> tuple[Check, ChatResponse | None]:
+) -> tuple[Check, ChatResponse | None, Check | None]:
+    """(first-turn check, first response, second-turn check or None)."""
     if os.environ.get(LIVE_ENV) != "1":
-        return Check("skip", "tool calling", f"probe needs {LIVE_ENV}=1 (one chat call)"), None
+        skip = Check("skip", "tool calling", f"probe needs {LIVE_ENV}=1 (two chat calls)")
+        return skip, None, None
     transport = OpenAICompatTransport(base_url, allow_remote=allow_remote, client=client)
+    messages: list[dict[str, object]] = [
+        {"role": "system", "content": "You are a health check. Use the ping tool."},
+        {
+            "role": "user",
+            "content": "Call ping with token 'mb-probe'. When you get its result, "
+            "call ping again with token 'mb-probe-2'.",
+        },
+    ]
     params = {
         "model": model,
-        "messages": [
-            {"role": "system", "content": "You are a health check. Use the ping tool."},
-            {"role": "user", "content": "Call ping with token 'mb-probe'."},
-        ],
+        "messages": messages,
         "tools": [PROBE_TOOL],
         "tool_choice": "auto",
         "temperature": 0.0,
@@ -147,21 +157,63 @@ def _probe(
     try:
         response = parse_completion(transport.send(params, "doctor/probe").body)
     except (ModelCallError, ModelRequestInvalid, ResponseShapeError) as exc:
-        return Check("fail", "tool calling", f"probe failed: {exc}"), None
+        return Check("fail", "tool calling", f"probe failed: {exc}"), None, None
+    first = _call_check("tool calling", response)
+    if first.level != "ok":
+        return first, response, None
+    return first, response, _second_turn(transport, params, response)
+
+
+def _call_check(name: str, response: ChatResponse) -> Check:
     if response.invalid_tool_calls:
         bad = response.invalid_tool_calls[0]
         return Check(
             "fail",
-            "tool calling",
+            name,
             f"malformed tool call ({bad.kind}): {bad.detail}; {probe_diagnostic(response)}",
-        ), response
+        )
     if not any(c.name == "ping" for c in response.tool_calls):
         return Check(
             "fail",
-            "tool calling",
+            name,
             f"the model answered without calling the tool; {probe_diagnostic(response)}",
-        ), response
-    return Check("ok", "tool calling", "the model returned a valid tool call"), response
+        )
+    return Check("ok", name, "the model returned a valid tool call")
+
+
+def _second_turn(
+    transport: OpenAICompatTransport, params: dict[str, object], first: ChatResponse
+) -> Check:
+    """Send the tool result back and require a second tool call. Catches chat
+    templates that drop the tools or the system prompt after a tool result
+    (the model then cannot call tools again; see docs/local-models.md)."""
+    name = TWO_TURN_CHECK
+    call = next(c for c in first.tool_calls if c.name == "ping")
+    (assistant,) = first.provider_raw  # reasoning already stripped
+    messages = [
+        *params["messages"],  # type: ignore[misc]
+        assistant,
+        {"role": "tool", "tool_call_id": call.id, "content": '{"ok": true, "token": "mb-probe"}'},
+    ]
+    try:
+        response = parse_completion(
+            transport.send({**params, "messages": messages}, "doctor/probe-2").body
+        )
+    except (ModelCallError, ModelRequestInvalid, ResponseShapeError) as exc:
+        return Check("fail", name, f"probe failed: {exc}")
+    before, after = first.prompt_tokens, response.prompt_tokens
+    if before is not None and after is not None and after < before:
+        return Check(
+            "fail",
+            name,
+            f"the prompt shrank from {before} to {after} tokens after a tool result, although "
+            "the history grew: the chat template likely drops the tool definitions or the "
+            "system prompt (check `ollama show <tag> --template`)",
+        )
+    check = _call_check(name, response)
+    if check.level == "ok":
+        return Check("ok", name, "the model called a tool again after a tool result")
+    return check
 
 
 def probe_diagnostic(response: ChatResponse) -> str:
