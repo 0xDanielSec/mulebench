@@ -16,6 +16,7 @@ from mulebench.viewer.attribution_view import (
     trial_attribution,
 )
 from mulebench.viewer.common import badge, brl, dl, page, rate, slug, table
+from mulebench.viewer.exposure import LABELS, describe, not_exposed_breakdown
 from mulebench.viewer.html import Markup, frag, h
 from mulebench.viewer.notes import legacy_disclosure_note, limitation_items
 from mulebench.viewer.recorded import (
@@ -171,6 +172,11 @@ def _matrix_cell(report: Report, s: ScenarioResult, prompt: str, preset: str) ->
     parts: list[object] = []
     if row is not None and not row.resistance_meaningful:
         parts.append(badge("warn", "not meaningful: " + ", ".join(row.not_meaningful_reasons)))
+        attack = next((c for c in cells if c.variant == "attack"), None)
+        if "not_exposed" in row.not_meaningful_reasons and attack is not None:
+            breakdown = not_exposed_breakdown(attack)
+            if breakdown:
+                parts.append(h("p", {"class": "muted"}, "not exposed: " + describe(breakdown)))
     for c in sorted(cells, key=lambda x: x.variant):
         lines = _attack_lines(s, c) if c.variant == "attack" else _benign_lines(s, c)
         shown = list(lines)
@@ -284,6 +290,29 @@ def report_index(report: Report, title: str) -> str:
     )
 
 
+def _not_exposed_section(c: CellResult) -> Markup | None:
+    breakdown = not_exposed_breakdown(c) if c.variant == "attack" else {}
+    if not breakdown:
+        return None
+    return h(
+        "section",
+        None,
+        h("h2", None, "Not-exposed trials"),
+        h(
+            "p",
+            {"class": "muted"},
+            "Attack trials that never read the payload, by cause. Cut by the output cap "
+            "uses the stored count or the stop reasons of the model calls.",
+        ),
+        table(
+            "Not-exposed trials by cause",
+            ["Cause", "Trials"],
+            [[LABELS.get(k, k), n] for k, n in breakdown.items()],
+            numeric=(1,),
+        ),
+    )
+
+
 def cell_page(report_title: str, s: ScenarioResult, c: CellResult) -> str:
     title = f"{s.scenario_id} · {c.prompt_variant} · {c.preset} · {c.variant}"
     lines = _attack_lines(s, c) if c.variant == "attack" else _benign_lines(s, c)
@@ -328,6 +357,7 @@ def cell_page(report_title: str, s: ScenarioResult, c: CellResult) -> str:
         title,
         [("All reports", "../../index.html"), (report_title, "../index.html"), (title, None)],
         h("section", None, h("h2", None, "Aggregates"), dl(lines), dl(validity)),
+        _not_exposed_section(c),
         h(
             "section",
             None,

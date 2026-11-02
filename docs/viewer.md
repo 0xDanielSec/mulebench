@@ -17,6 +17,10 @@ site, in the order given; `index.html` lists them.
   prompt x preset matrix. Each cell shows its headline rates as k/n with a
   Wilson 95% interval, the flags (`not meaningful` with reasons, `cut by cap`,
   `context near limit`, `errored`) and links to the attack and benign cells.
+  In a cell flagged not meaningful for `not_exposed`, the attack trials that
+  never read the payload are broken down by cause: cut by the output cap,
+  answered without reading the history, read the history but not the payload,
+  or stopped for another reason. The cell page shows the same table.
 - **Cell** (`r<k>/cell/...html`): every rate of the cell, including
   attributed success, task error/omission and disclosure per sink (exact and
   approximate), then one row per trial with outcome badges. Badges always
