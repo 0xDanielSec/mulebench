@@ -2,7 +2,19 @@
 
 from __future__ import annotations
 
-from mulebench.harness.models import CellResult, Report, ScenarioResult, TrialResult
+from mulebench.harness.models import (
+    Attribution,
+    CellResult,
+    Report,
+    ScenarioResult,
+    TrialResult,
+)
+from mulebench.viewer.attribution_view import (
+    POSTHOC_LABEL,
+    Source,
+    cell_attribution,
+    trial_attribution,
+)
 from mulebench.viewer.common import badge, brl, dl, page, rate, slug, table
 from mulebench.viewer.html import Markup, frag, h
 from mulebench.viewer.notes import limitation_items
@@ -27,7 +39,12 @@ def trial_href(s: ScenarioResult, c: CellResult, t: TrialResult) -> str:
     return f"trial/{cell_name(s, c)}--{t.trial}.html"
 
 
-def trial_badges(t: TrialResult, variant: str) -> Markup:
+def trial_badges(
+    t: TrialResult,
+    variant: str,
+    attribution: Attribution | None = None,
+    source: Source = "stored",
+) -> Markup:
     out: list[Markup] = []
     if t.errored:
         out.append(badge("warn", "errored"))
@@ -41,14 +58,15 @@ def trial_badges(t: TrialResult, variant: str) -> Markup:
             )
         if t.benign_pass is False:
             out.append(badge("bad", "benign fail"))
-    a = t.attribution
+    a = attribution if attribution is not None else t.attribution
     if a is not None:
+        tag = " (post-hoc)" if source == "post-hoc" else ""
         if a.attack_success:
-            out.append(badge("bad", "attack (attributed)"))
+            out.append(badge("bad", "attack (attributed)" + tag))
         if a.task_error:
-            out.append(badge("warn", "task error"))
+            out.append(badge("warn", "task error" + tag))
         if a.task_omitted:
-            out.append(badge("warn", "task omitted"))
+            out.append(badge("warn", "task omitted" + tag))
     d = t.disclosure
     if d is not None:
         if d.disclosed:
@@ -64,19 +82,33 @@ def trial_badges(t: TrialResult, variant: str) -> Markup:
     return frag(out)
 
 
-def _attack_lines(c: CellResult) -> list[tuple[str, str]]:
+def _attribution_lines(s: ScenarioResult, c: CellResult) -> list[tuple[str, object]]:
+    ca = cell_attribution(s, c)
+    tag = "" if ca.source == "stored" else f" ({POSTHOC_LABEL})"
+    if ca.source == "unavailable":
+        return [("attribution", "not available")]
+    lines: list[tuple[str, object]] = []
+    if c.variant == "attack":
+        lines.append(("attributed success" + tag, rate(ca.attributed_success)))
+    lines += [
+        ("task error" + tag, rate(ca.task_error)),
+        ("task omitted" + tag, rate(ca.task_omitted)),
+    ]
+    return lines
+
+
+def _attack_lines(s: ScenarioResult, c: CellResult) -> list[tuple[str, object]]:
+    """Headline first: frozen attack success next to the attribution fields."""
     a = c.attack
     if a is None:
         return []
-    lines = [
+    lines: list[tuple[str, object]] = [
         ("exposure", rate(a.exposure)),
-        ("attack success", rate(a.attack_success)),
-        ("attributed", rate(a.attributed_success)),
+        ("attack success (policy)", rate(a.attack_success)),
+        *_attribution_lines(s, c),
         ("refusal", rate(a.refusal)),
         ("disclosure", rate(a.disclosure)),
-        ("disclosure ≈", rate(a.disclosure_approximate)),
-        ("task error", rate(a.task_error)),
-        ("task omitted", rate(a.task_omitted)),
+        ("disclosure (approx.)", rate(a.disclosure_approximate)),
         ("utility (subset)", rate(a.utility_subset)),
     ]
     for sink, r in a.disclosure_by_sink.items():
@@ -84,15 +116,14 @@ def _attack_lines(c: CellResult) -> list[tuple[str, str]]:
     return lines
 
 
-def _benign_lines(c: CellResult) -> list[tuple[str, str]]:
+def _benign_lines(s: ScenarioResult, c: CellResult) -> list[tuple[str, object]]:
     b = c.benign
     if b is None:
         return []
     return [
         ("utility (exact)", rate(b.utility_exact)),
         ("benign pass", rate(b.benign_pass)),
-        ("task error", rate(b.task_error)),
-        ("task omitted", rate(b.task_omitted)),
+        *_attribution_lines(s, c),
     ]
 
 
@@ -124,7 +155,7 @@ def _matrix_cell(report: Report, s: ScenarioResult, prompt: str, preset: str) ->
     if row is not None and not row.resistance_meaningful:
         parts.append(badge("warn", "not meaningful: " + ", ".join(row.not_meaningful_reasons)))
     for c in sorted(cells, key=lambda x: x.variant):
-        lines = _attack_lines(c) if c.variant == "attack" else _benign_lines(c)
+        lines = _attack_lines(s, c) if c.variant == "attack" else _benign_lines(s, c)
         shown = [(k, v) for k, v in lines if v != "—"]
         parts.append(
             h(
@@ -133,7 +164,7 @@ def _matrix_cell(report: Report, s: ScenarioResult, prompt: str, preset: str) ->
                 h("a", {"href": cell_href(s, c)}, f"{c.variant} ({len(c.trials)} trials)"),
                 " ",
                 _cell_flags(c),
-                dl(shown[:4] if c.variant == "attack" else shown[:2]),
+                dl(shown[:5] if c.variant == "attack" else shown[:4]),
             )
         )
     return frag(parts)
@@ -237,7 +268,7 @@ def report_index(report: Report, title: str) -> str:
 
 def cell_page(report_title: str, s: ScenarioResult, c: CellResult) -> str:
     title = f"{s.scenario_id} · {c.prompt_variant} · {c.preset} · {c.variant}"
-    lines = _attack_lines(c) if c.variant == "attack" else _benign_lines(c)
+    lines = _attack_lines(s, c) if c.variant == "attack" else _benign_lines(s, c)
     validity = [
         ("tool-call validity", rate(c.tool_call_validity)),
         ("unauthorized outflow", brl(c.unauthorized_outflow_cents)),
@@ -249,7 +280,7 @@ def cell_page(report_title: str, s: ScenarioResult, c: CellResult) -> str:
     rows = [
         [
             h("a", {"href": f"../{trial_href(s, c, t)}"}, f"trial {t.trial}"),
-            trial_badges(t, c.variant),
+            trial_badges(t, c.variant, *trial_attribution(s, c, t)),
             brl(t.unauthorized_outflow_cents),
             t.metrics.tool_calls,
             len(t.model_calls),

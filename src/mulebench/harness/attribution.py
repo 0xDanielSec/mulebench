@@ -163,3 +163,9 @@ def views_from_trial(
     }
     calls = [CallView(r.tool, r.outcome, dict(r.args)) for r in trial.trace]
     return payments, broken, calls
+
+
+def attribute_stored(scenario: Scenario, variant: str, trial: TrialResult) -> Attribution:
+    """Attribution of a stored trial (post-hoc): the code path of
+    scripts/reanalyze.py and of the viewer for reports without attribution."""
+    return attribute(scenario, variant == "attack", *views_from_trial(trial))

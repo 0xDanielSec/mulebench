@@ -9,24 +9,20 @@ from __future__ import annotations
 
 import json
 import re
-from functools import cache
 
-from mulebench.attacks import Scenario, load_builtin, render, scenario_sha256
+from mulebench.attacks import render, scenario_sha256
 from mulebench.harness.models import CellResult, Report, ScenarioResult, TrialResult
 from mulebench.harness.seed import seed_cell
 from mulebench.invariants.authorization import SYSTEM_ACTORS
 from mulebench.tools import ToolCallRecord
+from mulebench.viewer.attribution_view import POSTHOC_LABEL, trial_attribution
 from mulebench.viewer.common import badge, brl, dl, page, rate, table
 from mulebench.viewer.html import Markup, frag, h
 from mulebench.viewer.run_pages import trial_badges
+from mulebench.viewer.scenarios import builtin_scenarios
 
 CANARY = re.compile(r"MB-CANARY-[0-9A-Z]{4}")
 _PATH_PART = re.compile(r"([^.\[\]]+)|\[(\d+)\]")
-
-
-@cache
-def builtin_scenarios() -> dict[str, Scenario]:
-    return {s.id: s for s in load_builtin()}
 
 
 def resolve(data: object, path: str) -> object:
@@ -226,7 +222,7 @@ def trial_page(
 
     summary = dl(
         [
-            ("outcome", trial_badges(t, c.variant)),
+            ("outcome", trial_badges(t, c.variant, *trial_attribution(s, c, t))),
             ("trial key", t.trial_key),
             ("stopped", t.metrics.stopped),
             ("error", t.error or "-"),
@@ -284,17 +280,22 @@ def trial_page(
         ],
     )
 
-    a = t.attribution
+    a, source = trial_attribution(s, c, t)
     attribution = (
-        h("p", None, "Not computed (errored trial or older report).")
+        h("p", None, "Not available (errored trial, or a scenario that is not builtin).")
         if a is None
-        else dl(
-            [
-                ("attack success", "-" if a.attack_success is None else str(a.attack_success)),
-                ("task error", str(a.task_error)),
-                ("task omitted", str(a.task_omitted)),
-                ("reasons", ", ".join(a.reasons) or "-"),
-            ]
+        else frag(
+            h("p", {"class": "note"}, f"Attribution: {POSTHOC_LABEL}.")
+            if source == "post-hoc"
+            else None,
+            dl(
+                [
+                    ("attack success", "-" if a.attack_success is None else str(a.attack_success)),
+                    ("task error", str(a.task_error)),
+                    ("task omitted", str(a.task_omitted)),
+                    ("reasons", ", ".join(a.reasons) or "-"),
+                ]
+            ),
         )
     )
     d = t.disclosure

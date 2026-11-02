@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 from mulebench.attacks import load_builtin
-from mulebench.harness.attribution import attribute, views_from_trial
+from mulebench.harness.attribution import attribute_stored
 from mulebench.harness.models import Attribution, CellResult, Report
 from mulebench.harness.stats import Rate, wilson
 from mulebench.reports.reader import load_report
@@ -57,7 +57,7 @@ def attributions(report: Report) -> dict[tuple[str, str, str, int], Attribution]
                 if t.errored:
                     continue
                 key = (result.scenario_id, cell.prompt_variant, cell.variant, t.trial)
-                out[key] = attribute(s, cell.variant == "attack", *views_from_trial(t))
+                out[key] = attribute_stored(s, cell.variant, t)
     return out
 
 
