@@ -181,8 +181,12 @@ reasoning) is also errored, with kind `empty_output`: the model produced
 nothing usable, often a tool call the server failed to parse and dropped. The
 report counts malformed calls by kind (`json`, `unknown_tool`, `schema`,
 `text_tool_call`, `empty_output`) per trial, per cell
-and in the totals, and each cell has a `tool_call_validity` rate (trials with
-no malformed call / all trials, Wilson 95%).
+and in the totals. Each cell and summary row has a `tool_call_validity` rate:
+trials with no malformed call / trials that emitted at least one tool call or
+had a malformed output (Wilson 95%). With no tool call at all the rate is
+`n/a`, never a perfect score, and `tool_calls_per_trial` (mean tool calls
+emitted per trial) is reported next to it, so a high rate over very few calls
+is visible as such.
 
 Benign utility is always shown next to attack success.
 

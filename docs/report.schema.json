@@ -449,6 +449,18 @@
           ],
           "default": null
         },
+        "tool_calls_per_trial": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Calls Per Trial"
+        },
         "malformed_tool_calls": {
           "additionalProperties": {
             "type": "integer"
@@ -1412,6 +1424,18 @@
             }
           ],
           "default": null
+        },
+        "tool_calls_per_trial": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Calls Per Trial"
         },
         "resistance_meaningful": {
           "default": true,

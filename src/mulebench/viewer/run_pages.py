@@ -275,7 +275,16 @@ def cell_page(report_title: str, s: ScenarioResult, c: CellResult) -> str:
     title = f"{s.scenario_id} · {c.prompt_variant} · {c.preset} · {c.variant}"
     lines = _attack_lines(s, c) if c.variant == "attack" else _benign_lines(s, c)
     validity = [
-        ("tool-call validity", rate(c.tool_call_validity)),
+        (
+            "tool-call validity",
+            "n/a (no tool calls)"
+            if c.tool_call_validity is not None and c.tool_call_validity.n == 0
+            else rate(c.tool_call_validity),
+        ),
+        (
+            "tool calls per trial",
+            "—" if c.tool_calls_per_trial is None else f"{c.tool_calls_per_trial:g}",
+        ),
         ("unauthorized outflow", brl(c.unauthorized_outflow_cents)),
         ("model calls cut at max_tokens", str(c.length_calls)),
         ("trials cut by cap", str(c.cut_by_cap_trials)),

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from mulebench.harness.models import Report
 from mulebench.harness.stats import HEADLINE_MIN_TRIALS, format_rate
+from mulebench.harness.validity import format_validity
 
 HEADERS = (
     "scenario",
@@ -17,7 +18,7 @@ HEADERS = (
 )
 
 
-LLM_HEADERS = ("tool validity", "meaningful")
+LLM_HEADERS = ("tool validity", "tool calls/trial", "meaningful")
 
 
 def render_table(report: Report) -> str:
@@ -39,9 +40,10 @@ def render_table(report: Report) -> str:
             "-" if b is None else format_rate(b.utility_exact),
         )
         if llm:
-            validity = "-" if r.tool_call_validity is None else format_rate(r.tool_call_validity)
+            validity = format_validity(r.tool_call_validity)
+            per_trial = "-" if r.tool_calls_per_trial is None else f"{r.tool_calls_per_trial:g}"
             flag = "yes" if r.resistance_meaningful else "! " + ",".join(r.not_meaningful_reasons)
-            row += (validity, flag)
+            row += (validity, per_trial, flag)
         rows.append(row)
     widths = [max([len(h), *(len(row[i]) for row in rows)]) for i, h in enumerate(headers)]
     lines = [

@@ -198,6 +198,8 @@ class CellResult(_Model):
     unauthorized_outflow_cents: int = 0  # total over non-errored trials
     # Trials with no malformed tool call / all trials (errored ones included).
     tool_call_validity: Rate | None = None
+    # Mean tool calls emitted per trial; None in older reports.
+    tool_calls_per_trial: float | None = None
     malformed_tool_calls: dict[str, int] = {}  # by kind, summed over trials
     coerced_calls: int = 0  # summed over trials
     coerced_args: dict[str, int] = {}
@@ -276,6 +278,7 @@ class SummaryRow(_Model):
     attack: AttackAggregates | None
     benign: BenignAggregates | None
     tool_call_validity: Rate | None = None  # attack and benign trials together
+    tool_calls_per_trial: float | None = None  # attack and benign trials together
     # False when the attack outcome cannot be read as resistance (see
     # mulebench.harness.validity); the reasons say why.
     resistance_meaningful: bool = True

@@ -35,6 +35,7 @@ from mulebench.harness.validity import (
     malformed_counts,
     not_meaningful_reasons,
     tool_call_validity,
+    tool_calls_per_trial,
 )
 
 LIMITATIONS = [
@@ -93,6 +94,7 @@ def build_report(
                         attack=None if attack is None else attack.attack,
                         benign=None if benign is None else benign.benign,
                         tool_call_validity=tool_call_validity(trials_),
+                        tool_calls_per_trial=tool_calls_per_trial(trials_),
                         resistance_meaningful=not reasons,
                         not_meaningful_reasons=reasons,
                     )

@@ -46,6 +46,7 @@ from mulebench.harness.validity import (
     near_context_limit,
     output_cap_fields,
     tool_call_validity,
+    tool_calls_per_trial,
 )
 from mulebench.invariants import (
     CallEvidence,
@@ -508,6 +509,7 @@ def _attribution(
 def _validity_fields(trials: list[TrialResult]) -> dict[str, Any]:
     return {
         "tool_call_validity": tool_call_validity(trials),
+        "tool_calls_per_trial": tool_calls_per_trial(trials),
         "malformed_tool_calls": malformed_counts(trials),
         "coerced_calls": sum(t.coerced_calls for t in trials),
         "coerced_args": coerced_counts(trials),
