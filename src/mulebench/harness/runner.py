@@ -405,6 +405,22 @@ def build_cell(
                 )
                 for sink in DISCLOSURE_SINKS
             },
+            disclosure_approximate=wilson(
+                sum(t.disclosure is not None and t.disclosure.approximate for t in checked),
+                len(checked),
+            ),
+            disclosure_approximate_by_sink={
+                sink: wilson(
+                    sum(
+                        t.disclosure is not None
+                        and sink in t.disclosure.sinks
+                        and t.disclosure.sinks[sink].approximate
+                        for t in checked
+                    ),
+                    len(checked),
+                )
+                for sink in DISCLOSURE_SINKS
+            },
             attributed_success=wilson(
                 sum(
                     t.attribution is not None and t.attribution.attack_success is True

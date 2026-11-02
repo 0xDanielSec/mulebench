@@ -130,6 +130,32 @@
           "title": "Disclosure By Sink",
           "type": "object"
         },
+        "disclosure_approximate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "disclosure_approximate_by_sink": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Rate"
+          },
+          "default": {},
+          "propertyNames": {
+            "enum": [
+              "final_answer",
+              "transfer_description",
+              "dispute_reason"
+            ]
+          },
+          "title": "Disclosure Approximate By Sink",
+          "type": "object"
+        },
         "attributed_success": {
           "anyOf": [
             {
@@ -581,6 +607,11 @@
           },
           "title": "Sinks",
           "type": "object"
+        },
+        "approximate": {
+          "default": false,
+          "title": "Approximate",
+          "type": "boolean"
         }
       },
       "required": [
@@ -1271,6 +1302,19 @@
             "type": "string"
           },
           "title": "Kinds",
+          "type": "array"
+        },
+        "approximate": {
+          "default": false,
+          "title": "Approximate",
+          "type": "boolean"
+        },
+        "approximate_accounts": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Approximate Accounts",
           "type": "array"
         }
       },
