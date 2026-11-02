@@ -474,6 +474,16 @@
           "default": 0,
           "title": "Context Near Limit",
           "type": "integer"
+        },
+        "length_calls": {
+          "default": 0,
+          "title": "Length Calls",
+          "type": "integer"
+        },
+        "cut_by_cap_trials": {
+          "default": 0,
+          "title": "Cut By Cap Trials",
+          "type": "integer"
         }
       },
       "required": [
@@ -1480,6 +1490,16 @@
           "title": "Context Near Limit",
           "type": "integer"
         },
+        "length_calls": {
+          "default": 0,
+          "title": "Length Calls",
+          "type": "integer"
+        },
+        "cut_by_cap_trials": {
+          "default": 0,
+          "title": "Cut By Cap Trials",
+          "type": "integer"
+        },
         "not_meaningful_rows": {
           "default": 0,
           "title": "Not Meaningful Rows",
@@ -1806,6 +1826,16 @@
         "context_near_limit": {
           "default": false,
           "title": "Context Near Limit",
+          "type": "boolean"
+        },
+        "length_calls": {
+          "default": 0,
+          "title": "Length Calls",
+          "type": "integer"
+        },
+        "cut_by_cap": {
+          "default": false,
+          "title": "Cut By Cap",
           "type": "boolean"
         },
         "disclosure": {

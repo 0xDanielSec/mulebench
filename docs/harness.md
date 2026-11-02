@@ -110,7 +110,13 @@ report (`schema_version: 3`). v3 adds, with defaults, per-trial sampling
 `context_near_limit`; per cell `tool_call_validity`; per summary row
 `resistance_meaningful` with `not_meaningful_reasons` (rules and fixed
 thresholds in `mulebench.harness.validity`, see `docs/local-models.md`). A
-malformed tool call makes the trial errored, never resisted. `load_report`
+malformed tool call makes the trial errored, never resisted. Each trial also
+records `length_calls` (model calls whose stop reason is the output cap:
+`length`, or `max_tokens` on the Anthropic API) and `cut_by_cap` (its last
+model call was one, so the trial ended without a complete answer); each cell
+reports `length_calls` and `cut_by_cap_trials`, the summary totals both, and
+the terminal table lists the cells with cut trials. All default to 0 in older
+reports. `load_report`
 reads v2 reports as v3 (new fields at their defaults) and presents v1 reports
 as v3 (one trial, prompt `none`); the v1 schema is kept at
 `docs/report.schema.v1.json`. With no directory (or with `--builtin`) it runs the

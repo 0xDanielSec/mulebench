@@ -119,6 +119,10 @@ class TrialResult(_Model):
     coerced_args: dict[str, int] = {}  # "tool.field" -> count
     # Some model call used >= CONTEXT_NEAR_LIMIT of num_ctx (see mulebench.harness.validity).
     context_near_limit: bool = False
+    # Model calls whose stop reason is the output cap (`length`; Anthropic
+    # `max_tokens`), and whether the last call was one (trial cut by the cap).
+    length_calls: int = 0
+    cut_by_cap: bool = False
     # None when there was no final answer to check, and in older reports.
     disclosure: Disclosure | None = None
     # None for errored trials and in older reports.
@@ -191,6 +195,8 @@ class CellResult(_Model):
     coerced_calls: int = 0  # summed over trials
     coerced_args: dict[str, int] = {}
     context_near_limit: int = 0  # trials
+    length_calls: int = 0  # model calls that ended at the output cap
+    cut_by_cap_trials: int = 0  # trials whose last model call ended at the cap
 
 
 class ScenarioResult(_Model):
@@ -280,6 +286,8 @@ class SummaryTotals(_Model):
     coerced_calls: int = 0
     coerced_args: dict[str, int] = {}
     context_near_limit: int = 0
+    length_calls: int = 0
+    cut_by_cap_trials: int = 0
     not_meaningful_rows: int = 0
 
 

@@ -44,6 +44,7 @@ from mulebench.harness.validity import (
     coerced_counts,
     malformed_counts,
     near_context_limit,
+    output_cap_fields,
     tool_call_validity,
 )
 from mulebench.invariants import (
@@ -295,6 +296,7 @@ def run_trial(
             ],
             None if run.server_meta is None else run.server_meta.num_ctx,
         ),
+        **output_cap_fields([c.stop_reason for c in run.model_calls]),
         model_calls=list(run.model_calls),
         usage=usage,
         cost_usd=None if any(c is None for c in costs) else round(sum(c or 0.0 for c in costs), 6),
@@ -501,6 +503,8 @@ def _validity_fields(trials: list[TrialResult]) -> dict[str, Any]:
         "coerced_calls": sum(t.coerced_calls for t in trials),
         "coerced_args": coerced_counts(trials),
         "context_near_limit": sum(t.context_near_limit for t in trials),
+        "length_calls": sum(t.length_calls for t in trials),
+        "cut_by_cap_trials": sum(t.cut_by_cap for t in trials),
     }
 
 

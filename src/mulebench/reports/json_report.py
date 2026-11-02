@@ -112,6 +112,8 @@ def build_report(
         coerced_calls=sum(t.coerced_calls for t in all_trials),
         coerced_args=coerced_counts(all_trials),
         context_near_limit=sum(t.context_near_limit for t in all_trials),
+        length_calls=sum(t.length_calls for t in all_trials),
+        cut_by_cap_trials=sum(t.cut_by_cap for t in all_trials),
         not_meaningful_rows=sum(not r.resistance_meaningful for r in rows),
     )
     costs = [c.cost_usd for t in all_trials for c in t.model_calls]

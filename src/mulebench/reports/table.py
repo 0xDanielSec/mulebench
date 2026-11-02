@@ -61,6 +61,17 @@ def render_table(report: Report) -> str:
         lines.append(
             f"malformed tool calls ({kinds})  context near limit: {t.context_near_limit} trials"
         )
+        cut = [
+            f"{s.scenario_id} {c.prompt_variant} {c.preset} {c.variant} "
+            f"{c.cut_by_cap_trials}/{len(c.trials)}"
+            for s in report.scenarios
+            for c in s.cells
+            if c.cut_by_cap_trials
+        ]
+        lines.append(
+            f"output cap: {t.length_calls} model calls ended at max_tokens  "
+            f"trials cut: {t.cut_by_cap_trials}" + (f" ({'; '.join(cut)})" if cut else "")
+        )
         coercion = (report.llm.arg_coercion if report.llm else None) or "n/a"
         fields = ", ".join(f"{k}: {n}" for k, n in t.coerced_args.items()) or "none"
         lines.append(f"coerced tool calls: {t.coerced_calls} ({fields})  arg_coercion: {coercion}")

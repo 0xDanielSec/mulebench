@@ -30,6 +30,24 @@ def near_context_limit(context_tokens: Sequence[int | None], num_ctx: int | None
     return any(p is not None and p >= CONTEXT_NEAR_LIMIT * num_ctx for p in context_tokens)
 
 
+# Stop reasons that mean the output hit max_tokens: OpenAI-compatible servers
+# report `length`, the Anthropic API `max_tokens`.
+CAP_STOP_REASONS = frozenset({"length", "max_tokens"})
+
+
+def hit_output_cap(stop_reason: str | None) -> bool:
+    return stop_reason in CAP_STOP_REASONS
+
+
+def output_cap_fields(stop_reasons: Sequence[str | None]) -> dict[str, int | bool]:
+    """Per trial: calls that ended at the cap, and whether the last one did
+    (the trial was cut by the cap: its final turn has no complete answer)."""
+    return {
+        "length_calls": sum(hit_output_cap(r) for r in stop_reasons),
+        "cut_by_cap": bool(stop_reasons) and hit_output_cap(stop_reasons[-1]),
+    }
+
+
 def tool_call_validity(trials: Sequence[TrialResult]) -> Rate:
     return wilson(sum(not t.malformed_tool_calls for t in trials), len(trials))
 
