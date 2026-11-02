@@ -10,6 +10,7 @@
                   [--checkpoint FILE] [--resume]
     mulebench doctor --model TAG [--base-url URL] [--allow-remote]
     mulebench schema [--out report.schema.json]
+    mulebench view REPORT.json [REPORT.json ...] --out DIR [--force]
 
 Long runs write a per-trial checkpoint (JSON Lines): --checkpoint FILE, or by
 default `<out>.checkpoint.jsonl` for --agent llm with --out. --resume skips the
@@ -144,7 +145,29 @@ def _parser() -> argparse.ArgumentParser:
 
     schema = sub.add_parser("schema", help="print the report JSON Schema")
     schema.add_argument("--out", type=Path, help="write the schema here instead")
+
+    view = sub.add_parser(
+        "view", help="write a static, offline HTML site from run and ablation reports"
+    )
+    view.add_argument("reports", nargs="+", type=Path, help="JSON reports (run or ablation)")
+    view.add_argument("--out", type=Path, required=True, help="output directory")
+    view.add_argument(
+        "--force", action="store_true", help="write into a non-empty output directory"
+    )
     return parser
+
+
+def _view(reports: Sequence[Path], out: Path, force: bool) -> int:
+    from mulebench.viewer.site import ViewerInputError, build_site, load_any, write_site
+
+    try:
+        inputs = [(p.stem, load_any(p)) for p in reports]
+        files = build_site(inputs)
+        write_site(files, out, force=force)
+    except ViewerInputError as exc:
+        return _error(str(exc))
+    print(f"wrote {len(files)} pages to {out} (open {out / 'index.html'})")
+    return 0
 
 
 def _add_server_args(group: argparse._ActionsContainer) -> None:
@@ -213,6 +236,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "doctor":
         return _doctor(args)
+
+    if args.command == "view":
+        return _view(args.reports, args.out, args.force)
 
     directory: Path | None = args.directory
     if directory is not None and not directory.is_dir():
