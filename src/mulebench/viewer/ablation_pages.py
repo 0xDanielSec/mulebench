@@ -5,6 +5,7 @@ from __future__ import annotations
 from mulebench.reports.ablation import AblationReport
 from mulebench.viewer.common import badge, brl, dl, page, table
 from mulebench.viewer.html import Markup, frag, h
+from mulebench.viewer.notes import limitation_items
 
 ATTACK_BADGE: dict[str, tuple[str, str]] = {
     "stopped": ("good", "stopped"),
@@ -193,7 +194,7 @@ def ablation_page(report: AblationReport, title: str) -> str:
             "section",
             None,
             h("h2", None, "Limitations"),
-            h("ul", None, [h("li", None, x) for x in report.limitations]),
+            h("ul", None, limitation_items(report.limitations)),
         )
     )
     return page(title, [("All reports", "../index.html"), (title, None)], *sections)

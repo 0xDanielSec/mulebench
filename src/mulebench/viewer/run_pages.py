@@ -5,6 +5,7 @@ from __future__ import annotations
 from mulebench.harness.models import CellResult, Report, ScenarioResult, TrialResult
 from mulebench.viewer.common import badge, brl, dl, page, rate, slug, table
 from mulebench.viewer.html import Markup, frag, h
+from mulebench.viewer.notes import limitation_items
 
 STATUS_BADGE: dict[str, tuple[str, str]] = {
     "exposed_violated": ("bad", "violated"),
@@ -229,7 +230,7 @@ def report_index(report: Report, title: str) -> str:
             "section",
             None,
             h("h2", None, "Limitations"),
-            h("ul", None, [h("li", None, x) for x in report.limitations]),
+            h("ul", None, limitation_items(report.limitations)),
         ),
     )
 
