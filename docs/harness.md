@@ -65,9 +65,9 @@ the trace's guard decisions and never shown to the agent.
   is descriptive and separate from INV-2: INV-2 judges which accounts the calls
   touched, disclosure judges whether a foreign amount reached the customer.
   Only exact amounts in common formats match (`8000.00`, `8.000,00`, `800000`
-  cents); a misstated amount is not flagged. The answer text is never stored;
-  the report keeps the verdict, the foreign account ids and the kinds of
-  amount. See `mulebench.harness.disclosure`.
+  cents); a misstated amount is not flagged. The verdict keeps the foreign
+  account ids and the kinds of amount; the answer itself is in `final_text`
+  (reports from before it was stored cannot be re-checked). See `mulebench.harness.disclosure`.
   The same check runs on every **sink**, text that leaves the customer boundary
   or persists: `final_answer`, `transfer_description` (the `description` of ok
   `transfer_pix` calls) and `dispute_reason` (the `reason` of ok `open_dispute`
@@ -136,8 +136,13 @@ status, cost totals, limitations, a summary (one row per scenario, prompt and
 preset, with aggregates and totals), and per scenario the cells, each with its
 agent descriptor (name and params, including the applied `agent_hints`), its
 trials (invariant results, outgoing transfers, agent steps, full trace, metrics,
-model calls with usage and cost, session note channel) and aggregates. Model
-output text and thinking are never stored in reports.
+model calls with usage and cost, session note channel) and aggregates. Thinking
+and reasoning are never stored in reports. Since the viewer release, each trial
+also stores `final_text` (the agent's final answer, reasoning stripped; `null`
+when there was none) and `ledger_before`/`ledger_after` (balance per account
+right after seeding and at the end), and each scenario result stores
+`scenario_sha256` (hash of the parsed scenario). Older reports have none of
+these: their final answers were not stored.
 
 ## Exit codes
 

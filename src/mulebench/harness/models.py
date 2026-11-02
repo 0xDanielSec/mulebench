@@ -127,6 +127,13 @@ class TrialResult(_Model):
     disclosure: Disclosure | None = None
     # None for errored trials and in older reports.
     attribution: Attribution | None = None
+    # The agent's final answer text (reasoning stripped, never stored). None
+    # when there was none, and in older reports, which did not store it.
+    final_text: str | None = None
+    # Balance per account id right after seeding and at the end of the trial.
+    # None in older reports.
+    ledger_before: dict[str, int] | None = None
+    ledger_after: dict[str, int] | None = None
     model_calls: list[ModelCallRecord]
     usage: TokenUsage
     cost_usd: float | None
@@ -206,6 +213,9 @@ class ScenarioResult(_Model):
     channel: str
     expected_invariants: list[str]
     cells: list[CellResult]
+    # sha256 of the parsed scenario (mulebench.attacks.scenario_sha256); None in
+    # older reports.
+    scenario_sha256: str | None = None
 
     def cell(self, preset: Preset, variant: Variant, prompt_variant: str = NO_PROMPT) -> CellResult:
         return next(

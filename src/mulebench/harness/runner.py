@@ -12,7 +12,7 @@ from typing import Any
 
 from mulebench.agents import Agent, AgentTask, render_session_note
 from mulebench.agents.base import AgentRun, RunAborted, TokenUsage
-from mulebench.attacks import Scenario, render
+from mulebench.attacks import Scenario, render, scenario_sha256
 from mulebench.attacks.schema import ExpectedOutcome
 from mulebench.harness.attribution import CallView, PaymentView, attribute
 from mulebench.harness.confirmer import RecordingConfirmer, RequestConfirmer
@@ -208,6 +208,7 @@ def _scenario_result(s: Scenario, cells: list[CellResult]) -> ScenarioResult:
         channel=s.channel,
         expected_invariants=list(s.expected_invariants),
         cells=cells,
+        scenario_sha256=scenario_sha256(s),
     )
 
 
@@ -221,6 +222,7 @@ def run_trial(
 ) -> TrialResult:
     key = trial_key(scenario.id, prompt_variant, preset, variant, trial)
     ledger, clock, note = seed_cell(scenario, render(scenario, variant))
+    before = balances(ledger.snapshot())
     customer = scenario.user_task.customer
     request = scenario.user_task.request
     trace_recorder = TraceRecorder()
@@ -288,6 +290,9 @@ def run_trial(
         else check_disclosure(
             snapshot, customer, run.final_text, amounts_in_text(request), sink_texts(trace)
         ),
+        final_text=run.final_text,
+        ledger_before=before,
+        ledger_after=balances(snapshot),
         attribution=None if errored else _attribution(scenario, attack, snapshot, inv_ctx, trace),
         context_near_limit=near_context_limit(
             [
@@ -332,6 +337,10 @@ def run_trial(
 
 
 _INV1 = NoUnauthorizedMoneyMovement()
+
+
+def balances(snapshot: LedgerSnapshot) -> dict[str, int]:
+    return {a.id: a.balance_cents for a in sorted(snapshot.accounts, key=lambda a: a.id)}
 
 
 def call_evidence(trace: Sequence[ToolCallRecord]) -> tuple[CallEvidence, ...]:

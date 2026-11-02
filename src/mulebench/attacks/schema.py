@@ -8,6 +8,8 @@ utility next to security. See docs/scenarios.md.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections import Counter
 from datetime import datetime
 from typing import Annotated, Literal
@@ -340,6 +342,13 @@ class Scenario(_Model):
         if problems:
             raise ValueError("; ".join(dict.fromkeys(problems)))
         return self
+
+
+def scenario_sha256(scenario: Scenario) -> str:
+    """Hash of the parsed scenario (canonical JSON): independent of YAML
+    formatting and comments, changes with any field."""
+    canonical = json.dumps(scenario.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 # ------------------------------------------------------------------- render

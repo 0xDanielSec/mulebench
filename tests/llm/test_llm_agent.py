@@ -201,8 +201,10 @@ def test_usage_and_cost_recorded_without_model_text() -> None:
     # claude-opus-5-5: $4 / $20 per MTok
     assert t.cost_usd == pytest.approx(2000 * 4e-6 + 510 * 20e-6)
     dumped = t.model_dump_json()
-    assert "sig" not in dumped
-    assert "Done." not in dumped
+    assert "sig" not in dumped  # thinking (and its signature) is never stored
+    # The final answer is stored only in `final_text`, nowhere else.
+    assert t.final_text == "Done."
+    assert "Done." not in t.model_dump_json(exclude={"final_text"})
 
 
 def test_cost_cap_aborts_whole_run_and_keeps_finished_trials() -> None:

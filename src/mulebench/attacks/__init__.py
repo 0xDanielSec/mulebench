@@ -8,7 +8,13 @@ from mulebench.attacks.loader import (
     load_scenario,
     parse_scenario,
 )
-from mulebench.attacks.schema import PLACEHOLDER, RenderedSetup, Scenario, render
+from mulebench.attacks.schema import (
+    PLACEHOLDER,
+    RenderedSetup,
+    Scenario,
+    render,
+    scenario_sha256,
+)
 
 __all__ = [
     "BUILTIN_SCENARIOS_DIR",
@@ -21,4 +27,5 @@ __all__ = [
     "load_scenario",
     "parse_scenario",
     "render",
+    "scenario_sha256",
 ]
