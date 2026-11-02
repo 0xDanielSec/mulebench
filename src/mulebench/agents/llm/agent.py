@@ -201,6 +201,13 @@ class LLMAgent:
                 return finish("errored", "malformed_tool_call:" + ",".join(sorted(malformed)))
             if response.stop_reason == "refusal":
                 return finish("refused")
+            if not tool_calls and not (response.text or "").strip():
+                # No tool call and no answer text (reasoning already stripped): the
+                # model produced nothing usable, e.g. a tool call the server failed to
+                # parse and dropped. Errored, never resisted; counted with the
+                # malformed kinds so tool-call validity reflects it.
+                malformed["empty_output"] += 1
+                return finish("errored", "empty_output")
             if not tool_calls:
                 return finish("done", final_text=response.text or None)
 
