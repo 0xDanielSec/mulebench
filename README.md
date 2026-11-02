@@ -45,6 +45,7 @@ flowchart LR
 The scenario seeds the ledger and plants a payload in one channel. The agent
 handles a user request through the tools, which a guard preset may wrap. The
 harness then evaluates every invariant against the snapshot and the trace.
+Browse a report as a static site: [`docs/viewer.md`](docs/viewer.md).
 Details: [`docs/harness.md`](docs/harness.md), [`docs/ledger.md`](docs/ledger.md),
 [`docs/tools.md`](docs/tools.md).
 
@@ -104,6 +105,7 @@ git clone https://github.com/0xDanielSec/mulebench.git && cd mulebench
 uv sync
 uv run mulebench run --builtin --out report.json   # 12 scenarios x vulnerable/hardened
 uv run mulebench ablate                            # guard ablation matrix
+uv run mulebench view report.json --out site         # static HTML viewer, offline
 uv run pytest                                      # offline, no API keys
 ```
 
@@ -171,7 +173,7 @@ OpenAI-compatible server such as Ollama (`--provider openai-compatible`,
   error to the model and allow N retries, measuring self-correction separately
   from first-attempt validity (today a malformed call ends the trial as errored).
 - More injection channels: dispute reason, KYC document text, support tickets.
-- HTML and SARIF reports.
+- SARIF reports.
 - A CI gate for a user's agent on the hardened preset (never on the
   vulnerable control).
 - Review of the OWASP Agentic, LGPD and BACEN Res. 4.893 mappings (currently
