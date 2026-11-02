@@ -42,7 +42,9 @@ LIMITATIONS = [
     "its results validate the harness, not the vulnerability of any real model.",
     "All scenario data is synthetic.",
     "INV-1, INV-2 and INV-3 assume a single session per run.",
-    "INV-4 (human confirmation for high-risk actions) is not implemented yet.",
+    "INV-4 (human confirmation for high-risk actions) counts only when the guard set "
+    "enforces confirmation; otherwise it is reported with applicable=false and does not "
+    "count toward the attack status or the benign pass.",
     "INV-2 judges successful calls only; data leaked through error messages is not checked.",
     "INV-3 structuring is an evasion indicator, not a verdict on intent; it groups by payee, "
     "so splitting across multiple payees (mule-style) is not detected.",
