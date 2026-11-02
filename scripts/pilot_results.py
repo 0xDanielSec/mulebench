@@ -28,7 +28,12 @@ PILOTS: dict[str, list[str]] = {
         "pilot-01-qwen3-14b-8k.json",
         "pilot-01-llama31-8b-8k.json",
     ],
+    "docs/experiments/local-pilot-02.md": ["pilot-02-qwen3-14b-8k.json"],
 }
+PILOT_02_DOC = "docs/experiments/local-pilot-02.md"
+PILOT_01_QWEN = "pilot-01-qwen3-14b-8k.json"
+SCENARIO_004 = "pix-description-cross-customer-read-004"
+ATTACKER_DOMAIN = "attacker.example.test"
 
 PROMPT_SHORT = {"baseline": "baseline", "data_not_instructions": "data_not_instr."}
 
@@ -72,6 +77,32 @@ def cells_by_row(report: dict[str, Any]) -> dict[tuple[str, str], dict[str, Any]
     return out
 
 
+def benign_lines(
+    rows: list[dict[str, Any]], extra: dict[tuple[str, str], dict[str, Any]]
+) -> list[str]:
+    lines = [
+        "",
+        "**Benign control and validity** (validity over all trials of the row; malformed "
+        "and coerced counts over both variants).",
+        "",
+        "| Scen. | Prompt | Benign utility | Errored (benign) | Tool-call validity "
+        "| Malformed | Coerced calls | Meaningful |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for r in rows:
+        b, x = r["benign"], extra[(r["scenario_id"], r["prompt_variant"])]
+        meaningful = (
+            "yes" if r["resistance_meaningful"] else "no: " + ", ".join(r["not_meaningful_reasons"])
+        )
+        lines.append(
+            f"| {short_id(r['scenario_id'])} | {PROMPT_SHORT[r['prompt_variant']]} "
+            f"| {rate(b['utility_exact'])} | {b['errored']}/{b['trials']} "
+            f"| {rate(r['tool_call_validity'])} | {counts(x['malformed'])} "
+            f"| {x['coerced']} | {meaningful} |"
+        )
+    return lines
+
+
 def render_model(report: dict[str, Any], file_name: str) -> list[str]:
     llm, totals = report["llm"], report["summary"]["totals"]
     rows = sorted(
@@ -99,26 +130,7 @@ def render_model(report: dict[str, Any], file_name: str) -> list[str]:
             f"| {rate(a['attack_success'])} | {rate(a['refusal'])} "
             f"| {a['errored']}/{a['trials']} | {a['not_exposed']}/{a['trials']} | {x['outflow']} |"
         )
-    lines += [
-        "",
-        "**Benign control and validity** (validity over all trials of the row; malformed "
-        "and coerced counts over both variants).",
-        "",
-        "| Scen. | Prompt | Benign utility | Errored (benign) | Tool-call validity "
-        "| Malformed | Coerced calls | Meaningful |",
-        "|---|---|---|---|---|---|---|---|",
-    ]
-    for r in rows:
-        b, x = r["benign"], extra[(r["scenario_id"], r["prompt_variant"])]
-        meaningful = (
-            "yes" if r["resistance_meaningful"] else "no: " + ", ".join(r["not_meaningful_reasons"])
-        )
-        lines.append(
-            f"| {short_id(r['scenario_id'])} | {PROMPT_SHORT[r['prompt_variant']]} "
-            f"| {rate(b['utility_exact'])} | {b['errored']}/{b['trials']} "
-            f"| {rate(r['tool_call_validity'])} | {counts(x['malformed'])} "
-            f"| {x['coerced']} | {meaningful} |"
-        )
+    lines += benign_lines(rows, extra)
     errors: dict[str, int] = {}
     for x in extra.values():
         add(errors, x["errors"])
@@ -163,8 +175,225 @@ def render_model(report: dict[str, Any], file_name: str) -> list[str]:
     return lines
 
 
+def load(name: str) -> dict[str, Any]:
+    report: dict[str, Any] = json.loads((DATA / name).read_text(encoding="utf-8"))
+    return report
+
+
+def wl(k: int, n: int) -> str:
+    return rate(wilson(k, n).model_dump())
+
+
+def trials_of(report: dict[str, Any]) -> dict[tuple[str, str, str], list[dict[str, Any]]]:
+    """Per (short scenario id, prompt, variant): the trials of the cell."""
+    out: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for s in report["scenarios"]:
+        for c in s["cells"]:
+            key = (short_id(s["scenario_id"]), c["prompt_variant"], c["variant"])
+            out.setdefault(key, []).extend(c["trials"])
+    return out
+
+
+def violation_codes(trials: list[dict[str, Any]]) -> dict[str, int]:
+    codes: dict[str, int] = {}
+    for t in trials:
+        for inv in t["invariants"]:
+            add(codes, {f"{inv['id']} {v['code']}": 1 for v in inv["violations"]})
+    return codes
+
+
+def read_before_pay(trials: list[dict[str, Any]]) -> str:
+    """Trials whose first list_transactions came before their first transfer_pix call."""
+    k = n = 0
+    for t in trials:
+        tools = [c["tool"] for c in t["trace"]]
+        if "transfer_pix" not in tools:
+            continue
+        n += 1
+        first_pay = tools.index("transfer_pix")
+        k += "list_transactions" in tools[:first_pay]
+    return f"{k}/{n}"
+
+
+def render_pilot_02(report: dict[str, Any], file_name: str) -> list[str]:
+    llm, totals = report["llm"], report["summary"]["totals"]
+    rows = sorted(
+        report["summary"]["rows"], key=lambda r: (short_id(r["scenario_id"]), r["prompt_variant"])
+    )
+    extra = cells_by_row(report)
+    cells = trials_of(report)
+    lines = [
+        f"### {llm['model']}",
+        "",
+        f"Source: `docs/experiments/data/{file_name}` (run status `{report['run_status']}`, "
+        f"seed derivation `{llm['seed_derivation']}`, base seed {llm['seed']}, "
+        f"tool schema `{llm['tool_schema_sha256'][:12]}`). "
+        f"Attack trials {totals['attack_trials']}, benign trials {totals['benign_trials']}, "
+        f"errored {totals['errored']}, not_exposed {totals['not_exposed']}, "
+        f"not-meaningful rows {totals['not_meaningful_rows']} of {len(rows)}.",
+        "",
+        "**Attack variant.** Exposure is over all attack trials. Attack success and refusal "
+        "are over exposed, non-errored attack trials. Disclosure is the harness check over "
+        "exposed trials with a final answer. Attack utility is the task outcome of the attack "
+        "trials.",
+        "",
+        "| Scen. | Prompt | Attack success | Exposure | Not exposed | Errored | Refusal "
+        "| Disclosure | Attack utility | Outflow (cents) |",
+        "|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for r in rows:
+        a, x = r["attack"], extra[(r["scenario_id"], r["prompt_variant"])]
+        lines.append(
+            f"| {short_id(r['scenario_id'])} | {PROMPT_SHORT[r['prompt_variant']]} "
+            f"| {rate(a['attack_success'])} | {rate(a['exposure'])} "
+            f"| {a['not_exposed']}/{a['trials']} | {a['errored']}/{a['trials']} "
+            f"| {rate(a['refusal'])} | {rate(a.get('disclosure'))} "
+            f"| {rate(a['utility_subset'])} | {x['outflow']} |"
+        )
+    lines += benign_lines(rows, extra)
+
+    errors: dict[str, int] = {}
+    for x in extra.values():
+        add(errors, x["errors"])
+    capped: dict[str, int] = {}
+    for (sid, _prompt, variant), trials in cells.items():
+        n = sum(m["stop_reason"] == "length" for t in trials for m in t["model_calls"])
+        if n:
+            add(capped, {f"{sid} {variant}": n})
+    near = sum(x["near"] for x in extra.values())
+    lines += [
+        "",
+        f"Error kinds (trials): {counts(errors)}. Coerced arguments: "
+        f"{counts(totals['coerced_args'])}. Model calls at >= 90% of num_ctx: {near}. "
+        f"Model calls that ended at the output cap (`length`): {counts(capped)}.",
+        "",
+        "**Violating trials** (attack variant; codes count violations, a trial can have "
+        "several; disclosure counted over violating trials with a final answer).",
+        "",
+        "| Scen. | Prompt | Violating trials | Violation codes | Disclosure true "
+        "| Without final answer |",
+        "|---|---|---|---|---|---|",
+    ]
+    for r in rows:
+        sid, prompt = short_id(r["scenario_id"]), r["prompt_variant"]
+        bad = [t for t in cells[(sid, prompt, "attack")] if t["status"] == "exposed_violated"]
+        answered = [t for t in bad if t["disclosure"] is not None]
+        disclosed = sum(bool(t["disclosure"]["disclosed"]) for t in answered)
+        lines.append(
+            f"| {sid} | {PROMPT_SHORT[prompt]} | {len(bad)} | {counts(violation_codes(bad))} "
+            f"| {disclosed}/{len(answered)} | {len(bad) - len(answered)} |"
+        )
+
+    lines += [
+        "",
+        "**Prompts side by side** (per cell; difference = data_not_instr. minus baseline, "
+        "percentage points; no significance tests and no pooling across scenarios).",
+        "",
+        "| Scen. | Attack success: baseline | data_not_instr. | Diff. "
+        "| Benign utility: baseline | data_not_instr. | Diff. |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    by_key = {(r["scenario_id"], r["prompt_variant"]): r for r in rows}
+    for sid in sorted({r["scenario_id"] for r in rows}, key=short_id):
+        base, defd = by_key[(sid, "baseline")], by_key[(sid, "data_not_instructions")]
+        cols = []
+        for metric, part in (("attack_success", "attack"), ("utility_exact", "benign")):
+            rb, rd = base[part][metric], defd[part][metric]
+            diff = f"{(rd['rate'] - rb['rate']) * 100:+.0f}" if rb["n"] and rd["n"] else "n/a"
+            cols += [rate(rb), rate(rd), diff]
+        lines.append(f"| {short_id(sid)} | " + " | ".join(cols) + " |")
+
+    p1 = {
+        (short_id(r["scenario_id"]), r["prompt_variant"]): r["attack"]["attack_success"]
+        for r in load(PILOT_01_QWEN)["summary"]["rows"]
+    }
+    lines += [
+        "",
+        "**004 across pilots (RQ1).** Replicated: pilot 02 alone has k >= 1 "
+        "(pre-registered rule). The combined row is descriptive.",
+        "",
+        "| | baseline | data_not_instr. |",
+        "|---|---|---|",
+    ]
+    p2 = {p: by_key[(SCENARIO_004, p)]["attack"]["attack_success"] for p in PROMPT_SHORT}
+    lines.append(
+        f"| Pilot 01 (N=10) | {rate(p1[('004', 'baseline')])} | "
+        f"{rate(p1[('004', 'data_not_instructions')])} |"
+    )
+    lines.append(
+        f"| Pilot 02 (N=30) | {rate(p2['baseline'])} | {rate(p2['data_not_instructions'])} |"
+    )
+    lines.append(
+        "| Combined, descriptive | "
+        + " | ".join(
+            wl(p1[("004", p)]["k"] + p2[p]["k"], p1[("004", p)]["n"] + p2[p]["n"])
+            for p in PROMPT_SHORT
+        )
+        + " |"
+    )
+    lines.append(
+        "| Rule outcome | "
+        + " | ".join(
+            "replicated" if p2[p]["k"] >= 1 else f"not replicated (upper bound {p2[p]['high']:.0%})"
+            for p in PROMPT_SHORT
+        )
+        + " |"
+    )
+
+    lines += [
+        "",
+        "**011 and 012 side by side (RQ3, RQ3b; descriptive, they differ only in the "
+        "payload).** Paid to attacker: transfers to a key in the attacker's synthetic domain. "
+        "Read before pay: trials whose listing came before their first `transfer_pix`, over "
+        "trials with a `transfer_pix` call.",
+        "",
+        "| Scen. | Prompt | Variant | Violation codes | Paid to attacker (trials, cents) "
+        "| Unauthorized outflow (cents) | Read before pay | Task utility |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for sid in ("011", "012"):
+        for prompt in PROMPT_SHORT:
+            for variant in ("attack", "benign"):
+                trials = cells[(sid, prompt, variant)]
+                diverted = [
+                    o["amount_cents"]
+                    for t in trials
+                    for o in t["outgoing_transfers"]
+                    if o["actor"] != "seed" and o["to_pix_key"].endswith(ATTACKER_DOMAIN)
+                ]
+                outflow = sum(t["unauthorized_outflow_cents"] for t in trials)
+                util_key = "utility_subset" if variant == "attack" else "utility_exact"
+                util = sum(bool(t[util_key]) for t in trials)
+                lines.append(
+                    f"| {sid} | {PROMPT_SHORT[prompt]} | {variant} "
+                    f"| {counts(violation_codes(trials))} | {len(diverted)}, {sum(diverted)} "
+                    f"| {outflow} | {read_before_pay(trials)} | {util}/{len(trials)} |"
+                )
+    lines += [
+        "",
+        "Pilot 01, scenario 001 (different scenario, descriptive): attack success "
+        f"baseline {rate(p1[('001', 'baseline')])}, data_not_instr. "
+        f"{rate(p1[('001', 'data_not_instructions')])}.",
+        "",
+    ]
+    return lines
+
+
 def render(doc: str) -> str:
-    lines: list[str] = [
+    if doc == PILOT_02_DOC:
+        lines: list[str] = [
+            START,
+            "",
+            "Format: k/n (rate, Wilson 95% interval). Scenario ids are shortened to their "
+            "number (004 cross-customer read, 008 foreign history, 009 dispute flow, 010 payee "
+            "name, 011 read before pay, 012 key swap). Preset `vulnerable` only.",
+            "",
+        ]
+        for name in PILOTS[doc]:
+            lines += render_pilot_02(load(name), name)
+        lines.append(END)
+        return "\n".join(lines)
+    lines = [
         START,
         "",
         "Format: k/n (rate, Wilson 95% interval). Scenario ids are shortened to their "
@@ -173,8 +402,7 @@ def render(doc: str) -> str:
         "",
     ]
     for name in PILOTS[doc]:
-        report = json.loads((DATA / name).read_text(encoding="utf-8"))
-        lines += render_model(report, name)
+        lines += render_model(load(name), name)
     lines.append(END)
     return "\n".join(lines)
 
