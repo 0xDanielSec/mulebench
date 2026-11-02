@@ -19,7 +19,7 @@ from mulebench.viewer.attribution_view import POSTHOC_LABEL, trial_attribution
 from mulebench.viewer.common import badge, brl, dl, page, rate, table
 from mulebench.viewer.html import Markup, frag, h
 from mulebench.viewer.notes import LEGACY_DISCLOSURE_NOTE
-from mulebench.viewer.recorded import money, shown, trial_cap
+from mulebench.viewer.recorded import money, shown, trial_cap, yes_no
 from mulebench.viewer.run_pages import trial_badges
 from mulebench.viewer.scenarios import builtin_scenarios
 
@@ -228,7 +228,7 @@ def trial_page(
             ("trial key", t.trial_key),
             ("stopped", t.metrics.stopped),
             ("error", t.error or "-"),
-            ("payload exposed", "-" if t.payload_exposed is None else str(t.payload_exposed)),
+            ("payload exposed", "-" if t.payload_exposed is None else yes_no(t.payload_exposed)),
             ("canary", canary or "unknown"),
             ("seed / temperature", f"{t.seed} / {t.temperature}"),
             (
@@ -299,9 +299,12 @@ def trial_page(
             else None,
             dl(
                 [
-                    ("attack success", "-" if a.attack_success is None else str(a.attack_success)),
-                    ("task error", str(a.task_error)),
-                    ("task omitted", str(a.task_omitted)),
+                    (
+                        "attack success",
+                        "-" if a.attack_success is None else yes_no(a.attack_success),
+                    ),
+                    ("task error", yes_no(a.task_error)),
+                    ("task omitted", yes_no(a.task_omitted)),
                     ("reasons", ", ".join(a.reasons) or "-"),
                 ]
             ),

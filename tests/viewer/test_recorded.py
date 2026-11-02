@@ -163,3 +163,19 @@ def test_no_missing_metric_renders_as_a_bare_zero() -> None:
         ):
             for value in dd(page, label):
                 assert not re.fullmatch(r"(R\$ )?0(\.00)?", value), (path, label, value)
+
+
+# ---------------------------------------------------------------- booleans
+
+
+def test_booleans_render_as_yes_no() -> None:
+    import pytest
+
+    from mulebench.viewer.html import h
+
+    for files in (pilot_site(), stripped_site()):
+        for path, page in files.items():
+            text = re.sub(r"<[^>]+>", " ", page)
+            assert not re.search(r"\b(True|False)\b", text), path
+    with pytest.raises(TypeError, match="yes_no"):
+        h("p", None, True)

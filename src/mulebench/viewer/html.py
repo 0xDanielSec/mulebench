@@ -36,7 +36,10 @@ def _render_children(children: Iterable[object]) -> str:
     out: list[str] = []
     for child in children:
         if child is None or child is False:
-            continue
+            continue  # conditional omission
+        if child is True:
+            # A bare boolean would render as "True"; say yes/no (recorded.yes_no).
+            raise TypeError("render booleans with yes_no, not as text")
         if isinstance(child, Markup):
             out.append(child)
         elif isinstance(child, str | int | float):
