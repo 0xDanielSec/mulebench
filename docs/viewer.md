@@ -46,7 +46,21 @@ hash (`scenario_sha256`, also new) or when the recorded hash differs from the
 current scenario, because a changed scenario can make the reconstruction
 wrong.
 
-## Security
+## Missing data
+
+Reports gain fields over time, and when loading an older report pydantic fills
+a missing field with its default (0, `false`, `null`). The viewer never shows
+such a default as a measurement. It checks whether each field was stored
+(`model_fields_set`). A metric the report did not store renders as **not
+recorded**. A value the viewer can rebuild from data the report did store is
+shown with a label:
+
+- output-cap counts (`length_calls`, `cut_by_cap`, `cut_by_cap_trials`) are
+  rebuilt from the stored stop reasons of the model calls (`length`, and
+  `max_tokens` on the Anthropic API), labelled "derived from stop reasons";
+- attribution is computed with the re-analysis code, labelled "post-hoc
+  (computed by viewer)".
+
 
 Report text is attacker-controlled: payloads travel through tool results,
 arguments, error messages and final answers. The viewer treats all of it as

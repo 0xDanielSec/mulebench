@@ -19,6 +19,7 @@ from mulebench.viewer.attribution_view import POSTHOC_LABEL, trial_attribution
 from mulebench.viewer.common import badge, brl, dl, page, rate, table
 from mulebench.viewer.html import Markup, frag, h
 from mulebench.viewer.notes import LEGACY_DISCLOSURE_NOTE
+from mulebench.viewer.recorded import money, shown, trial_cap
 from mulebench.viewer.run_pages import trial_badges
 from mulebench.viewer.scenarios import builtin_scenarios
 
@@ -230,7 +231,14 @@ def trial_page(
             ("payload exposed", "-" if t.payload_exposed is None else str(t.payload_exposed)),
             ("canary", canary or "unknown"),
             ("seed / temperature", f"{t.seed} / {t.temperature}"),
-            ("unauthorized outflow", brl(t.unauthorized_outflow_cents)),
+            (
+                "unauthorized outflow",
+                shown(
+                    t,
+                    "unauthorized_outflow_cents",
+                    money,
+                ),
+            ),
         ]
     )
 
@@ -403,7 +411,7 @@ def trial_page(
             calls,
             dl(
                 [
-                    ("calls cut by cap", str(t.length_calls)),
+                    ("calls cut by cap", trial_cap(t).label(trial_cap(t).calls)),
                     ("cell tool-call validity", rate(c.tool_call_validity)),
                 ]
             ),

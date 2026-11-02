@@ -18,6 +18,14 @@ from mulebench.viewer.attribution_view import (
 from mulebench.viewer.common import badge, brl, dl, page, rate, slug, table
 from mulebench.viewer.html import Markup, frag, h
 from mulebench.viewer.notes import legacy_disclosure_note, limitation_items
+from mulebench.viewer.recorded import (
+    cell_cap,
+    money,
+    recorded,
+    report_cap,
+    shown,
+    trial_cap,
+)
 
 STATUS_BADGE: dict[str, tuple[str, str]] = {
     "exposed_violated": ("bad", "violated"),
@@ -73,11 +81,12 @@ def trial_badges(
             out.append(badge("bad", "disclosed"))
         if d.approximate:
             out.append(badge("warn", "disclosed (approx.)"))
-    if t.cut_by_cap:
-        out.append(badge("warn", "cut by cap"))
-    if t.context_near_limit:
+    cap = trial_cap(t)
+    if cap.trials:
+        out.append(badge("warn", "cut by cap" + (" (derived)" if cap.derived else "")))
+    if recorded(t, "context_near_limit") and t.context_near_limit:
         out.append(badge("warn", "context near limit"))
-    if t.unauthorized_outflow_cents:
+    if recorded(t, "unauthorized_outflow_cents") and t.unauthorized_outflow_cents:
         out.append(badge("bad", f"outflow {brl(t.unauthorized_outflow_cents)}"))
     return frag(out)
 
@@ -137,9 +146,12 @@ def _cell_flags(c: CellResult) -> list[Markup]:
     errored = sum(t.errored for t in c.trials)
     if errored:
         out.append(badge("warn", f"errored {errored}"))
-    if c.cut_by_cap_trials:
-        out.append(badge("warn", f"cut by cap {c.cut_by_cap_trials}"))
-    if c.context_near_limit:
+    cap = cell_cap(c)
+    if cap.trials:
+        out.append(
+            badge("warn", f"cut by cap {cap.trials}" + (" (derived)" if cap.derived else ""))
+        )
+    if recorded(c, "context_near_limit") and c.context_near_limit:
         out.append(badge("warn", f"context near limit {c.context_near_limit}"))
     return out
 
@@ -161,7 +173,7 @@ def _matrix_cell(report: Report, s: ScenarioResult, prompt: str, preset: str) ->
         parts.append(badge("warn", "not meaningful: " + ", ".join(row.not_meaningful_reasons)))
     for c in sorted(cells, key=lambda x: x.variant):
         lines = _attack_lines(s, c) if c.variant == "attack" else _benign_lines(s, c)
-        shown = [(k, v) for k, v in lines if v != "—"]
+        shown = list(lines)
         parts.append(
             h(
                 "div",
@@ -189,6 +201,7 @@ def report_index(report: Report, title: str) -> str:
         ("run status", report.run_status),
     ]
     t = report.summary.totals
+    cap = report_cap(report)
     totals = [
         ("attack trials", t.attack_trials),
         ("violated", t.exposed_violated),
@@ -197,8 +210,8 @@ def report_index(report: Report, title: str) -> str:
         ("not exposed", t.not_exposed),
         ("errored", t.errored),
         ("benign utility", f"{t.benign_utility_pass}/{t.benign_trials}"),
-        ("model calls cut at max_tokens", t.length_calls),
-        ("trials cut by cap", t.cut_by_cap_trials),
+        ("model calls cut at max_tokens", cap.label(cap.calls)),
+        ("trials cut by cap", cap.label(cap.trials)),
     ]
     rows = [
         [h("a", {"href": f"#s-{slug(s.scenario_id)}"}, s.scenario_id)]
@@ -274,6 +287,7 @@ def report_index(report: Report, title: str) -> str:
 def cell_page(report_title: str, s: ScenarioResult, c: CellResult) -> str:
     title = f"{s.scenario_id} · {c.prompt_variant} · {c.preset} · {c.variant}"
     lines = _attack_lines(s, c) if c.variant == "attack" else _benign_lines(s, c)
+    cap = cell_cap(c)
     validity = [
         (
             "tool-call validity",
@@ -283,19 +297,19 @@ def cell_page(report_title: str, s: ScenarioResult, c: CellResult) -> str:
         ),
         (
             "tool calls per trial",
-            "—" if c.tool_calls_per_trial is None else f"{c.tool_calls_per_trial:g}",
+            shown(c, "tool_calls_per_trial", lambda v: f"{v:g}"),
         ),
-        ("unauthorized outflow", brl(c.unauthorized_outflow_cents)),
-        ("model calls cut at max_tokens", str(c.length_calls)),
-        ("trials cut by cap", str(c.cut_by_cap_trials)),
-        ("context near limit (trials)", str(c.context_near_limit)),
+        ("unauthorized outflow", shown(c, "unauthorized_outflow_cents", money)),
+        ("model calls cut at max_tokens", cap.label(cap.calls)),
+        ("trials cut by cap", cap.label(cap.trials)),
+        ("context near limit (trials)", shown(c, "context_near_limit")),
         ("agent", c.agent.name),
     ]
     rows = [
         [
             h("a", {"href": f"../{trial_href(s, c, t)}"}, f"trial {t.trial}"),
             trial_badges(t, c.variant, *trial_attribution(s, c, t)),
-            brl(t.unauthorized_outflow_cents),
+            shown(t, "unauthorized_outflow_cents", money),
             t.metrics.tool_calls,
             len(t.model_calls),
             t.metrics.stopped,

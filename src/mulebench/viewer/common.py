@@ -32,8 +32,9 @@ def brl(cents: int) -> str:
 
 
 def rate(r: Rate | None) -> str:
+    """k/n with interval; a rate missing from the report is "not recorded"."""
     if r is None:
-        return "—"
+        return "not recorded"
     if r.n == 0 or r.rate is None or r.low is None or r.high is None:
         return f"{r.k}/{r.n}"
     return f"{r.k}/{r.n} ({r.rate:.0%}, {r.low:.0%}-{r.high:.0%})"
