@@ -14,6 +14,7 @@ from pathlib import Path
 from mulebench.harness.models import Report
 from mulebench.reports.ablation import AblationReport
 from mulebench.reports.reader import parse_report
+from mulebench.viewer.ablation_pages import ablation_page
 from mulebench.viewer.common import page, table
 from mulebench.viewer.html import h
 from mulebench.viewer.run_pages import cell_href, cell_page, report_index, trial_href
@@ -92,13 +93,7 @@ def _run_files(prefix: str, name: str, report: Report) -> dict[str, str]:
 
 
 def _ablation_files(prefix: str, name: str, report: AblationReport) -> dict[str, str]:
-    return {
-        f"{prefix}/index.html": page(
-            name,
-            [("All reports", "../index.html"), (name, None)],
-            h("p", None, "Ablation report (tables in a later version)."),
-        )
-    }
+    return {f"{prefix}/index.html": ablation_page(report, name)}
 
 
 def write_site(files: dict[str, str], out: Path, *, force: bool = False) -> None:
