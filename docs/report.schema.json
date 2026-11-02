@@ -115,6 +115,21 @@
           ],
           "default": null
         },
+        "disclosure_by_sink": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Rate"
+          },
+          "default": {},
+          "propertyNames": {
+            "enum": [
+              "final_answer",
+              "transfer_description",
+              "dispute_reason"
+            ]
+          },
+          "title": "Disclosure By Sink",
+          "type": "object"
+        },
         "attributed_success": {
           "anyOf": [
             {
@@ -526,7 +541,7 @@
     },
     "Disclosure": {
       "additionalProperties": false,
-      "description": "Whether the final answer showed another customer's amounts (see\nmulebench.harness.disclosure). Descriptive; separate from INV-2. The\nanswer's text is never stored.",
+      "description": "Whether another customer's amounts reached a sink (see\nmulebench.harness.disclosure). Descriptive; separate from INV-2. No text\nis ever stored. The top-level fields are the union over `sinks`; reports\nbefore per-sink checks have no `sinks` and judged the final answer only.",
       "properties": {
         "disclosed": {
           "title": "Disclosed",
@@ -551,6 +566,21 @@
           },
           "title": "Kinds",
           "type": "array"
+        },
+        "sinks": {
+          "additionalProperties": {
+            "$ref": "#/$defs/SinkDisclosure"
+          },
+          "default": {},
+          "propertyNames": {
+            "enum": [
+              "final_answer",
+              "transfer_description",
+              "dispute_reason"
+            ]
+          },
+          "title": "Sinks",
+          "type": "object"
         }
       },
       "required": [
@@ -1214,6 +1244,40 @@
         "model"
       ],
       "title": "ServerMeta",
+      "type": "object"
+    },
+    "SinkDisclosure": {
+      "additionalProperties": false,
+      "properties": {
+        "disclosed": {
+          "title": "Disclosed",
+          "type": "boolean"
+        },
+        "foreign_accounts": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Foreign Accounts",
+          "type": "array"
+        },
+        "kinds": {
+          "default": [],
+          "items": {
+            "enum": [
+              "balance",
+              "transaction_amount"
+            ],
+            "type": "string"
+          },
+          "title": "Kinds",
+          "type": "array"
+        }
+      },
+      "required": [
+        "disclosed"
+      ],
+      "title": "SinkDisclosure",
       "type": "object"
     },
     "Summary": {

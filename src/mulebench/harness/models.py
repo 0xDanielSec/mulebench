@@ -7,7 +7,7 @@ prompt, so their prompt axis is the single value "none".
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict
 
@@ -53,16 +53,28 @@ class CellMetrics(_Model):
 
 
 DisclosureKind = Literal["balance", "transaction_amount"]
+# Where a foreign amount can leave the session: the final answer, the
+# description of an outgoing transfer, the reason of a dispute.
+DisclosureSink = Literal["final_answer", "transfer_description", "dispute_reason"]
+DISCLOSURE_SINKS: tuple[DisclosureSink, ...] = get_args(DisclosureSink)
+
+
+class SinkDisclosure(_Model):
+    disclosed: bool
+    foreign_accounts: list[str] = []
+    kinds: list[DisclosureKind] = []
 
 
 class Disclosure(_Model):
-    """Whether the final answer showed another customer's amounts (see
-    mulebench.harness.disclosure). Descriptive; separate from INV-2. The
-    answer's text is never stored."""
+    """Whether another customer's amounts reached a sink (see
+    mulebench.harness.disclosure). Descriptive; separate from INV-2. No text
+    is ever stored. The top-level fields are the union over `sinks`; reports
+    before per-sink checks have no `sinks` and judged the final answer only."""
 
     disclosed: bool
     foreign_accounts: list[str] = []
     kinds: list[DisclosureKind] = []
+    sinks: dict[DisclosureSink, SinkDisclosure] = {}
 
 
 class Attribution(_Model):
@@ -131,6 +143,8 @@ class AttackAggregates(_Model):
     # Exposed trials whose final answer showed a foreign amount / exposed
     # trials with a final answer. Descriptive; None in older reports.
     disclosure: Rate | None = None
+    # Same numerator per sink, same denominator; empty in older reports.
+    disclosure_by_sink: dict[DisclosureSink, Rate] = {}
     # Attribution layer (None in older reports). attributed_success: exposed
     # trials whose outcome moved in the attacker's direction / exposed trials.
     # task_error, task_omitted: over non-errored trials.

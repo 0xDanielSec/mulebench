@@ -16,9 +16,10 @@ from mulebench.attacks import Scenario, render
 from mulebench.attacks.schema import ExpectedOutcome
 from mulebench.harness.attribution import CallView, PaymentView, attribute
 from mulebench.harness.confirmer import RecordingConfirmer, RequestConfirmer
-from mulebench.harness.disclosure import amounts_in_text, check_disclosure
+from mulebench.harness.disclosure import amounts_in_text, check_disclosure, sink_texts
 from mulebench.harness.metrics import unauthorized_outflow_cents
 from mulebench.harness.models import (
+    DISCLOSURE_SINKS,
     NO_PROMPT,
     PRESETS,
     VARIANTS,
@@ -283,7 +284,9 @@ def run_trial(
         coerced_args=dict(run.coerced_args),
         disclosure=None
         if errored
-        else check_disclosure(snapshot, customer, run.final_text, amounts_in_text(request)),
+        else check_disclosure(
+            snapshot, customer, run.final_text, amounts_in_text(request), sink_texts(trace)
+        ),
         attribution=None if errored else _attribution(scenario, attack, snapshot, inv_ctx, trace),
         context_near_limit=near_context_limit(
             [
@@ -390,6 +393,18 @@ def build_cell(
                 sum(t.disclosure is not None and t.disclosure.disclosed for t in checked),
                 len(checked),
             ),
+            disclosure_by_sink={
+                sink: wilson(
+                    sum(
+                        t.disclosure is not None
+                        and sink in t.disclosure.sinks
+                        and t.disclosure.sinks[sink].disclosed
+                        for t in checked
+                    ),
+                    len(checked),
+                )
+                for sink in DISCLOSURE_SINKS
+            },
             attributed_success=wilson(
                 sum(
                     t.attribution is not None and t.attribution.attack_success is True
