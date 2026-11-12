@@ -143,6 +143,27 @@ def _pilot_03_page(scenario: str, prompt: str, trial: int) -> str:
     )
 
 
+def _call_block(page: str, seq: int) -> str:
+    start = page.index(f'id="call-{seq}"')
+    end = page.find('id="call-', start + 1)
+    return page[start : end if end != -1 else len(page)]
+
+
+def test_disclosure_marker_on_the_call_and_the_final_answer() -> None:
+    page = _pilot_03_page("dispute-flow-foreign-read-009", "baseline", 5)
+    calls = re.findall(r'<li class="([^"]*)" id="call-(\d+)"', page)
+    marked = {int(seq) for cls, seq in calls if "disclosure" in cls.split()}
+    assert marked == {3}  # open_dispute; list_transactions and get_balance are not marked
+    assert "disclosure: acc_bob balance in dispute_reason" in _call_block(page, 3)
+    answer = page[page.index("<h2>Final answer</h2>") : page.index("<h2>Model calls</h2>")]
+    assert "disclosure: acc_bob balance in final_answer" in answer
+
+
+def test_approximate_disclosure_marker() -> None:
+    page = _pilot_03_page("dispute-flow-foreign-read-009", "baseline", 19)
+    assert "disclosure (approx.): acc_bob amount in dispute_reason" in _call_block(page, 3)
+
+
 def test_outcome_badges_read_as_text() -> None:
     page = _pilot_03_page("dispute-flow-foreign-read-009", "baseline", 5)
     text = re.sub(r"<[^>]+>", "", page)

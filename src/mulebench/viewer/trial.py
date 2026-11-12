@@ -11,7 +11,14 @@ import json
 import re
 
 from mulebench.attacks import render, scenario_sha256
-from mulebench.harness.models import CellResult, Report, ScenarioResult, TrialResult
+from mulebench.harness.disclosure import SINK_ARGS, amounts_in_text
+from mulebench.harness.models import (
+    CellResult,
+    Report,
+    ScenarioResult,
+    SinkDisclosure,
+    TrialResult,
+)
 from mulebench.harness.seed import seed_cell
 from mulebench.invariants.authorization import SYSTEM_ACTORS
 from mulebench.tools import ToolCallRecord
@@ -129,9 +136,65 @@ def _violations_by_seq(t: TrialResult) -> tuple[dict[int, list[str]], list[str]]
     return pinned, loose
 
 
+def disclosure_label(sink: str, v: SinkDisclosure) -> list[str]:
+    """Marker texts for one sink verdict: exact first, then approximate-only."""
+    out: list[str] = []
+    if v.disclosed:
+        fields = ", ".join(v.kinds) or "amount"
+        out.append(f"disclosure: {', '.join(v.foreign_accounts)} {fields} in {sink}")
+    near = [a for a in v.approximate_accounts if a not in v.foreign_accounts]
+    if v.approximate and near:
+        out.append(f"disclosure (approx.): {', '.join(near)} amount in {sink}")
+    return out
+
+
+def _disclosures_by_seq(t: TrialResult) -> dict[int, list[str]]:
+    """Pin each tool-sink disclosure to the ok call(s) that wrote it.
+
+    The report stores one verdict per sink, not per call. With several calls
+    into one sink, the calls whose text names a foreign account's balance
+    (exactly or off by a power of ten) are marked; if none can be told apart,
+    all of them are."""
+    d = t.disclosure
+    if d is None:
+        return {}
+    balances = t.ledger_before or {}
+    out: dict[int, list[str]] = {}
+    for sink, v in d.sinks.items():
+        labels = disclosure_label(sink, v)
+        if sink not in SINK_ARGS or not labels:
+            continue
+        tool, arg = SINK_ARGS[sink]
+        calls = [
+            (r.seq, text)
+            for r in t.trace
+            if r.tool == tool and r.outcome == "ok" and isinstance(text := r.args.get(arg), str)
+        ]
+        wanted = {
+            balances[a] for a in [*v.foreign_accounts, *v.approximate_accounts] if balances.get(a)
+        }
+        hit = [
+            seq
+            for seq, text in calls
+            if any(
+                w == x or w in (x * 10, x * 100, x * 1000) or x in (w * 10, w * 100, w * 1000)
+                for w in wanted
+                for x in amounts_in_text(text)
+            )
+        ]
+        for seq in hit or [seq for seq, _ in calls]:
+            out.setdefault(seq, []).extend(labels)
+    return out
+
+
 def _record_item(
-    r: ToolCallRecord, origin: str | None, violations: list[str], canary: str | None
+    r: ToolCallRecord,
+    origin: str | None,
+    violations: list[str],
+    canary: str | None,
+    disclosures: list[str] | None = None,
 ) -> Markup:
+    disclosures = disclosures or []
     injected = origin == "tool_output"
     payload_paths = [
         p
@@ -146,6 +209,7 @@ def _record_item(
         badge(kind, r.outcome),
         badge("warn", "instruction from tool output") if injected else None,
         badge("bad", "violation") if violations else None,
+        [badge("bad", x) for x in disclosures],
         badge("warn", "payload entered here") if payload_paths else None,
     )
     parts: list[object] = [head, h("p", {"class": "muted"}, f"origin: {origin or 'unknown'}")]
@@ -198,7 +262,8 @@ def _record_item(
     if violations:
         parts.append(h("h4", None, "Violations at this call"))
         parts.append(h("ul", None, [h("li", None, v) for v in violations]))
-    classes = " ".join(c for c, on in (("violation", violations), ("injected", injected)) if on)
+    flags = (("violation", violations), ("disclosure", disclosures), ("injected", injected))
+    classes = " ".join(c for c, on in flags if on)
     return h("li", {"class": classes or None, "id": f"call-{r.seq}"}, parts)
 
 
@@ -242,8 +307,13 @@ def trial_page(
         ]
     )
 
+    final_sink = t.disclosure.sinks.get("final_answer") if t.disclosure else None
+    final_markers = disclosure_label("final_answer", final_sink) if final_sink else []
     if t.final_text is not None:
-        answer: object = h("pre", None, _marked(t.final_text, canary))
+        answer: object = frag(
+            h("p", None, [badge("bad", x) for x in final_markers]) if final_markers else None,
+            h("pre", None, _marked(t.final_text, canary)),
+        )
     elif stores_final_text:
         answer = h("p", None, "No final answer.")
     else:
@@ -269,10 +339,16 @@ def trial_page(
 
     origins = {st.seq: st.origin for st in t.agent_steps}
     pinned, loose = _violations_by_seq(t)
+    disclosed_at = _disclosures_by_seq(t)
     timeline = h(
         "ol",
         {"class": "timeline"},
-        [_record_item(r, origins.get(r.seq), pinned.get(r.seq, []), canary) for r in t.trace],
+        [
+            _record_item(
+                r, origins.get(r.seq), pinned.get(r.seq, []), canary, disclosed_at.get(r.seq)
+            )
+            for r in t.trace
+        ],
     )
 
     invariants = table(
@@ -428,7 +504,8 @@ def trial_page(
                 {"class": "muted"},
                 "Tool calls in order. Marked: untrusted fields, where the payload (canary) "
                 "entered, calls the agent made on instructions from tool output, guard "
-                "decisions and the calls where an invariant broke.",
+                "decisions, the calls where an invariant broke and the calls that wrote "
+                "another customer's data to a sink.",
             ),
             timeline if t.trace else h("p", None, "No tool calls."),
             h("h3", None, "Violations not tied to one call") if loose else None,
