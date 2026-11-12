@@ -15,6 +15,11 @@ Run it:
     MODEL=llama3.1:8b mulebench run \
         --agent-module openai_compatible_agent:factory --agent-path examples --trials 10
 
+PowerShell (module form, in case Application Control blocks mulebench.exe):
+    $env:MODEL = "llama3.1:8b"
+    uv run python -m mulebench check-agent `
+        --agent-module openai_compatible_agent:factory --agent-path examples
+
 WARNING: with a base URL that is not loopback, every scenario (synthetic
 customer data, injected payloads) is sent to that host, and the calls may cost
 money. The factory prints a warning when that is the case.

@@ -4,6 +4,8 @@ Run it:
     mulebench check-agent --agent-module minimal_agent:factory --agent-path examples --trials 1
     mulebench run --agent-module minimal_agent:factory --agent-path examples --trials 1
 
+If Windows Application Control blocks mulebench.exe, use `uv run python -m mulebench`.
+
 It trusts only the session note and the customer's request, never tool output,
 so the packaged attacks should fail against it. Real agents are not this simple:
 use it to see the shape of the adapter, not as a baseline.

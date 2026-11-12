@@ -12,19 +12,22 @@ from mulebench.byoa import AgentReply, ExternalTask, Tools
 
 
 class MyAgent:
-    name = "my-agent"            # optional; shown in the report
-    params = {"model": "x"}      # optional; JSON-safe; stored in the report
+    name = "my-agent"  # optional; shown in the report
+    params = {"model": "x"}  # optional; JSON-safe; stored in the report
 
     def run(self, task: ExternalTask, tools: Tools) -> AgentReply | str:
-        accounts = [line.split("=", 1)[1] for line in task.session_note.splitlines()
-                    if line.startswith("ACCOUNT id=")]
+        accounts = [
+            line.split("=", 1)[1]
+            for line in task.session_note.splitlines()
+            if line.startswith("ACCOUNT id=")
+        ]
         result = tools.call("get_balance", {"account_id": accounts[0]})
         if not result.ok:
             return AgentReply(final_text="Sorry, I could not read your balance.")
         return f"Your balance is {result.data['balance_cents']} cents."
 
 
-def factory() -> MyAgent:        # takes no arguments
+def factory() -> MyAgent:  # takes no arguments
     return MyAgent()
 ```
 
@@ -51,6 +54,20 @@ mulebench run --agent-module my_pkg.agent:factory [--agent-path DIR] --out repor
 # 3. Browse it.
 mulebench view report.json --out site
 ```
+
+On Windows, Application Control (for example Smart App Control or WDAC) can
+block the generated `mulebench.exe` launcher. If it does, run the module with
+`uv run python -m mulebench ...` instead of `uv run mulebench ...`. The
+arguments are the same.
+
+```powershell
+uv run python -m mulebench check-agent --agent-module my_pkg.agent:factory --agent-path DIR
+uv run python -m mulebench run --agent-module my_pkg.agent:factory --agent-path DIR --out report.json
+```
+
+Adapters that read environment variables need them set first. In POSIX shells
+use `MODEL=x mulebench ...`. In PowerShell set them for the session with
+`$env:MODEL = "x"`, then run the command.
 
 - `--agent-path DIR` puts `DIR` on the import path. You need it when your
   module is not installed in the environment.

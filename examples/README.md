@@ -4,6 +4,11 @@ Two external agents that use the public API in `mulebench.byoa`. Neither one
 adds a dependency. See [docs/bring-your-own-agent.md](../docs/bring-your-own-agent.md)
 for the API and the trust model.
 
+On Windows, Application Control (for example Smart App Control or WDAC) can
+block the generated `mulebench.exe` launcher. If it does, run the module with
+`uv run python -m mulebench ...` instead of `uv run mulebench ...`. The
+arguments are the same.
+
 | File | What it shows |
 | --- | --- |
 | `minimal_agent.py` | A plain-Python agent with no model. It reads the session note, calls tools and returns a string. |
@@ -14,6 +19,13 @@ for the API and the trust model.
 ```sh
 uv run mulebench check-agent --agent-module minimal_agent:factory --agent-path examples --trials 1
 uv run mulebench run --agent-module minimal_agent:factory --agent-path examples --trials 1
+```
+
+If the launcher is blocked:
+
+```sh
+uv run python -m mulebench check-agent --agent-module minimal_agent:factory --agent-path examples --trials 1
+uv run python -m mulebench run --agent-module minimal_agent:factory --agent-path examples --trials 1
 ```
 
 This agent is deterministic, so `--trials 1` is enough. `check-agent` still
@@ -27,6 +39,20 @@ MODEL=llama3.1:8b uv run mulebench check-agent \
     --agent-module openai_compatible_agent:factory --agent-path examples
 MODEL=llama3.1:8b uv run mulebench run \
     --agent-module openai_compatible_agent:factory --agent-path examples --trials 10
+```
+
+PowerShell sets the variables for the session first. This example uses the
+module form:
+
+```powershell
+$env:MODEL = "llama3.1:8b"
+$env:OPENAI_BASE_URL = "http://localhost:11434/v1"   # optional; this is the default
+# $env:OPENAI_API_KEY = "..."                        # optional; never printed or stored
+uv run python -m mulebench check-agent `
+    --agent-module openai_compatible_agent:factory --agent-path examples
+uv run python -m mulebench run `
+    --agent-module openai_compatible_agent:factory --agent-path examples --trials 10
+Remove-Item Env:MODEL, Env:OPENAI_BASE_URL -ErrorAction SilentlyContinue
 ```
 
 - `OPENAI_BASE_URL` defaults to `http://localhost:11434/v1` (a local Ollama).
