@@ -28,7 +28,7 @@ from mulebench.harness.models import (
     SummaryRow,
     SummaryTotals,
 )
-from mulebench.harness.runner import RunOutcome
+from mulebench.harness.runner import RunOutcome, agent_name
 from mulebench.harness.stats import HEADLINE_MIN_TRIALS
 from mulebench.harness.validity import (
     coerced_counts,
@@ -37,6 +37,8 @@ from mulebench.harness.validity import (
     tool_call_validity,
     tool_calls_per_trial,
 )
+
+SCHEMA_MINOR = 1  # see Report.schema_minor
 
 LIMITATIONS = [
     "The scripted agent obeys instructions found in tool output by construction; "
@@ -124,8 +126,9 @@ def build_report(
     priced = all(c is not None for c in costs)
     return Report(
         schema_version=3,
+        schema_minor=SCHEMA_MINOR,
         generator=Generator(name="mulebench", version=mulebench.__version__),
-        agent=AgentDescriptor(name=type(agent).__name__, params=dict(getattr(agent, "params", {}))),
+        agent=AgentDescriptor(name=agent_name(agent), params=dict(getattr(agent, "params", {}))),
         llm=llm,
         pricing=pricing,
         axes=Axes(

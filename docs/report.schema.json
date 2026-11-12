@@ -40,7 +40,8 @@
           "enum": [
             "user_request",
             "tool_output",
-            "model"
+            "model",
+            "unknown"
           ],
           "title": "Origin",
           "type": "string"
@@ -368,8 +369,15 @@
           "type": "integer"
         },
         "injected_steps": {
-          "title": "Injected Steps",
-          "type": "integer"
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Injected Steps"
         }
       },
       "required": [
@@ -2138,6 +2146,11 @@
     "schema_version": {
       "const": 3,
       "title": "Schema Version",
+      "type": "integer"
+    },
+    "schema_minor": {
+      "default": 0,
+      "title": "Schema Minor",
       "type": "integer"
     },
     "generator": {

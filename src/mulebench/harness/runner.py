@@ -182,7 +182,11 @@ def run_scenario(
 def describe_agent(agent: object, applied_hints: Mapping[str, object]) -> AgentDescriptor:
     params = dict(getattr(agent, "params", {}))
     params["agent_hints"] = dict(applied_hints)
-    return AgentDescriptor(name=type(agent).__name__, params=params)
+    return AgentDescriptor(name=agent_name(agent), params=params)
+
+
+def agent_name(agent: object) -> str:
+    return str(getattr(agent, "report_name", None) or type(agent).__name__)
 
 
 def apply_hints(agent: Agent, hints: Mapping[str, object]) -> tuple[Agent, AgentDescriptor]:
@@ -332,7 +336,9 @@ def run_trial(
             ok_calls=sum(r.outcome == "ok" for r in trace),
             denied_calls=sum(r.outcome == "denied" for r in trace),
             failed_calls=sum(r.outcome not in ("ok", "denied") for r in trace),
-            injected_steps=sum(s.origin == "tool_output" for s in run.steps),
+            injected_steps=None
+            if any(s.origin == "unknown" for s in run.steps)
+            else sum(s.origin == "tool_output" for s in run.steps),
         ),
     )
 

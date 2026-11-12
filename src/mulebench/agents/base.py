@@ -8,7 +8,9 @@ from pydantic import BaseModel, ConfigDict
 
 from mulebench.tools.client import ToolClient
 
-StepOrigin = Literal["user_request", "tool_output", "model"]
+# "unknown": recorded at the tool boundary for an external agent, which
+# cannot be trusted to label where an instruction came from.
+StepOrigin = Literal["user_request", "tool_output", "model", "unknown"]
 StopReason = Literal["done", "step_cap", "turn_cap", "refused", "errored"]
 SessionNoteChannel = Literal["operator", "system_prompt"]
 
@@ -91,6 +93,9 @@ class AgentRun(_Model):
     steps: tuple[AgentStep, ...]
     stopped: StopReason
     model_calls: tuple[ModelCallRecord, ...] = ()
+    # False when the agent does not report its model calls (external agents
+    # without them): token, cost and context metrics are then "not recorded".
+    model_calls_recorded: bool = True
     error: str | None = None  # set when stopped == "errored"
     session_note_channel: SessionNoteChannel | None = None
     tool_calls_total: int = 0  # tool calls the model emitted, valid or not
