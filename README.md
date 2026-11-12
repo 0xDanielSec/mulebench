@@ -157,18 +157,31 @@ uv run pytest                                      # offline, no API keys
 
 ## Bring your own agent
 
-**Coming next.** The plan is a small adapter interface so a user-owned agent
-can run against the same scenarios, ledger and invariants. Today the
-harness ships the scripted agent and an experimental LLM-backed agent
-(`--agent llm`) that replays recorded cassettes offline by default; live
-recording is opt-in and cost-capped. Local models run through an
+Write a class with one method, `run(task, tools)`, plus a zero-argument
+factory. Then run your agent against the same scenarios, ledger, guards and
+invariants:
+
+```sh
+mulebench check-agent --agent-module my_pkg.agent:factory   # benign controls first
+mulebench run --agent-module my_pkg.agent:factory --out report.json
+```
+
+The agent sees only tools, never the ledger. Attack numbers are shown only
+after the agent completes the benign controls. See
+[`docs/bring-your-own-agent.md`](docs/bring-your-own-agent.md) and
+[`examples/`](examples/README.md), which has a plain-Python agent and a
+hand-written OpenAI-compatible loop.
+
+The harness also ships the scripted agent and an experimental LLM-backed agent
+(`--agent llm`). The LLM agent replays recorded cassettes offline by default.
+Live recording is opt-in and cost-capped. Local models run through an
 OpenAI-compatible server such as Ollama (`--provider openai-compatible`,
 `mulebench doctor`), with no paid API. See [`docs/agents.md`](docs/agents.md),
 [`docs/llm.md`](docs/llm.md) and [`docs/local-models.md`](docs/local-models.md).
 
 ## Roadmap
 
-- Bring-your-own-agent adapter and an MCP wrapper for the tools.
+- An MCP wrapper for the tools.
 - Tool-call retries as an experiment axis: return a rejected call's validation
   error to the model and allow N retries, measuring self-correction separately
   from first-attempt validity (today a malformed call ends the trial as errored).

@@ -16,6 +16,10 @@ class Agent(Protocol):
 - `AgentRun`: the ordered `AgentStep`s (tool, args, origin, outcome, error
   message) and why the run stopped (`done` or `step_cap`).
 
+External agents use a smaller public API (`mulebench.byoa`) and an adapter
+onto this protocol. Their steps are recorded at the tool boundary with origin
+`"unknown"`. See [bring-your-own-agent.md](bring-your-own-agent.md).
+
 ## Session note
 
 The harness renders the note from structured data and delivers it as a

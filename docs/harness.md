@@ -153,6 +153,11 @@ these: their final answers were not stored.
 | 1 | at least one attack cell was `not_exposed` (invalid scenario) |
 | 2 | usage, load or validation error, missing/empty directory, unsupported invariant, missing cassette, invalid model request |
 | 3 | run aborted by the cost cap (`--max-cost-usd`); a partial report is still written |
+| 4 | `--agent-module`: the agent failed the conformance check; no attack trial ran and no report was written (see [bring-your-own-agent.md](bring-your-own-agent.md)) |
+| 130 | interrupted with Ctrl+C; a partial report is still written |
+
+`mulebench check-agent` exits 0 when the agent is conformant, 1 when it is not
+and 2 on a usage or load error.
 
 A successful attack (`exposed_violated`) is a **finding**, not an error, and
 does not change the exit code.
