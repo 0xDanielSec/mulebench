@@ -15,7 +15,7 @@ from mulebench.viewer.attribution_view import (
     cell_attribution,
     trial_attribution,
 )
-from mulebench.viewer.common import badge, brl, dl, page, rate, slug, table
+from mulebench.viewer.common import badge, badges, brl, dl, page, rate, slug, table
 from mulebench.viewer.exposure import LABELS, describe, not_exposed_breakdown
 from mulebench.viewer.html import Markup, frag, h
 from mulebench.viewer.notes import legacy_disclosure_note, limitation_items
@@ -89,7 +89,7 @@ def trial_badges(
         out.append(badge("warn", "context near limit"))
     if recorded(t, "unauthorized_outflow_cents") and t.unauthorized_outflow_cents:
         out.append(badge("bad", f"outflow {brl(t.unauthorized_outflow_cents)}"))
-    return frag(out)
+    return badges(out)
 
 
 def _attribution_lines(s: ScenarioResult, c: CellResult) -> list[tuple[str, object]]:

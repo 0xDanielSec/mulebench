@@ -44,6 +44,16 @@ def badge(kind: BadgeKind, text: str) -> Markup:
     return h("span", {"class": f"badge {kind}"}, text)
 
 
+def badges(items: Sequence[Markup]) -> Markup:
+    """Badges separated by " · " in the DOM, so copied text stays readable."""
+    out: list[object] = []
+    for i, b in enumerate(items):
+        if i:
+            out.append(h("span", {"class": "sep"}, " · "))
+        out.append(b)
+    return frag(out)
+
+
 def dl(items: Sequence[tuple[str, object]]) -> Markup:
     return h("dl", None, [frag(h("dt", None, k), h("dd", None, v)) for k, v in items])
 
@@ -56,6 +66,8 @@ def table(
     table_id: str | None = None,
     numeric: Sequence[int] = (),
 ) -> Markup:
+    if not rows:
+        return h("p", {"class": "empty"}, h("strong", None, caption), ": None")
     head = h(
         "thead",
         None,

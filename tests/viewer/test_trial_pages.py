@@ -132,3 +132,24 @@ def test_reconstruction_warns_on_hash_mismatch() -> None:
     same = s.model_copy(update={"scenario_sha256": report.scenarios[0].scenario_sha256})
     _, _, ok_notes = ledger_diff(same, c, t)
     assert not any("Warning" in n for n in ok_notes)
+
+
+def _pilot_03_page(scenario: str, prompt: str, trial: int) -> str:
+    files = pilot_site()
+    return next(
+        v
+        for k, v in files.items()
+        if k.startswith(f"r4/trial/{scenario}--{prompt}") and k.endswith(f"--attack--{trial}.html")
+    )
+
+
+def test_outcome_badges_read_as_text() -> None:
+    page = _pilot_03_page("dispute-flow-foreign-read-009", "baseline", 5)
+    text = re.sub(r"<[^>]+>", "", page)
+    assert "violated · attack (attributed) · disclosed" in text
+
+
+def test_empty_table_shows_none() -> None:
+    page = _pilot_03_page("dispute-flow-foreign-read-009", "baseline", 5)
+    assert "<strong>Transfers made during the trial</strong>: None" in page
+    assert "<caption>Transfers made during the trial</caption>" not in page

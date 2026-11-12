@@ -95,6 +95,7 @@ CSS = (
     "ol.timeline>li{border-left:4px solid var(--border);padding:.25rem 0 .5rem .75rem;"
     "margin-bottom:.75rem}"
     "ol.timeline>li.violation{border-left-color:var(--bad-fg)}"
+    ".sep{color:var(--muted)}"
     "ol.timeline>li.injected{border-left-color:var(--warn-fg)}"
     ".note{border:1px solid var(--border);background:var(--surface);padding:.5rem .75rem;"
     "margin:.5rem 0}"
