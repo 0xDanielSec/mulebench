@@ -1,7 +1,8 @@
 """Command-line interface (argparse only).
 
     mulebench run [<dir> | --builtin] [--scenario ID ...] [--out report.json]
-                  [--agent scripted|llm] [--trials N] [--max-steps N]
+                  [--agent scripted|llm | --agent-module MOD:FACTORY [--agent-path DIR]]
+                  [--trials N] [--max-steps N]
                   [--provider anthropic|openai-compatible]
                   [--model M] [--effort E] [--prompt-variants a,b]
                   [--cassettes DIR] [--record] [--max-cost-usd X]
@@ -13,7 +14,7 @@
     mulebench view REPORT.json [REPORT.json ...] --out DIR [--force]
 
 Long runs write a per-trial checkpoint (JSON Lines): --checkpoint FILE, or by
-default `<out>.checkpoint.jsonl` for --agent llm with --out. --resume skips the
+default `<out>.checkpoint.jsonl` for --agent llm or --agent-module with --out. --resume skips the
 trials already in it. Ctrl+C keeps the finished trials and writes a valid
 partial report. The checkpoint is deleted once a run completes.
 
@@ -47,6 +48,7 @@ from mulebench.reports import build_report, render_table, schema_to_json, write_
 from mulebench.tools.client import tool_schema_sha256
 
 DEFAULT_LLM_TRIALS = 10
+DEFAULT_EXTERNAL_TRIALS = 5
 LOCAL_URL = "http://localhost:11434/v1"  # Ollama; same as http_transport.DEFAULT_BASE_URL
 LOCAL_MAX_TOKENS = 2048  # output tokens also count toward a small local num_ctx
 SERVER_META_FILE = "_server_meta.json"  # in the cassette directory
@@ -69,9 +71,25 @@ def _parser() -> argparse.ArgumentParser:
         "--builtin", action="store_true", help="run the packaged scenarios (default)"
     )
     run.add_argument("--out", type=Path, help="write the JSON report here")
-    run.add_argument("--agent", choices=("scripted", "llm"), default="scripted")
+    which = run.add_mutually_exclusive_group()
+    which.add_argument("--agent", choices=("scripted", "llm"), default=None)
+    which.add_argument(
+        "--agent-module",
+        metavar="MODULE:FACTORY",
+        help="your own agent: a zero-argument factory, e.g. my_pkg.agent:factory "
+        "(see docs/bring-your-own-agent.md)",
+    )
     run.add_argument(
-        "--trials", type=int, help=f"trials per cell (scripted: 1, llm: {DEFAULT_LLM_TRIALS})"
+        "--agent-path",
+        type=Path,
+        metavar="DIR",
+        help="directory added to the import path for --agent-module",
+    )
+    run.add_argument(
+        "--trials",
+        type=int,
+        help=f"trials per cell (scripted: 1, llm: {DEFAULT_LLM_TRIALS}, "
+        f"--agent-module: {DEFAULT_EXTERNAL_TRIALS})",
     )
     run.add_argument("--max-steps", type=int, default=DEFAULT_MAX_STEPS, help="agent step cap")
     run.add_argument(
@@ -266,8 +284,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     llm_config: LLMConfig | None = None
     pricing: PricingInfo | None = None
     agent: Agent
-    if args.agent == "scripted":
+    if args.agent_path is not None and args.agent_module is None:
+        return _error("--agent-path needs --agent-module")
+    if args.agent_module is not None:
+        from mulebench.byoa import AgentLoadError, load_agent
+
+        try:
+            agent = load_agent(args.agent_module, args.agent_path)
+        except AgentLoadError as exc:
+            return _error(str(exc))
         prompts: list[str] = [NO_PROMPT]
+        trials = args.trials or DEFAULT_EXTERNAL_TRIALS
+    elif args.agent in (None, "scripted"):
+        prompts = [NO_PROMPT]
         trials = args.trials or 1
         agent = ScriptedAgent(max_steps=args.max_steps)
     else:
@@ -282,10 +311,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     from mulebench.harness.checkpoint import Checkpoint, CheckpointError, fingerprint
 
     checkpoint_path: Path | None = args.checkpoint
-    if checkpoint_path is None and args.agent == "llm" and args.out:
+    long_run = args.agent == "llm" or args.agent_module is not None
+    if checkpoint_path is None and long_run and args.out:
         checkpoint_path = args.out.with_name(args.out.name + ".checkpoint.jsonl")
     if args.resume and checkpoint_path is None:
-        return _error("--resume needs --checkpoint FILE (or --agent llm with --out)")
+        return _error(
+            "--resume needs --checkpoint FILE (or --agent llm / --agent-module with --out)"
+        )
     checkpoint: Checkpoint | None = None
     if checkpoint_path is not None:
         config = {
