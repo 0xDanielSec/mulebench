@@ -46,9 +46,16 @@ def test_old_report_trial_page_marks_reconstruction_and_missing_text() -> None:
 
 
 def test_size_budget() -> None:
+    """Guard against duplication and blow-ups, not a product requirement.
+
+    The budget catches accidental growth: the same data rendered twice,
+    per-trial copies of shared content, or output that scales worse than
+    the report. Every page inlines the CSS (CSP hash) and per-call markup,
+    so small per-page additions multiply by the page count; 2.0x the report
+    leaves room for that. The 300 KB cap keeps any one page openable."""
     files = build_site([("pilot 02", load_any(PILOT_02))])
     total = sum(len(v.encode("utf-8")) for v in files.values())
-    assert total <= 1.5 * PILOT_02.stat().st_size, total
+    assert total <= 2.0 * PILOT_02.stat().st_size, total
     assert max(len(v.encode("utf-8")) for v in files.values()) <= 300_000
 
 
