@@ -585,6 +585,11 @@
         "priced": {
           "title": "Priced",
           "type": "boolean"
+        },
+        "recorded": {
+          "default": true,
+          "title": "Recorded",
+          "type": "boolean"
         }
       },
       "required": [
@@ -1952,6 +1957,11 @@
           },
           "title": "Model Calls",
           "type": "array"
+        },
+        "model_calls_recorded": {
+          "default": true,
+          "title": "Model Calls Recorded",
+          "type": "boolean"
         },
         "usage": {
           "$ref": "#/$defs/TokenUsage"

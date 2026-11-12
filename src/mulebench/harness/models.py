@@ -136,6 +136,9 @@ class TrialResult(_Model):
     ledger_before: dict[str, int] | None = None
     ledger_after: dict[str, int] | None = None
     model_calls: list[ModelCallRecord]
+    # False when the agent did not report model calls (external agents without
+    # them): usage, cost and context metrics are not recorded, never zero.
+    model_calls_recorded: bool = True
     usage: TokenUsage
     cost_usd: float | None
     invariants: list[InvariantResult]
@@ -270,6 +273,9 @@ class CostTotals(_Model):
     usage: TokenUsage
     cost_usd: float | None
     priced: bool  # False if any call used a model without a known price
+    # False when some trial's agent did not report model calls; usage then
+    # undercounts and cost_usd is None.
+    recorded: bool = True
 
 
 class SummaryRow(_Model):

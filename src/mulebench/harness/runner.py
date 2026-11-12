@@ -308,8 +308,11 @@ def run_trial(
         ),
         **output_cap_fields([c.stop_reason for c in run.model_calls]),
         model_calls=list(run.model_calls),
+        model_calls_recorded=run.model_calls_recorded,
         usage=usage,
-        cost_usd=None if any(c is None for c in costs) else round(sum(c or 0.0 for c in costs), 6),
+        cost_usd=None
+        if not run.model_calls_recorded or any(c is None for c in costs)
+        else round(sum(c or 0.0 for c in costs), 6),
         invariants=invariants,
         outgoing_transfers=[
             OutgoingTransfer(

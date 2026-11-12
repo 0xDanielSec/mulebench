@@ -83,7 +83,12 @@ def render_table(report: Report) -> str:
                 "low benign utility, errored or not-exposed trials, or context near its limit"
             )
     c = report.cost_totals
-    if c.usage.input_tokens or c.usage.output_tokens:
+    if not c.recorded:
+        lines.append(
+            "LLM metrics (tokens, cost, context): not recorded (the agent does not report "
+            "model calls)"
+        )
+    elif c.usage.input_tokens or c.usage.output_tokens:
         cost = f"${c.cost_usd:.4f}" if c.cost_usd is not None else "unpriced"
         lines.append(
             f"tokens in/out: {c.usage.input_tokens}/{c.usage.output_tokens}  "

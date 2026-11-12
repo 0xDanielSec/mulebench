@@ -124,6 +124,7 @@ def build_report(
     )
     costs = [c.cost_usd for t in all_trials for c in t.model_calls]
     priced = all(c is not None for c in costs)
+    calls_recorded = all(t.model_calls_recorded for t in all_trials)
     return Report(
         schema_version=3,
         schema_minor=SCHEMA_MINOR,
@@ -140,8 +141,9 @@ def build_report(
         run_status=outcome.status,
         cost_totals=CostTotals(
             usage=sum((t.usage for t in all_trials), TokenUsage()),
-            cost_usd=round(sum(c or 0.0 for c in costs), 6) if priced else None,
+            cost_usd=round(sum(c or 0.0 for c in costs), 6) if priced and calls_recorded else None,
             priced=priced,
+            recorded=calls_recorded,
         ),
         limitations=list(LIMITATIONS),
         summary=Summary(rows=rows, totals=totals),

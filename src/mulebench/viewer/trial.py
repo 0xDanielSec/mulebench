@@ -334,22 +334,30 @@ def trial_page(
     else:
         answer = h("p", {"class": "note"}, "Not stored: this report predates final-answer storage.")
 
-    calls = table(
-        "Model calls (metadata only; model text and reasoning are not shown)",
-        ["#", "Stop reason", "Input tokens", "Output tokens", "Reasoning"],
-        [
+    calls = (
+        h(
+            "p",
+            {"class": "note"},
+            "Model calls: not recorded (the agent does not report them).",
+        )
+        if not t.model_calls_recorded
+        else table(
+            "Model calls (metadata only; model text and reasoning are not shown)",
+            ["#", "Stop reason", "Input tokens", "Output tokens", "Reasoning"],
             [
-                i,
-                frag(m.stop_reason or "-", " ", badge("warn", "cut by cap"))
-                if m.stop_reason in ("length", "max_tokens")
-                else (m.stop_reason or "-"),
-                m.usage.input_tokens,
-                m.usage.output_tokens,
-                "present (not shown)" if m.reasoning_present else "none",
-            ]
-            for i, m in enumerate(t.model_calls, start=1)
-        ],
-        numeric=(2, 3),
+                [
+                    i,
+                    frag(m.stop_reason or "-", " ", badge("warn", "cut by cap"))
+                    if m.stop_reason in ("length", "max_tokens")
+                    else (m.stop_reason or "-"),
+                    m.usage.input_tokens,
+                    m.usage.output_tokens,
+                    "present (not shown)" if m.reasoning_present else "none",
+                ]
+                for i, m in enumerate(t.model_calls, start=1)
+            ],
+            numeric=(2, 3),
+        )
     )
 
     origins = {st.seq: st.origin for st in t.agent_steps}

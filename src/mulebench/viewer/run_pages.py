@@ -20,6 +20,7 @@ from mulebench.viewer.exposure import LABELS, describe, not_exposed_breakdown
 from mulebench.viewer.html import Markup, frag, h
 from mulebench.viewer.notes import legacy_disclosure_note, limitation_items
 from mulebench.viewer.recorded import (
+    NOT_RECORDED,
     cell_cap,
     money,
     recorded,
@@ -331,7 +332,12 @@ def cell_page(report_title: str, s: ScenarioResult, c: CellResult) -> str:
         ("unauthorized outflow", shown(c, "unauthorized_outflow_cents", money)),
         ("model calls cut at max_tokens", cap.label(cap.calls)),
         ("trials cut by cap", cap.label(cap.trials)),
-        ("context near limit (trials)", shown(c, "context_near_limit")),
+        (
+            "context near limit (trials)",
+            shown(c, "context_near_limit")
+            if any(t.model_calls_recorded for t in c.trials)
+            else NOT_RECORDED,
+        ),
         ("agent", c.agent.name),
     ]
     rows = [
@@ -340,7 +346,7 @@ def cell_page(report_title: str, s: ScenarioResult, c: CellResult) -> str:
             trial_badges(t, c.variant, *trial_attribution(s, c, t)),
             shown(t, "unauthorized_outflow_cents", money),
             t.metrics.tool_calls,
-            len(t.model_calls),
+            len(t.model_calls) if t.model_calls_recorded else NOT_RECORDED,
             t.metrics.stopped,
         ]
         for t in c.trials
