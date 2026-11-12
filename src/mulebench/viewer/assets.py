@@ -56,6 +56,22 @@ def _vars(theme: int) -> str:
     return "".join(f"--{k}:{v[theme]};" for k, v in PALETTE.items())
 
 
+# Print: black text on white, solid badges (white text on the light theme's
+# dark status colour), the same red/amber call borders, no theme toggle, no
+# breaks inside a call or a table. Compact: it is inlined on every page.
+# `:root:root:root` outranks the dark-theme selectors.
+KINDS = ("bad", "good", "warn", "info", "neutral")
+PRINT_BADGES: dict[str, str] = {k: PALETTE[f"{k}-fg"][0] for k in KINDS}
+PRINT_CSS = (
+    "@media print{:root:root:root{--fg:#000;--bg:#fff;--muted:#000;--surface:#fff;"
+    f"--mark-bg:{PALETTE['mark-bg'][0]};"
+    + ";".join(f"--{k}-fg:{PRINT_BADGES[k]}" for k in ("bad", "warn"))
+    + "}*{print-color-adjust:exact}"
+    + "".join(f".{k}{{background:{v}}}" for k, v in PRINT_BADGES.items())
+    + ",".join(f".{k}" for k in KINDS)
+    + "{color:#fff}#theme-toggle{display:none}li,table{break-inside:avoid}}"
+)
+
 CSS = (
     f":root{{{_vars(0)}color-scheme:light}}"
     f"@media (prefers-color-scheme: dark){{:root:not([data-theme=light]){{{_vars(1)}"
@@ -102,7 +118,7 @@ CSS = (
     "margin:.5rem 0}"
     "button,input{font:inherit;color:var(--fg);background:var(--surface);"
     "border:1px solid var(--border);padding:.2rem .5rem}"
-    "td.num,th.num{text-align:right}"
+    "td.num,th.num{text-align:right}" + PRINT_CSS
 )
 
 JS = (

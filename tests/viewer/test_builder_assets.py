@@ -8,7 +8,17 @@ import re
 
 import pytest
 
-from mulebench.viewer.assets import CSP, CSS, JS, PALETTE, TEXT_PAIRS, UI_PAIRS, contrast
+from mulebench.viewer.assets import (
+    CSP,
+    CSS,
+    JS,
+    PALETTE,
+    PRINT_BADGES,
+    PRINT_CSS,
+    TEXT_PAIRS,
+    UI_PAIRS,
+    contrast,
+)
 from mulebench.viewer.html import Markup, esc, frag, h
 
 EVIL = '<script>alert(1)</script>"><img src=x onerror=alert(1)>'
@@ -94,3 +104,27 @@ def test_palette_contrast(theme: int) -> None:
         assert ratio >= 4.5, (theme, fg, bg, round(ratio, 2))
     for fg, bg in UI_PAIRS:
         assert contrast(PALETTE[fg][theme], PALETTE[bg][theme]) >= 3.0, (theme, fg, bg)
+
+
+def test_print_stylesheet_is_inline_and_covered_by_the_csp() -> None:
+    assert PRINT_CSS.startswith("@media print{")
+    assert PRINT_CSS in CSS
+    assert f"style-src 'sha256-{_sha(CSS)}'" in CSP
+    for rule in (
+        "--fg:#000;--bg:#fff;",
+        "#theme-toggle{display:none}",
+        "li,table{break-inside:avoid}",
+        "print-color-adjust:exact",
+        f".bad{{background:{PALETTE['bad-fg'][0]}}}",
+    ):
+        assert rule in PRINT_CSS
+    # call borders keep the light theme's red and amber in print
+    assert f"--bad-fg:{PALETTE['bad-fg'][0]}" in PRINT_CSS
+    assert f"--warn-fg:{PALETTE['warn-fg'][0]}" in PRINT_CSS
+    assert "li.disclosure{border-left-color:var(--bad-fg)}" in CSS
+    assert "li.injected{border-left-color:var(--warn-fg)}" in CSS
+
+
+def test_print_badges_have_contrast() -> None:
+    for fill in PRINT_BADGES.values():
+        assert contrast("#ffffff", fill) >= 4.5  # white badge text, and visible on paper
