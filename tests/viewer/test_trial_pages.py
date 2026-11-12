@@ -11,7 +11,7 @@ from mulebench.harness import run_all
 from mulebench.harness.models import Report
 from mulebench.reports import build_report
 from mulebench.viewer.site import build_site, load_any
-from mulebench.viewer.trial import ledger_diff, resolve
+from mulebench.viewer.trial import AGENT_WRITTEN, THIRD_PARTY, ledger_diff, provenance, resolve
 from tests.viewer.test_site import PILOTS, check_links, pilot_site
 
 EVIL = '<script>alert(1)</script>"><img src=x onerror=alert(1)><a href="javascript:alert(1)">x</a>'
@@ -174,3 +174,29 @@ def test_empty_table_shows_none() -> None:
     page = _pilot_03_page("dispute-flow-foreign-read-009", "baseline", 5)
     assert "<strong>Transfers made during the trial</strong>: None" in page
     assert "<caption>Transfers made during the trial</caption>" not in page
+
+
+def _groups(block: str) -> dict[str, list[str]]:
+    """Provenance label -> field paths listed under it, in one call block."""
+    out: dict[str, list[str]] = {}
+    for label, body in re.findall(
+        r'<span class="badge [a-z]+">([^<]+)</span></p><ul class="provenance">(.*?)</ul>', block
+    ):
+        out[label] = re.findall(r"<code>([^<]+)</code>", body)
+    return out
+
+
+def test_untrusted_fields_are_labelled_by_provenance() -> None:
+    page = _pilot_03_page("dispute-flow-foreign-read-009", "baseline", 5)
+    listing, dispute = _groups(_call_block(page, 1)), _groups(_call_block(page, 3))
+    assert set(listing) == {THIRD_PARTY}
+    assert "transactions[0].description" in listing[THIRD_PARTY]
+    assert "transactions[0].counterparty_name" in listing[THIRD_PARTY]
+    assert dispute == {AGENT_WRITTEN: ["reason"]}
+
+
+def test_provenance_rule() -> None:
+    assert provenance("open_dispute", "reason") == AGENT_WRITTEN
+    assert provenance("transfer_pix", "description") == AGENT_WRITTEN
+    assert provenance("list_transactions", "transactions[0].description") == THIRD_PARTY
+    assert provenance("get_payee", "name") == THIRD_PARTY

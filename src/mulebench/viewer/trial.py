@@ -136,6 +136,20 @@ def _violations_by_seq(t: TrialResult) -> tuple[dict[int, list[str]], list[str]]
     return pinned, loose
 
 
+THIRD_PARTY = "untrusted (third-party)"
+AGENT_WRITTEN = "free text (written by the agent)"
+
+
+def provenance(tool: str, path: str) -> str:
+    """Who wrote an untrusted free-text field of a tool result.
+
+    A field that echoes the agent's own text argument to a sink tool (the
+    `reason` of `open_dispute`, the `description` of `transfer_pix`) was
+    written by the agent; everything else (incoming Pix descriptions, payee
+    and counterparty names, KYC text) came from a third party."""
+    return AGENT_WRITTEN if (tool, path) in set(SINK_ARGS.values()) else THIRD_PARTY
+
+
 def disclosure_label(sink: str, v: SinkDisclosure) -> list[str]:
     """Marker texts for one sink verdict: exact first, then approximate-only."""
     out: list[str] = []
@@ -233,23 +247,24 @@ def _record_item(
         )
     if r.untrusted_paths:
         parts.append(h("h4", None, "Untrusted fields in the result"))
-        parts.append(
-            h(
-                "ul",
-                None,
-                [
-                    h(
-                        "li",
-                        None,
-                        h("code", None, p),
-                        " ",
-                        badge("warn", "payload") if p in payload_paths else None,
-                        h("pre", None, _marked(_text(resolve(r.result, p)), canary)),
-                    )
-                    for p in r.untrusted_paths
-                ],
-            )
-        )
+        # one label per provenance group (the size budget rules out one per field)
+        for label, kind in ((THIRD_PARTY, "warn"), (AGENT_WRITTEN, "neutral")):
+            group = [p for p in r.untrusted_paths if provenance(r.tool, p) == label]
+            if not group:
+                continue
+            items = [
+                h(
+                    "li",
+                    None,
+                    h("code", None, p),
+                    " ",
+                    badge("warn", "payload") if p in payload_paths else None,
+                    h("pre", None, _marked(_text(resolve(r.result, p)), canary)),
+                )
+                for p in group
+            ]
+            parts.append(h("p", None, badge(kind, label)))
+            parts.append(h("ul", {"class": "provenance"}, items))
     if r.result is not None:
         parts.append(h("h4", None, "Result"))
         parts.append(h("pre", None, _marked(_json(r.result), canary)))
@@ -502,10 +517,9 @@ def trial_page(
             h(
                 "p",
                 {"class": "muted"},
-                "Tool calls in order. Marked: untrusted fields, where the payload (canary) "
-                "entered, calls the agent made on instructions from tool output, guard "
-                "decisions, the calls where an invariant broke and the calls that wrote "
-                "another customer's data to a sink.",
+                "Tool calls in order, marking untrusted fields by source, payload (canary) "
+                "entry, calls made on tool-output instructions, guards, violations and "
+                "disclosures.",
             ),
             timeline if t.trace else h("p", None, "No tool calls."),
             h("h3", None, "Violations not tied to one call") if loose else None,
