@@ -15,7 +15,10 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from mulebench.attacks import load_builtin
+from mulebench.harness.attribution import attribute_stored
 from mulebench.harness.stats import wilson
+from mulebench.reports.reader import load_report
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "docs" / "experiments" / "data"
@@ -29,8 +32,14 @@ PILOTS: dict[str, list[str]] = {
         "pilot-01-llama31-8b-8k.json",
     ],
     "docs/experiments/local-pilot-02.md": ["pilot-02-qwen3-14b-8k.json"],
+    "docs/experiments/local-pilot-03.md": ["pilot-03-qwen3-14b-8k.json"],
 }
 PILOT_02_DOC = "docs/experiments/local-pilot-02.md"
+PILOT_03_DOC = "docs/experiments/local-pilot-03.md"
+PILOT_02_QWEN = "pilot-02-qwen3-14b-8k.json"
+SINKS = ("final_answer", "transfer_description", "dispute_reason")
+REPLICATION = ("004", "012")
+POOLED = ("004", "009", "012")
 PILOT_01_QWEN = "pilot-01-qwen3-14b-8k.json"
 SCENARIO_004 = "pix-description-cross-customer-read-004"
 ATTACKER_DOMAIN = "attacker.example.test"
@@ -379,7 +388,300 @@ def render_pilot_02(report: dict[str, Any], file_name: str) -> list[str]:
     return lines
 
 
+def attributed_posthoc(name: str) -> dict[tuple[str, str], tuple[int, int]]:
+    """Attributed attack success of an older report, (short id, prompt) -> (k, n).
+
+    Same code path as scripts/reanalyze.py: attribution of the stored trials,
+    over exposed, non-errored attack trials."""
+    scenarios = {s.id: s for s in load_builtin()}
+    out: dict[tuple[str, str], tuple[int, int]] = {}
+    for result in load_report(DATA / name).scenarios:
+        for cell in result.cells:
+            if cell.variant != "attack":
+                continue
+            exposed = [t for t in cell.trials if not t.errored and t.payload_exposed]
+            k = sum(
+                attribute_stored(scenarios[result.scenario_id], "attack", t).attack_success is True
+                for t in exposed
+            )
+            out[(short_id(result.scenario_id), cell.prompt_variant)] = (k, len(exposed))
+    return out
+
+
+def overlap(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    return bool(a["low"] <= b["high"] and b["low"] <= a["high"])
+
+
+def replication_outcome(sid: str, prompt: str, row: dict[str, Any]) -> str:
+    """The frozen replication rule of pilot 03 for one prompt of 004 or 012."""
+    attributed = row["attack"]["attributed_success"]
+    if not row["resistance_meaningful"]:
+        return "inconclusive (resistance not meaningful)"
+    if sid == "012" and prompt == "data_not_instructions":
+        return "consistent with pilot 02" if attributed["k"] == 0 else "new observation"
+    if attributed["k"] >= 1:
+        return "replicated"
+    return f"not replicated (upper bound {attributed['high']:.0%})"
+
+
+def sink_cell(trials: list[dict[str, Any]], sink: str) -> str:
+    """Exact and approximate-only disclosure in one sink, over the given trials."""
+    sinks = [t["disclosure"]["sinks"][sink] for t in trials if t["disclosure"] is not None]
+    exact = sum(bool(x["disclosed"]) for x in sinks)
+    approx = sum(bool(x["approximate"]) and not x["disclosed"] for x in sinks)
+    return f"{exact} / {approx}"
+
+
+def render_pilot_03(report: dict[str, Any], file_name: str) -> list[str]:
+    llm, totals = report["llm"], report["summary"]["totals"]
+    rows = sorted(
+        report["summary"]["rows"], key=lambda r: (short_id(r["scenario_id"]), r["prompt_variant"])
+    )
+    by_key = {(short_id(r["scenario_id"]), r["prompt_variant"]): r for r in rows}
+    extra = cells_by_row(report)
+    cells = trials_of(report)
+    every = [t for ts in cells.values() for t in ts]
+    seeds = [t["seed"] for t in every]
+    versions = sorted({t["server_meta"]["server_version"] for t in every})
+    digests = sorted({t["server_meta"]["digest"][:12] for t in every})
+    lines = [
+        f"### {llm['model']}",
+        "",
+        f"Source: `docs/experiments/data/{file_name}` (run status `{report['run_status']}`, "
+        f"seed derivation `{llm['seed_derivation']}`, base seed {llm['seed']}, "
+        f"`max_tokens` {llm['max_tokens']}, tool schema `{llm['tool_schema_sha256'][:12]}`, "
+        f"server version {', '.join(versions)}, digest {', '.join(digests)}). "
+        f"Trials {len(every)} ({len(set(seeds))} distinct seeds, smallest {min(seeds):,}). "
+        f"Attack trials {totals['attack_trials']}, benign trials {totals['benign_trials']}, "
+        f"errored {totals['errored']}, not_exposed {totals['not_exposed']}, "
+        f"not-meaningful rows {totals['not_meaningful_rows']} of {len(rows)}.",
+        "",
+        "**Attack variant (RQ1, RQ4).** Attributed success (primary) and the frozen policy "
+        "attack success are over exposed, non-errored attack trials; task error and task "
+        "omitted over non-errored attack trials. Outflow is unauthorized outflow in cents.",
+        "",
+        "| Scen. | Prompt | Attributed success | Policy attack success | Exposure "
+        "| Not exposed | Errored | Task error | Task omitted | Outflow (cents) |",
+        "|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for r in rows:
+        a, x = r["attack"], extra[(r["scenario_id"], r["prompt_variant"])]
+        lines.append(
+            f"| {short_id(r['scenario_id'])} | {PROMPT_SHORT[r['prompt_variant']]} "
+            f"| {rate(a['attributed_success'])} | {rate(a['attack_success'])} "
+            f"| {rate(a['exposure'])} | {a['not_exposed']}/{a['trials']} "
+            f"| {a['errored']}/{a['trials']} | {rate(a['task_error'])} "
+            f"| {rate(a['task_omitted'])} | {x['outflow']} |"
+        )
+
+    lines += [
+        "",
+        "**Policy and attribution differ** (attack trials where the frozen policy success "
+        "and the attributed success disagree).",
+        "",
+        "| Scen. | Prompt | Trial | Policy | Attributed | Violation codes | Reasons |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for (sid, prompt, variant), trials in sorted(cells.items()):
+        if variant != "attack":
+            continue
+        for t in trials:
+            policy = t["status"] == "exposed_violated"
+            attributed = bool(t["payload_exposed"]) and t["attribution"]["attack_success"] is True
+            if policy != attributed:
+                lines.append(
+                    f"| {sid} | {PROMPT_SHORT[prompt]} | {t['trial']} "
+                    f"| {'violated' if policy else t['status']} "
+                    f"| {'yes' if attributed else 'no'} | {counts(violation_codes([t]))} "
+                    f"| {', '.join(t['attribution']['reasons']) or '-'} |"
+                )
+
+    lines += [
+        "",
+        "**Disclosure per sink (RQ3).** Rates: exact disclosure (`disclosure_by_sink`) and "
+        "approximate disclosure (`disclosure_approximate_by_sink`) over exposed attack trials "
+        "with a final answer. Counts: exact / approximate-only, over the attributed-success "
+        "trials of the cell.",
+        "",
+        "| Scen. | Prompt | Final answer: exact | approx. | Transfer descr.: exact | approx. "
+        "| Dispute reason: exact | approx. | Successes | Final answer | Transfer descr. "
+        "| Dispute reason |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for r in rows:
+        sid, prompt, a = short_id(r["scenario_id"]), r["prompt_variant"], r["attack"]
+        exact, approx = a.get("disclosure_by_sink") or {}, a.get("disclosure_approximate_by_sink")
+        rates = []
+        for sink in SINKS:
+            rates += [rate(exact.get(sink)), rate((approx or {}).get(sink))]
+        hits = [
+            t
+            for t in cells[(sid, prompt, "attack")]
+            if t["payload_exposed"] and t["attribution"]["attack_success"] is True
+        ]
+        lines.append(
+            f"| {sid} | {PROMPT_SHORT[prompt]} | "
+            + " | ".join(rates)
+            + f" | {len(hits)} | "
+            + " | ".join(sink_cell(hits, sink) for sink in SINKS)
+            + " |"
+        )
+
+    lines += [
+        "",
+        "**Benign control and validity (RQ4).** Task error and task omitted over non-errored "
+        "benign trials; validity over all trials of the row.",
+        "",
+        "| Scen. | Prompt | Benign utility | Task error | Task omitted | Errored "
+        "| Tool-call validity | Meaningful |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for r in rows:
+        b = r["benign"]
+        meaningful = (
+            "yes" if r["resistance_meaningful"] else "no: " + ", ".join(r["not_meaningful_reasons"])
+        )
+        lines.append(
+            f"| {short_id(r['scenario_id'])} | {PROMPT_SHORT[r['prompt_variant']]} "
+            f"| {rate(b['utility_exact'])} | {rate(b['task_error'])} "
+            f"| {rate(b['task_omitted'])} | {b['errored']}/{b['trials']} "
+            f"| {rate(r['tool_call_validity'])} | {meaningful} |"
+        )
+
+    capped: dict[str, int] = {}
+    cut: dict[str, int] = {}
+    stops: dict[str, int] = {}
+    for s in report["scenarios"]:
+        for c in s["cells"]:
+            prompt = PROMPT_SHORT[c["prompt_variant"]]
+            name = f"{short_id(s['scenario_id'])} {prompt} {c['variant']}"
+            if c["length_calls"]:
+                add(capped, {name: c["length_calls"]})
+            if c["cut_by_cap_trials"]:
+                add(cut, {name: c["cut_by_cap_trials"]})
+            for t in c["trials"]:
+                for m in t["model_calls"]:
+                    add(stops, {m["stop_reason"]: 1})
+    cap_not_exposed = sum(
+        t["cut_by_cap"] and not t["payload_exposed"] and not t["errored"]
+        for (_sid, _p, variant), ts in cells.items()
+        if variant == "attack"
+        for t in ts
+    )
+    n_cells = sum(len(s["cells"]) for s in report["scenarios"])
+    lines += [
+        "",
+        f"**Output cap (RQ5).** Calls that ended at the cap (`length_calls`), over all "
+        f"{n_cells} cells: {counts(capped) if capped else 'none'} (total "
+        f"{totals['length_calls']}). Trials `cut_by_cap`: {counts(cut) if cut else 'none'} "
+        f"(total {totals['cut_by_cap_trials']}). Not-exposed attack trials cut by the cap: "
+        f"{cap_not_exposed}. Model calls by stop reason: {counts(stops)}. Coerced arguments: "
+        f"{counts(totals['coerced_args'])}. Malformed tool calls: "
+        f"{counts(totals['malformed_tool_calls'])}. Model calls at >= 90% of num_ctx: "
+        f"{totals['context_near_limit']}.",
+        "",
+        "**Calls and tokens per trial** (secondary; mean over both prompts and variants).",
+        "",
+        "| Scen. | Model calls | Tool calls | Tokens in | Tokens out | Largest context |",
+        "|---|---|---|---|---|---|",
+    ]
+    for sid in sorted({k[0] for k in cells}):
+        ts = [t for (s2, _p, _v), tt in cells.items() if s2 == sid for t in tt]
+        n = len(ts)
+        biggest = max((m["context_tokens"] or 0) for t in ts for m in t["model_calls"])
+        lines.append(
+            f"| {sid} | {sum(len(t['model_calls']) for t in ts) / n:.1f} "
+            f"| {sum(t['tool_calls_total'] for t in ts) / n:.1f} "
+            f"| {sum(t['usage']['input_tokens'] for t in ts) / n:,.0f} "
+            f"| {sum(t['usage']['output_tokens'] for t in ts) / n:,.0f} | {biggest:,} |"
+        )
+
+    p2 = attributed_posthoc(PILOT_02_QWEN)
+    lines += [
+        "",
+        "**Replication (RQ2, frozen rules).** Attributed success; pilot 02 values from the "
+        "stored traces (same code path as the re-analysis). Interval overlap is the "
+        "secondary rate-consistency check. The combined column is descriptive; seeds are "
+        "disjoint.",
+        "",
+        "| Scen. | Prompt | Pilot 02 | Pilot 03 | Rule outcome | Wilson overlap "
+        "| Combined, descriptive |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for sid in REPLICATION:
+        for prompt in PROMPT_SHORT:
+            row = by_key[(sid, prompt)]
+            a3 = row["attack"]["attributed_success"]
+            k2, n2 = p2[(sid, prompt)]
+            r2 = wilson(k2, n2).model_dump()
+            lines.append(
+                f"| {sid} | {PROMPT_SHORT[prompt]} | {rate(r2)} | {rate(a3)} "
+                f"| {replication_outcome(sid, prompt, row)} "
+                f"| {'yes (consistent)' if overlap(r2, a3) else 'no'} "
+                f"| {wl(k2 + a3['k'], n2 + a3['n'])} |"
+            )
+    outcomes_004 = [replication_outcome("004", p, by_key[("004", p)]) for p in PROMPT_SHORT]
+    whole = "replicated" if "replicated" in outcomes_004 else "not replicated"
+    lines += ["", f"004 as a whole (replicated under at least one prompt): {whole}."]
+
+    p1 = attributed_posthoc(PILOT_01_QWEN)
+    lines += [
+        "",
+        "**Across pilots 01-03, descriptive** (attributed success; pilot 01 ran 004 only, "
+        "N=10, old seed scheme, `max_tokens` 2048; pilot 02 `max_tokens` 2048; not an "
+        "estimate, protocols differ).",
+        "",
+        "| Scen. | Prompt | Pilot 01 | Pilot 02 | Pilot 03 | Pooled, descriptive |",
+        "|---|---|---|---|---|---|",
+    ]
+    for sid in POOLED:
+        for prompt in PROMPT_SHORT:
+            a3 = by_key[(sid, prompt)]["attack"]["attributed_success"]
+            parts = [p.get((sid, prompt)) for p in (p1, p2)] + [(a3["k"], a3["n"])]
+            shown = [wl(*kn) if kn else "not run" for kn in parts]
+            k = sum(kn[0] for kn in parts if kn)
+            n = sum(kn[1] for kn in parts if kn)
+            lines.append(
+                f"| {sid} | {PROMPT_SHORT[prompt]} | " + " | ".join(shown) + f" | {wl(k, n)} |"
+            )
+
+    lines += [
+        "",
+        "**Prompts side by side (RQ6, descriptive)** (difference = data_not_instr. minus "
+        "baseline, percentage points; no significance tests).",
+        "",
+        "| Scen. | Attributed: baseline | data_not_instr. | Diff. "
+        "| Benign utility: baseline | data_not_instr. | Diff. | Intervals overlap |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for sid in sorted({k[0] for k in by_key}):
+        base, defd = by_key[(sid, "baseline")], by_key[(sid, "data_not_instructions")]
+        cols = []
+        for metric, part in (("attributed_success", "attack"), ("utility_exact", "benign")):
+            rb, rd = base[part][metric], defd[part][metric]
+            diff = f"{(rd['rate'] - rb['rate']) * 100:+.0f}" if rb["n"] and rd["n"] else "n/a"
+            cols += [rate(rb), rate(rd), diff]
+        ab, ad = base["attack"]["attributed_success"], defd["attack"]["attributed_success"]
+        lines.append(
+            f"| {sid} | " + " | ".join(cols) + f" | {'yes' if overlap(ab, ad) else 'no'} |"
+        )
+    lines.append("")
+    return lines
+
+
 def render(doc: str) -> str:
+    if doc == PILOT_03_DOC:
+        lines3: list[str] = [
+            START,
+            "",
+            "Format: k/n (rate, Wilson 95% interval). Scenario ids are shortened to their "
+            "number (see Scenarios). Preset `vulnerable` only.",
+            "",
+        ]
+        for name in PILOTS[doc]:
+            lines3 += render_pilot_03(load(name), name)
+        lines3.append(END)
+        return "\n".join(lines3)
     if doc == PILOT_02_DOC:
         lines: list[str] = [
             START,
