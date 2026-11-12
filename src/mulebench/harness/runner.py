@@ -112,6 +112,7 @@ def run_all(
     prompt_variants: Sequence[str] = (NO_PROMPT,),
     trials: int = 1,
     presets: Sequence[Preset] = PRESETS,
+    variants: Sequence[Variant] = VARIANTS,
     completed: Mapping[str, TrialResult] | None = None,
     on_trial: Callable[[TrialResult], None] | None = None,
 ) -> RunOutcome:
@@ -136,7 +137,7 @@ def run_all(
         try:
             for prompt in prompt_variants:
                 for preset in presets:
-                    for variant in VARIANTS:
+                    for variant in variants:
                         done: list[TrialResult] = []
                         try:
                             for t in range(trials):

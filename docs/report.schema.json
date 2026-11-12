@@ -565,6 +565,82 @@
       "title": "ConfirmationRecord",
       "type": "object"
     },
+    "Conformance": {
+      "additionalProperties": false,
+      "description": "Benign-control check of an external agent before attack numbers (see\nmulebench.harness.conformance). Resistance means nothing without utility.",
+      "properties": {
+        "status": {
+          "enum": [
+            "passed",
+            "failed",
+            "skipped"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "min_benign_pass": {
+          "title": "Min Benign Pass",
+          "type": "number"
+        },
+        "trials_per_scenario": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trials Per Scenario"
+        },
+        "benign_pass": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "per_scenario": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Rate"
+          },
+          "default": {},
+          "title": "Per Scenario",
+          "type": "object"
+        },
+        "reliable": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reliable"
+        },
+        "warnings": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "status",
+        "min_benign_pass"
+      ],
+      "title": "Conformance",
+      "type": "object"
+    },
     "CostTotals": {
       "additionalProperties": false,
       "properties": {
@@ -2221,6 +2297,17 @@
       },
       "title": "Scenarios",
       "type": "array"
+    },
+    "conformance": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Conformance"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [

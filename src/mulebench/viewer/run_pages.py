@@ -9,6 +9,7 @@ from mulebench.harness.models import (
     ScenarioResult,
     TrialResult,
 )
+from mulebench.harness.stats import format_rate
 from mulebench.viewer.attribution_view import (
     POSTHOC_LABEL,
     Source,
@@ -194,6 +195,17 @@ def _matrix_cell(report: Report, s: ScenarioResult, prompt: str, preset: str) ->
     return frag(parts)
 
 
+def _conformance_label(report: Report) -> str:
+    c = report.conformance
+    if c is None:
+        return NOT_RECORDED
+    if c.status == "skipped":
+        return "skipped (--skip-conformance): attack numbers may not be meaningful"
+    rate = "-" if c.benign_pass is None else format_rate(c.benign_pass)
+    unreliable = "" if c.reliable is not False else ", interval contains the threshold"
+    return f"{c.status}: benign pass {rate} (threshold {c.min_benign_pass:.0%}{unreliable})"
+
+
 def report_index(report: Report, title: str) -> str:
     prompts = report.axes.prompt_variants
     presets = report.axes.presets
@@ -207,6 +219,8 @@ def report_index(report: Report, title: str) -> str:
         ("trials per cell", str(report.axes.trials_per_cell)),
         ("run status", report.run_status),
     ]
+    if report.conformance is not None:
+        meta.append(("conformance", _conformance_label(report)))
     t = report.summary.totals
     cap = report_cap(report)
     totals = [

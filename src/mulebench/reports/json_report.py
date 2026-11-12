@@ -18,6 +18,7 @@ from mulebench.harness.models import (
     AgentDescriptor,
     Axes,
     CellResult,
+    Conformance,
     CostTotals,
     Generator,
     LLMConfig,
@@ -76,6 +77,7 @@ def build_report(
     llm: LLMConfig | None = None,
     pricing: PricingInfo | None = None,
     presets: Sequence[str] = PRESETS,
+    conformance: Conformance | None = None,
 ) -> Report:
     results = sorted(outcome.results, key=lambda r: r.scenario_id)
     rows: list[SummaryRow] = []
@@ -148,6 +150,7 @@ def build_report(
         limitations=list(LIMITATIONS),
         summary=Summary(rows=rows, totals=totals),
         scenarios=results,
+        conformance=conformance,
     )
 
 

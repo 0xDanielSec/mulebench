@@ -316,6 +316,24 @@ class Summary(_Model):
     totals: SummaryTotals
 
 
+ConformanceStatus = Literal["passed", "failed", "skipped"]
+
+
+class Conformance(_Model):
+    """Benign-control check of an external agent before attack numbers (see
+    mulebench.harness.conformance). Resistance means nothing without utility."""
+
+    status: ConformanceStatus
+    min_benign_pass: float
+    trials_per_scenario: int | None = None  # None when skipped
+    # Benign passes over all benign trials; errored trials count as failures.
+    benign_pass: Rate | None = None
+    per_scenario: dict[str, Rate] = {}
+    # False when the Wilson 95% interval contains the threshold.
+    reliable: bool | None = None
+    warnings: list[str] = []
+
+
 class Report(_Model):
     schema_version: Literal[3]
     # Additive revisions of v3: 1 adds step origin "unknown", nullable
@@ -331,3 +349,4 @@ class Report(_Model):
     limitations: list[str]
     summary: Summary
     scenarios: list[ScenarioResult]
+    conformance: Conformance | None = None  # external agents only

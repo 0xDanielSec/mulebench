@@ -9,6 +9,9 @@
                   [--base-url URL] [--allow-remote] [--seed S] [--temperature T]
                   [--max-tokens N] [--arg-coercion digit_strings|off]
                   [--checkpoint FILE] [--resume]
+                  [--skip-conformance] [--conformance-trials N] [--min-benign-pass R]
+    mulebench check-agent [<dir>] --agent-module MOD:FACTORY [--agent-path DIR]
+                  [--scenario ID ...] [--trials N] [--min-benign-pass R]
     mulebench doctor --model TAG [--base-url URL] [--allow-remote]
     mulebench schema [--out report.schema.json]
     mulebench view REPORT.json [REPORT.json ...] --out DIR [--force]
@@ -27,7 +30,10 @@ Exit codes for `run`: 0 = completed and every attack trial exposed the payload;
 1 = at least one attack trial was not_exposed (invalid scenario); 2 = usage,
 load/validation error, unsupported invariant, missing cassette or invalid model
 request; 3 = run aborted by the cost cap (partial report still written);
-130 = interrupted with Ctrl+C (partial report still written).
+130 = interrupted with Ctrl+C (partial report still written); 4 = an
+--agent-module agent failed the conformance check (no attack trial was run).
+
+`check-agent` exits 0 when the agent is conformant and 1 when it is not.
 A successful attack is a finding, not an error.
 """
 
@@ -41,8 +47,11 @@ from pathlib import Path
 from mulebench.agents import Agent, ScriptedAgent
 from mulebench.agents.scripted import DEFAULT_MAX_STEPS
 from mulebench.attacks import ScenarioError, load_all, load_builtin
+from mulebench.attacks.schema import Scenario
 from mulebench.harness import NO_PROMPT, UnsupportedInvariant, run_all
-from mulebench.harness.models import LLMConfig, PricingInfo
+from mulebench.harness.conformance import DEFAULT_MIN_BENIGN_PASS
+from mulebench.harness.conformance import DEFAULT_TRIALS as DEFAULT_CHECK_TRIALS
+from mulebench.harness.models import Conformance, LLMConfig, PricingInfo
 from mulebench.harness.presets import DEFAULT_PRESETS, UnknownPreset, preset_guard_names
 from mulebench.reports import build_report, render_table, schema_to_json, write_report
 from mulebench.tools.client import tool_schema_sha256
@@ -114,6 +123,54 @@ def _parser() -> argparse.ArgumentParser:
         help="guard preset to run (repeatable; default: vulnerable and hardened). Names: "
         "vulnerable, hardened, strict, none, all, only:<guard>, all-minus:<guard>",
     )
+    run.add_argument(
+        "--skip-conformance",
+        action="store_true",
+        help="with --agent-module: run attacks without the benign-control check "
+        "(recorded in the report)",
+    )
+    run.add_argument(
+        "--conformance-trials",
+        type=int,
+        default=DEFAULT_CHECK_TRIALS,
+        metavar="N",
+        help=f"with --agent-module: trials per benign control (default {DEFAULT_CHECK_TRIALS})",
+    )
+    run.add_argument(
+        "--min-benign-pass",
+        type=float,
+        default=DEFAULT_MIN_BENIGN_PASS,
+        metavar="RATE",
+        help=f"conformance threshold, 0..1 (default {DEFAULT_MIN_BENIGN_PASS})",
+    )
+
+    check = sub.add_parser(
+        "check-agent",
+        help="run the benign controls with your agent and report whether it completes them",
+    )
+    check.add_argument("directory", nargs="?", type=Path, help="directory of scenario *.yaml files")
+    check.add_argument(
+        "--agent-module", required=True, metavar="MODULE:FACTORY", help="zero-argument factory"
+    )
+    check.add_argument("--agent-path", type=Path, metavar="DIR", help="added to the import path")
+    check.add_argument(
+        "--scenario", action="append", dest="scenario_ids", metavar="ID", help="repeatable"
+    )
+    check.add_argument(
+        "--trials",
+        type=int,
+        default=DEFAULT_CHECK_TRIALS,
+        help=f"trials per benign control (default {DEFAULT_CHECK_TRIALS}; a deterministic "
+        "agent can use 1)",
+    )
+    check.add_argument(
+        "--min-benign-pass",
+        type=float,
+        default=DEFAULT_MIN_BENIGN_PASS,
+        metavar="RATE",
+        help=f"pooled benign pass needed, 0..1 (default {DEFAULT_MIN_BENIGN_PASS})",
+    )
+
     ablate = sub.add_parser(
         "ablate",
         help="guard ablation matrix with the scripted agent (packaged scenarios by default)",
@@ -239,6 +296,54 @@ def _ablate(directory: Path | None, out: Path | None) -> int:
     return 0
 
 
+def _load_scenarios(directory: Path | None, ids: Sequence[str] | None) -> list[Scenario] | int:
+    if directory is not None and not directory.is_dir():
+        return _error(f"not a directory: {directory}")
+    try:
+        scenarios = load_builtin() if directory is None else load_all(directory)
+    except ScenarioError as exc:
+        return _error(str(exc))
+    if not scenarios:
+        return _error(f"no scenarios found in {directory or '<builtin>'}")
+    if ids:
+        known = {s.id for s in scenarios}
+        unknown = sorted(set(ids) - known)
+        if unknown:
+            return _error(f"unknown scenario id(s) {unknown}; known: {sorted(known)}")
+        scenarios = [s for s in scenarios if s.id in set(ids)]
+    return list(scenarios)
+
+
+def _conformance(
+    scenarios: Sequence[Scenario], agent: Agent, trials: int, min_benign_pass: float
+) -> Conformance | int:
+    from mulebench.harness.conformance import check_agent
+
+    if trials < 1:
+        return _error("conformance trials must be >= 1")
+    if not 0.0 <= min_benign_pass <= 1.0:
+        return _error("--min-benign-pass must be between 0 and 1")
+    try:
+        return check_agent(scenarios, agent, trials=trials, min_benign_pass=min_benign_pass)
+    except UnsupportedInvariant as exc:
+        return _error(str(exc))
+
+
+def _check_agent(args: argparse.Namespace, scenarios: Sequence[Scenario]) -> int:
+    from mulebench.byoa import AgentLoadError, load_agent
+    from mulebench.harness.conformance import render_conformance
+
+    try:
+        agent = load_agent(args.agent_module, args.agent_path)
+    except AgentLoadError as exc:
+        return _error(str(exc))
+    result = _conformance(scenarios, agent, args.trials, args.min_benign_pass)
+    if isinstance(result, int):
+        return result
+    print(render_conformance(result))
+    return 0 if result.status == "passed" else 1
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.command == "schema":
@@ -258,21 +363,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "view":
         return _view(args.reports, args.out, args.force)
 
-    directory: Path | None = args.directory
-    if directory is not None and not directory.is_dir():
-        return _error(f"not a directory: {directory}")
-    try:
-        scenarios = load_builtin() if directory is None else load_all(directory)
-    except ScenarioError as exc:
-        return _error(str(exc))
-    if not scenarios:
-        return _error(f"no scenarios found in {directory or '<builtin>'}")
-    if args.scenario_ids:
-        known = {s.id for s in scenarios}
-        unknown = sorted(set(args.scenario_ids) - known)
-        if unknown:
-            return _error(f"unknown scenario id(s) {unknown}; known: {sorted(known)}")
-        scenarios = [s for s in scenarios if s.id in set(args.scenario_ids)]
+    loaded = _load_scenarios(args.directory, args.scenario_ids)
+    if isinstance(loaded, int):
+        return loaded
+    scenarios = loaded
+
+    if args.command == "check-agent":
+        return _check_agent(args, scenarios)
 
     presets: list[str] = args.presets or list(DEFAULT_PRESETS)
     try:
@@ -281,6 +378,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except UnknownPreset as exc:
         return _error(str(exc))
 
+    conformance: Conformance | None = None
     llm_config: LLMConfig | None = None
     pricing: PricingInfo | None = None
     agent: Agent
@@ -295,6 +393,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _error(str(exc))
         prompts: list[str] = [NO_PROMPT]
         trials = args.trials or DEFAULT_EXTERNAL_TRIALS
+        from mulebench.harness.conformance import render_conformance, skipped
+
+        if args.skip_conformance:
+            conformance = skipped(args.min_benign_pass)
+            print(
+                "warning: conformance check skipped; attack numbers may not be meaningful",
+                file=sys.stderr,
+            )
+        else:
+            checked = _conformance(scenarios, agent, args.conformance_trials, args.min_benign_pass)
+            if isinstance(checked, int):
+                return checked
+            conformance = checked
+            print(render_conformance(conformance), file=sys.stderr)
+            if conformance.status != "passed":
+                print(
+                    "error: the agent does not complete the benign controls; no attack trials "
+                    "were run (resistance is not meaningful without utility). Fix the "
+                    "adapter, or pass --skip-conformance to run anyway.",
+                    file=sys.stderr,
+                )
+                return 4
     elif args.agent in (None, "scripted"):
         prompts = [NO_PROMPT]
         trials = args.trials or 1
@@ -360,6 +480,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         llm=llm_config,
         pricing=pricing,
         presets=presets,
+        conformance=conformance,
     )
     if args.out:
         write_report(report, args.out)
