@@ -181,3 +181,11 @@ benign trial). The provenance handoff fails a legitimate payment to a payee
 the customer never paid before, because there is no reference to resolve.
 No built-in delegation scenario has one, so this cost will not show in the
 table.
+
+### Outcome (added after the run)
+
+Every prediction in the table above held: both defences stop 015, 015b and
+016, and the benign controls pass. Provenance omits the legitimate payment
+in 016 only; the oracle omits it in 015b and 016. The predicted cost of the
+provenance handoff (a first payment to a new payee) is not exercised by any
+built-in scenario. See [delegation.md](delegation.md#findings).
