@@ -94,7 +94,18 @@ def _parser() -> argparse.ArgumentParser:
         "--agent-path",
         type=Path,
         metavar="DIR",
-        help="directory added to the import path for --agent-module",
+        help="directory added to the import path for --agent-module, --reader-module "
+        "and --payer-module",
+    )
+    run.add_argument(
+        "--reader-module",
+        metavar="MODULE:FACTORY",
+        help="delegation scenarios: your own agent for the Reader role (default: the run's agent)",
+    )
+    run.add_argument(
+        "--payer-module",
+        metavar="MODULE:FACTORY",
+        help="delegation scenarios: your own agent for the Payer role (default: the run's agent)",
     )
     run.add_argument(
         "--trials",
@@ -285,6 +296,20 @@ def _error(message: str) -> int:
     return 2
 
 
+def _team(agent: Agent, reader: str | None, payer: str | None, path: Path | None) -> Agent | int:
+    """The run's agent with external agents in the delegation roles given."""
+    from mulebench.agents import DelegationTeam
+    from mulebench.byoa import AgentLoadError, load_agent
+
+    try:
+        return DelegationTeam(
+            agent if reader is None else load_agent(reader, path),
+            agent if payer is None else load_agent(payer, path),
+        )
+    except AgentLoadError as exc:
+        return _error(str(exc))
+
+
 def _ablate(directory: Path | None, out: Path | None) -> int:
     from mulebench.reports.ablation import (
         render_ablation_markdown,
@@ -407,7 +432,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     llm_config: LLMConfig | None = None
     pricing: PricingInfo | None = None
     agent: Agent
-    if args.agent_path is not None and args.agent_module is None:
+    role_modules = args.reader_module is not None or args.payer_module is not None
+    if args.agent_path is not None and args.agent_module is None and not role_modules:
         return _error("--agent-path needs --agent-module")
     if args.agent_module is not None:
         from mulebench.byoa import AgentLoadError, load_agent
@@ -450,6 +476,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             return built
         agent, llm_config, pricing, prompts = built
         trials = args.trials or DEFAULT_LLM_TRIALS
+    if role_modules:
+        team = _team(agent, args.reader_module, args.payer_module, args.agent_path)
+        if isinstance(team, int):
+            return team
+        agent = team
 
     from mulebench.agents.llm.model import ModelRequestInvalid
     from mulebench.agents.llm.transport import CassetteMissing

@@ -37,7 +37,7 @@ from mulebench.agents.llm.model import (
     Turn,
 )
 from mulebench.agents.llm.pricing import cost_usd
-from mulebench.agents.llm.prompts import PROMPTS
+from mulebench.agents.llm.prompts import PROMPTS, system_prompt
 from mulebench.agents.llm.seeds import SEED_DERIVATION, derive_seed
 from mulebench.agents.llm.text_calls import text_tool_calls
 from mulebench.tools.client import ToolClient, ToolResult
@@ -145,7 +145,7 @@ class LLMAgent:
             self.meter.check()
             request = ChatRequest(
                 model=self.model,
-                system=PROMPTS[task.prompt_variant],
+                system=system_prompt(task.prompt_variant, task.role),
                 turns=tuple(turns),
                 tools=tool_defs,
                 max_tokens=self.max_tokens,

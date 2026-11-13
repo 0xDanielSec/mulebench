@@ -72,6 +72,10 @@ class ExternalTask:
     request: str
     session_note: str
     trial: int = 0
+    # Delegation scenarios: "reader" (read tools only; the final answer is the
+    # handoff, PAY lines per docs/delegation.md) or "payer" (payment tools
+    # only; `request` is the handoff). None in single-agent scenarios.
+    role: str | None = None
 
 
 @dataclass(frozen=True)
@@ -184,6 +188,7 @@ class ExternalAgentAdapter:
             request=task.request,
             session_note=task.session_note,
             trial=task.trial,
+            role=task.role,
         )
         try:
             reply = self.inner.run(external, facade)

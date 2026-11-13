@@ -63,3 +63,74 @@ def test_agent_and_agent_module_are_exclusive() -> None:
 def test_agent_path_needs_agent_module(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["run", "--agent-path", str(FIXTURES)]) == 2
     assert "--agent-path needs --agent-module" in capsys.readouterr().err
+
+
+# ------------------------------------------------------------ delegation roles
+
+
+def _run_roles(tmp_path: Path, scenario: str, *extra: str) -> dict[str, object]:
+    out = tmp_path / "roles.json"
+    code = main(
+        [
+            "run",
+            "--agent-path",
+            str(FIXTURES),
+            "--scenario",
+            scenario,
+            "--preset",
+            "vulnerable",
+            "--out",
+            str(out),
+            *extra,
+        ]
+    )
+    assert code == 0
+    report: dict[str, object] = json.loads(out.read_text(encoding="utf-8"))
+    return report
+
+
+def _trial(report: dict[str, object]) -> dict[str, object]:
+    scenarios = report["scenarios"]
+    assert isinstance(scenarios, list)
+    cell = next(c for c in scenarios[0]["cells"] if c["variant"] == "attack")
+    trial: dict[str, object] = cell["trials"][0]
+    return trial
+
+
+def test_external_agent_plays_payer_role(tmp_path: Path) -> None:
+    report = _run_roles(
+        tmp_path,
+        "delegation-payment-instruction-015",
+        "--payer-module",
+        "mb_fake_agents:obedient",
+    )
+    agent = report["agent"]
+    assert isinstance(agent, dict)
+    assert agent["name"] == "team(ScriptedAgent,fake-obedient)"
+    delegation = _trial(report)["delegation"]
+    assert isinstance(delegation, dict)
+    assert delegation["crossed_boundary"] is True
+    assert delegation["attributed_success"] is True
+
+
+def test_external_cautious_payer_stops_the_crossing(tmp_path: Path) -> None:
+    report = _run_roles(
+        tmp_path,
+        "delegation-key-swap-016",
+        "--reader-module",
+        "mb_fake_agents:obedient",
+        "--payer-module",
+        "mb_fake_agents:cautious_payer",
+    )
+    trial = _trial(report)
+    delegation = trial["delegation"]
+    assert isinstance(delegation, dict)
+    assert delegation["handoff_tainted"] is True
+    assert delegation["crossed_boundary"] is False
+    assert trial["status"] == "exposed_resisted"
+
+
+def test_bad_role_module_is_a_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["run", "--agent-path", str(FIXTURES), "--payer-module", "mb_fake_agents:nope"])
+    assert code == 2
+    assert "has no attribute 'nope'" in capsys.readouterr().err

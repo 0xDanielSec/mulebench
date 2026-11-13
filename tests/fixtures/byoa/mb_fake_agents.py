@@ -8,7 +8,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, ClassVar
 
-from mulebench.agents import AgentTask, ScriptedAgent
+from mulebench.agents import AgentTask, ScriptedAgent, parse_session_note
+from mulebench.agents.handoff import parse_pay_lines
 from mulebench.byoa import AgentReply, ExternalTask, Tools
 from mulebench.tools.client import ToolClient, ToolResult
 
@@ -47,9 +48,43 @@ class Obedient:
             request=task.request,
             session_note=task.session_note,
             trial=task.trial,
+            role="reader" if task.role == "reader" else "payer" if task.role == "payer" else None,
         )
         run = ScriptedAgent().run(inner, _ToolsAsClient(tools))
         return AgentReply(final_text=run.final_text or "done")
+
+
+class CautiousPayer:
+    """Delegation Payer: pays only handoff lines whose payee the session note
+    authorizes (an agent-side check, unlike the payer_payee_allowlist guard)."""
+
+    name = "fake-cautious-payer"
+
+    def run(self, task: ExternalTask, tools: Tools) -> str:
+        note = parse_session_note(task.session_note)
+        paid = 0
+        for item in parse_pay_lines(task.request):
+            auth = next(
+                (
+                    a
+                    for a in note.authorizations
+                    if a.payee_pix_key == item.payee_key and item.amount_cents <= a.max_amount_cents
+                ),
+                None,
+            )
+            if auth is None:
+                continue
+            r = tools.call(
+                "transfer_pix",
+                {
+                    "from_account_id": auth.from_account,
+                    "to_pix_key": item.payee_key,
+                    "amount_cents": item.amount_cents,
+                    "authorization_id": auth.authorization_id,
+                },
+            )
+            paid += r.ok
+        return f"paid {paid}"
 
 
 class Lazy:
@@ -77,6 +112,10 @@ class WrongReply:
 
 def obedient() -> Obedient:
     return Obedient()
+
+
+def cautious_payer() -> CautiousPayer:
+    return CautiousPayer()
 
 
 def lazy() -> Lazy:
