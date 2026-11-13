@@ -192,38 +192,35 @@ def _parser() -> argparse.ArgumentParser:
         "directory", nargs="?", type=Path, help="directory of scenario *.yaml files"
     )
     ablate.add_argument("--out", type=Path, help="write the JSON ablation report here")
-    llm = run.add_argument_group("llm agent")
-    llm.add_argument("--model", help="model id (required for --agent llm)")
-    llm.add_argument("--effort", default="medium", help="output_config.effort (default medium)")
-    llm.add_argument(
-        "--prompt-variants",
-        default="baseline,data_not_instructions",
-        help="comma-separated prompt variants",
+    _add_llm_args(run)
+
+    wl = sub.add_parser(
+        "workloads",
+        help="run benign workloads N times per preset and prompt (scripted or llm agent)",
     )
-    llm.add_argument("--cassettes", type=Path, help="cassette directory (replay by default)")
-    llm.add_argument("--record", action="store_true", help="make live calls and record them")
-    llm.add_argument("--max-cost-usd", type=float, help="whole-run cost cap")
-    llm.add_argument("--provider", choices=("anthropic", "openai-compatible"), default="anthropic")
-    _add_server_args(llm)
-    llm.add_argument(
-        "--seed",
-        type=int,
-        help="openai-compatible: base seed (per-trial seed: base + sha256(trial_key))",
+    wl.add_argument(
+        "--workload",
+        action="append",
+        dest="workload_ids",
+        metavar="ID",
+        help="run only this packaged workload (repeatable; default: all)",
     )
-    llm.add_argument(
-        "--temperature", type=float, help="openai-compatible: sampling temperature (default 0)"
+    wl.add_argument("--agent", choices=("scripted", "llm"), default="scripted")
+    wl.add_argument("--trials", type=int, default=1, help="trials per cell (default 1)")
+    wl.add_argument("--max-steps", type=int, default=DEFAULT_MAX_STEPS, help="agent step cap")
+    wl.add_argument(
+        "--preset",
+        action="append",
+        dest="presets",
+        metavar="NAME",
+        help="guard preset (repeatable; default: vulnerable and hardened)",
     )
-    llm.add_argument(
-        "--arg-coercion",
-        choices=("digit_strings", "off"),
-        default="digit_strings",
-        help="coerce integers sent as digit-only strings (default); off: strict",
+    wl.add_argument("--out", type=Path, required=True, help="write the JSON report here")
+    wl.add_argument(
+        "--checkpoint", type=Path, help="per-trial checkpoint (default <out>.checkpoint.jsonl)"
     )
-    llm.add_argument(
-        "--max-tokens",
-        type=int,
-        help=f"openai-compatible: output tokens per call (default {LOCAL_MAX_TOKENS})",
-    )
+    wl.add_argument("--resume", action="store_true", help="skip trials in the checkpoint")
+    _add_llm_args(wl)
 
     doctor = sub.add_parser(
         "doctor", help="check a local OpenAI-compatible server (Ollama) before a run"
@@ -256,6 +253,41 @@ def _parser() -> argparse.ArgumentParser:
         "--doc", type=Path, help="replace the generated block of this markdown document"
     )
     return parser
+
+
+def _add_llm_args(parser: argparse.ArgumentParser) -> None:
+    llm = parser.add_argument_group("llm agent")
+    llm.add_argument("--model", help="model id (required for --agent llm)")
+    llm.add_argument("--effort", default="medium", help="output_config.effort (default medium)")
+    llm.add_argument(
+        "--prompt-variants",
+        default="baseline,data_not_instructions",
+        help="comma-separated prompt variants",
+    )
+    llm.add_argument("--cassettes", type=Path, help="cassette directory (replay by default)")
+    llm.add_argument("--record", action="store_true", help="make live calls and record them")
+    llm.add_argument("--max-cost-usd", type=float, help="whole-run cost cap")
+    llm.add_argument("--provider", choices=("anthropic", "openai-compatible"), default="anthropic")
+    _add_server_args(llm)
+    llm.add_argument(
+        "--seed",
+        type=int,
+        help="openai-compatible: base seed (per-trial seed: base + sha256(trial_key))",
+    )
+    llm.add_argument(
+        "--temperature", type=float, help="openai-compatible: sampling temperature (default 0)"
+    )
+    llm.add_argument(
+        "--arg-coercion",
+        choices=("digit_strings", "off"),
+        default="digit_strings",
+        help="coerce integers sent as digit-only strings (default); off: strict",
+    )
+    llm.add_argument(
+        "--max-tokens",
+        type=int,
+        help=f"openai-compatible: output tokens per call (default {LOCAL_MAX_TOKENS})",
+    )
 
 
 def _view(reports: Sequence[Path], out: Path, force: bool) -> int:
@@ -308,6 +340,79 @@ def _team(agent: Agent, reader: str | None, payer: str | None, path: Path | None
         )
     except AgentLoadError as exc:
         return _error(str(exc))
+
+
+def _workloads(args: argparse.Namespace) -> int:
+    """`mulebench workloads`: benign workloads, N trials per cell, resumable."""
+    from mulebench.harness.workload_run import (
+        WorkloadCheckpoint,
+        fingerprint,
+        run_workload_matrix,
+        summary_lines,
+    )
+    from mulebench.workloads import load_workloads
+
+    workloads = load_workloads()
+    if args.workload_ids:
+        known = {w.id for w in workloads}
+        missing = [w for w in args.workload_ids if w not in known]
+        if missing:
+            return _error(f"unknown workload(s): {', '.join(missing)}")
+        workloads = [w for w in workloads if w.id in args.workload_ids]
+    presets: list[str] = args.presets or list(DEFAULT_PRESETS)
+    try:
+        for p in presets:
+            preset_guard_names(p)
+    except UnknownPreset as exc:
+        return _error(str(exc))
+    if args.trials < 1:
+        return _error("--trials must be >= 1")
+    llm_config: LLMConfig | None = None
+    agent: Agent
+    if args.agent == "scripted":
+        agent, prompts = ScriptedAgent(max_steps=args.max_steps), [NO_PROMPT]
+    else:
+        built = _build_llm(args)
+        if isinstance(built, int):
+            return built
+        agent, llm_config, _, prompts = built
+    from mulebench.harness.runner import describe_agent
+
+    config = {
+        "agent": dict(getattr(agent, "params", {})),
+        "llm": None if llm_config is None else llm_config.model_dump(mode="json"),
+        "prompts": prompts,
+        "presets": presets,
+        "trials": args.trials,
+    }
+    path: Path = args.checkpoint or args.out.with_name(args.out.name + ".checkpoint.jsonl")
+    try:
+        checkpoint = WorkloadCheckpoint.open(
+            path, fingerprint(config, workloads), resume=args.resume
+        )
+    except ValueError as exc:
+        return _error(str(exc))
+    try:
+        report = run_workload_matrix(
+            workloads,
+            agent,
+            describe_agent(agent, {}),
+            prompt_variants=prompts,
+            presets=presets,
+            trials=args.trials,
+            llm=llm_config,
+            completed=checkpoint.completed,
+            on_trial=checkpoint.write,
+        )
+    finally:
+        checkpoint.close()
+    args.out.write_bytes(report.model_dump_json(indent=2).encode("utf-8") + b"\n")
+    print("\n".join(summary_lines(report)))
+    if report.run_status != "complete":
+        print(f"aborted: {report.abort_reason}; resume with --resume", file=sys.stderr)
+        return 130 if report.run_status == "aborted_interrupt" else 3
+    checkpoint.path.unlink()
+    return 0
 
 
 def _ablate(directory: Path | None, out: Path | None) -> int:
@@ -399,6 +504,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "doctor":
         return _doctor(args)
+
+    if args.command == "workloads":
+        return _workloads(args)
 
     if args.command == "view":
         return _view(args.reports, args.out, args.force)
