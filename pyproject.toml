@@ -1,15 +1,51 @@
 [project]
 name = "mulebench"
 version = "0.1.0"
-description = "Test whether AI agents in financial services can be manipulated into violating financial invariants."
+description = "Test whether AI agents in financial services can be manipulated into violating financial invariants, judged on a simulated ledger, not by an LLM."
 readme = "README.md"
 license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.12,<3.13"
+keywords = [
+    "ai-agents",
+    "llm",
+    "prompt-injection",
+    "indirect-prompt-injection",
+    "red-teaming",
+    "benchmark",
+    "fintech",
+    "pix",
+    "agent-security",
+    "guardrails",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Security",
+    "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
+]
 dependencies = [
     "pydantic>=2.7",
     "pyyaml>=6.0",
     "tzdata>=2024.1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/0xDanielSec/mulebench"
+Repository = "https://github.com/0xDanielSec/mulebench"
+Issues = "https://github.com/0xDanielSec/mulebench/issues"
+Changelog = "https://github.com/0xDanielSec/mulebench/commits/main"
+Security = "https://github.com/0xDanielSec/mulebench/security/policy"
 
 [project.scripts]
 mulebench = "mulebench.cli:main"
@@ -37,6 +73,11 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.sdist]
+# Local caches and run output never ship (some are ignored only by nested
+# .gitignore files, which hatchling does not read).
+exclude = [".hypothesis", "runs", "site-*", "dist", ".prepublish-terms"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mulebench"]
