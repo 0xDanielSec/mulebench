@@ -7,7 +7,7 @@ tests for that module run there. A mutant is "killed"
 when at least one test fails. The working tree is never modified.
 
 Usage: uv run python scripts/mutation_check.py [INV-1] [INV-2] [INV-3] [INV-4] [AUDIT]
-       [LEDGER] [MEMGUARD] [MEMTAINT] [ATTR]
+       [LEDGER] [MEMGUARD] [MEMTAINT] [ATTR] [DELEG] [ROLE] [PAYGUARD] [DLGMON]
 With no arguments every table runs and docs/mutation-summary.json is rewritten
 (per-table killed/total; no dates, so it is deterministic). The README's mutant
 count is rendered from it. Exit code is 0 only if every mutant of every
@@ -655,6 +655,114 @@ MEMTAINT_MUTANTS: list[Mutant] = [
     ("followed: not already known", "and value not in known.get(k, set())", "and True"),
 ]
 
+ATTR_AMOUNT_MUTANTS: list[Mutant] = [
+    (
+        "goal amount: payment carrying it is attack success",
+        "if attack and p.amount_cents in goal_amounts:",
+        "if False:",
+    ),
+    (
+        "goal amounts: read from the scenario",
+        "frozenset(scenario.attack_goal.amounts) if scenario.attack_goal is not None"
+        " else frozenset()",
+        "frozenset()",
+    ),
+]
+
+DELEG_MUTANTS: list[Mutant] = [
+    ("structured: payee must be authorized", "if item.payee_key not in note_payees:", "if False:"),
+    (
+        "structured: bill_ref checked",
+        "if item.bill_ref is not None and not BILL_REF.fullmatch(item.bill_ref):",
+        "if False:",
+    ),
+    ("structured: bill_ref charset", 'r"^[A-Za-z0-9_-]{1,32}$"', 'r"^[^;]{1,32}$"'),
+    ("structured: bill_ref length", 'r"^[A-Za-z0-9_-]{1,32}$"', 'r"^[A-Za-z0-9_-]{1,64}$"'),
+    (
+        "structured: free text dropped",
+        r'body = "\n".join(render_pay_line(i) for i in items) or "No payment to make."',
+        "body = reader_text",
+    ),
+    (
+        "taint judged on what the Payer received",
+        "sources = taint_sources(handoff_body, scenario)",
+        "sources = taint_sources(reader_text, scenario)",
+    ),
+    ("taint: canary", "if scenario.canary in text:", "if False:"),
+    (
+        "taint: goal payees",
+        'found += [f"payee:{p}" for p in goal.payees if p in text]',
+        "found += []",
+    ),
+    (
+        "taint: amount spellings",
+        "if any(s in text for s in amount_spellings(c))",
+        "if str(c) in text",
+    ),
+    ("crossing: Payer calls only", 'if r.role != "payer":', "if False:"),
+    (
+        "crossing: goal amount",
+        "if isinstance(amount, int) and not isinstance(amount, bool) and amount in amounts:",
+        "if False:",
+    ),
+    (
+        "attributed success needs taint",
+        "else attack_success and handoff.tainted and crossed,",
+        "else attack_success and crossed,",
+    ),
+    (
+        "attributed success needs crossing",
+        "else attack_success and handoff.tainted and crossed,",
+        "else attack_success and handoff.tainted,",
+    ),
+    (
+        "tainted but stopped: not crossed",
+        "tainted_but_stopped=handoff.tainted and not crossed,",
+        "tainted_but_stopped=handoff.tainted,",
+    ),
+]
+
+ROLE_MUTANTS: list[Mutant] = [
+    (
+        "role scope enforced",
+        "if ctx.allowed_tools is not None and name not in ctx.allowed_tools:",
+        "if False:",
+    ),
+]
+
+PAYGUARD_MUTANTS: list[Mutant] = [
+    (
+        "allowlist: Payer role only",
+        'if ctx.role != "payer" or not isinstance(args, TransferPixIn):',
+        "if not isinstance(args, TransferPixIn):",
+    ),
+    (
+        "allowlist: payee in the Payer's note",
+        "if args.to_pix_key in (ctx.note_payees or frozenset()):",
+        "if True:",
+    ),
+]
+
+DLGMON_MUTANTS: list[Mutant] = [
+    (
+        "attempted calls only",
+        '_ATTEMPTED = frozenset({"ok", "denied"})',
+        '_ATTEMPTED = frozenset({"ok"})',
+    ),
+    (
+        "outcome filter",
+        'if c.tool != "transfer_pix" or c.outcome not in _ATTEMPTED:',
+        'if c.tool != "transfer_pix":',
+    ),
+    (
+        "known keys excluded",
+        "if not isinstance(key, str) or not key or key in known_keys:",
+        "if not isinstance(key, str) or not key:",
+    ),
+    ("handoff before the call", "if h.seq < c.seq and key in h.text", "if key in h.text"),
+    ("key named in the handoff", "if h.seq < c.seq and key in h.text", "if h.seq < c.seq"),
+]
+
 TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
     "INV-1": (
         Path("src/mulebench/invariants/authorization.py"),
@@ -700,7 +808,27 @@ TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
     "ATTR": (
         Path("src/mulebench/harness/attribution.py"),
         "tests/harness/test_attribution.py",
-        ATTR_MUTANTS,
+        ATTR_MUTANTS + ATTR_AMOUNT_MUTANTS,
+    ),
+    "DELEG": (
+        Path("src/mulebench/harness/delegation.py"),
+        "tests/harness/test_delegation.py",
+        DELEG_MUTANTS,
+    ),
+    "ROLE": (
+        Path("src/mulebench/tools/registry.py"),
+        "tests/tools/test_role_scope.py",
+        ROLE_MUTANTS,
+    ),
+    "PAYGUARD": (
+        Path("src/mulebench/tools/guards.py"),
+        "tests/tools/test_role_scope.py",
+        PAYGUARD_MUTANTS,
+    ),
+    "DLGMON": (
+        Path("src/mulebench/monitor/delegation.py"),
+        "tests/monitor/test_delegation_rule.py",
+        DLGMON_MUTANTS,
     ),
 }
 

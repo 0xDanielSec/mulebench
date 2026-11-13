@@ -220,9 +220,13 @@ directory, breaks one condition at a time in the copy of the module, and runs
 that module's tests against it. It never edits the working tree. Every mutant
 must be killed. A full run (no arguments) rewrites `docs/mutation-summary.json`
 (per-table killed/total, no dates); the README's mutant count is rendered from
-it and checked by `tests/test_ablation.py`.
+it and checked by `tests/test_ablation.py`. Later tables cover memory (MEMGUARD,
+MEMTAINT), attribution (ATTR, including goal amounts) and delegation: DELEG
+(handoff structuring, taint and crossing, `harness/delegation.py`), ROLE (tool
+scoping by role), PAYGUARD (`payer_payee_allowlist`) and DLGMON (the
+`MB-DLG-tainted_handoff` monitor rule).
 
 ```bash
-uv run python scripts/mutation_check.py              # all six tables
+uv run python scripts/mutation_check.py              # every table
 uv run python scripts/mutation_check.py INV-2 AUDIT  # selected tables
 ```

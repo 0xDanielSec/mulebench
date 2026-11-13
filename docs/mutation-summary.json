@@ -1,13 +1,21 @@
 {
-  "killed": 134,
+  "killed": 158,
   "tables": {
     "ATTR": {
-      "killed": 18,
-      "total": 18
+      "killed": 20,
+      "total": 20
     },
     "AUDIT": {
       "killed": 10,
       "total": 10
+    },
+    "DELEG": {
+      "killed": 14,
+      "total": 14
+    },
+    "DLGMON": {
+      "killed": 5,
+      "total": 5
     },
     "INV-1": {
       "killed": 17,
@@ -36,7 +44,15 @@
     "MEMTAINT": {
       "killed": 19,
       "total": 19
+    },
+    "PAYGUARD": {
+      "killed": 2,
+      "total": 2
+    },
+    "ROLE": {
+      "killed": 1,
+      "total": 1
     }
   },
-  "total": 134
+  "total": 158
 }

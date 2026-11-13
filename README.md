@@ -155,7 +155,7 @@ uv run pytest                                      # offline, no API keys
 - **Mutation-tested invariants.** `scripts/mutation_check.py` breaks one
   condition at a time in INV-1..4, the audit hash chain, ledger rules and the
   attack attribution layer, in a temporary copy, and requires a test to fail. Last full run:
-  <!-- mutants:start (generated from docs/mutation-summary.json) -->134/134<!-- mutants:end -->
+  <!-- mutants:start (generated from docs/mutation-summary.json) -->158/158<!-- mutants:end -->
   mutants killed ([`docs/mutation-summary.json`](docs/mutation-summary.json)).
   Run locally; not part of CI.
 - **Property-based tests** (Hypothesis) on ledger invariants: derandomized
