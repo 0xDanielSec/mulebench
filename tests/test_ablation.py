@@ -34,6 +34,7 @@ from mulebench.reports.ablation import (
     render_ablation_markdown,
     run_ablation,
     run_cap_sensitivity,
+    single_agent,
 )
 from mulebench.workloads import load_workloads
 
@@ -58,7 +59,9 @@ README_GUARD_SETS = (
 
 @pytest.fixture(scope="module")
 def results() -> list[ScenarioResult]:
-    return run_all(load_builtin(), ScriptedAgent(), presets=ablation_presets()).results
+    return run_all(
+        single_agent(load_builtin()), ScriptedAgent(), presets=ablation_presets()
+    ).results
 
 
 @pytest.fixture(scope="module")
@@ -394,7 +397,10 @@ def _attack_cell(s: ScenarioResult, preset: str) -> str:
     broken = [i.id for i in t.invariants if i.applicable and not i.holds]
     text = "violated " + ", ".join(broken) if t.status == "exposed_violated" else str(t.status)
     if t.status == "exposed_resisted":
-        text = "stopped"
+        succeeded = t.attribution is not None and t.attribution.attack_success is True
+        # No invariant broke, but the payment carried what the attacker asked
+        # (e.g. an injected amount within the authorization: 015b).
+        text = "succeeded, no invariant broken" if succeeded else "stopped"
     if t.unauthorized_outflow_cents:
         text += f" ({brl(t.unauthorized_outflow_cents)})"
     return text

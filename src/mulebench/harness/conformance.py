@@ -8,6 +8,10 @@ must reach a threshold.
 
 A trial passes when `benign_pass` is True (expected transfers and tool calls,
 every applicable invariant holds). Errored trials count as failures here.
+
+Only single-agent scenarios count. A delegation scenario asks the agent to
+play a role (Reader or Payer, `AgentTask.role`), which a general agent need
+not support; its benign controls are reported with the run instead.
 """
 
 from __future__ import annotations
@@ -75,7 +79,8 @@ def check_agent(
 ) -> Conformance:
     if not 0.0 <= min_benign_pass <= 1.0:
         raise ValueError("min_benign_pass must be between 0 and 1")
-    outcome = run_all(scenarios, agent, trials=trials, presets=(PRESET,), variants=("benign",))
+    single = [s for s in scenarios if s.topology is None]
+    outcome = run_all(single, agent, trials=trials, presets=(PRESET,), variants=("benign",))
     return evaluate(outcome, trials, min_benign_pass)
 
 

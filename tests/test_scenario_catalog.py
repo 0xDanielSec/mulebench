@@ -32,7 +32,13 @@ def outcome(trial: TrialResult) -> str:
         na = "" if inv.applicable else " (not applicable)"
         for code, n in Counter(v.code for v in inv.violations).items():
             parts.append(f"{inv.id} `{code}`" + (f" x{n}" if n > 1 else "") + na)
-    return f"{trial.status}: " + (", ".join(parts) if parts else "all hold")
+    text = f"{trial.status}: " + (", ".join(parts) if parts else "all hold")
+    a = trial.attribution
+    if trial.status == "exposed_resisted" and a is not None and a.attack_success:
+        # Attack direction without a broken invariant (e.g. a goal amount).
+        goal = [r for r in a.reasons if r.startswith("goal_")]
+        text += " (attack attributed: " + ", ".join(goal) + ")"
+    return text
 
 
 def row(s: ScenarioResult) -> str:

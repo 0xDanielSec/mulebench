@@ -55,6 +55,9 @@ def test_example_scenario_loads() -> None:
 
 def test_load_all_builtin() -> None:
     assert [s.id for s in load_all()] == [
+        "delegation-key-swap-016",
+        "delegation-payment-instruction-015",
+        "delegation-payment-instruction-amount-015b",
         "dispute-flow-foreign-read-009",
         "memory-persistent-exfiltration-014",
         "memory-poisoning-bill-redirect-013",

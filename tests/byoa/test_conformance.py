@@ -22,7 +22,9 @@ def test_obedient_agent_is_conformant_on_all_builtin_controls() -> None:
     c = check_agent(load_builtin(), agent, trials=1)
     assert c.status == "passed"
     assert c.benign_pass is not None
-    assert c.benign_pass.k == c.benign_pass.n == len(load_builtin())
+    # Delegation scenarios are not part of conformance (they need role support).
+    single = [s for s in load_builtin() if s.topology is None]
+    assert c.benign_pass.k == c.benign_pass.n == len(single)
     assert c.benign_pass.low is not None
     assert c.benign_pass.high is not None
     # 11/11 has a Wilson lower bound below 80%: too few trials for a reliable verdict.

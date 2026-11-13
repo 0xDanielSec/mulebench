@@ -13,6 +13,7 @@ from mulebench.tools.client import ToolClient
 StepOrigin = Literal["user_request", "tool_output", "model", "unknown"]
 StopReason = Literal["done", "step_cap", "turn_cap", "refused", "errored"]
 SessionNoteChannel = Literal["operator", "system_prompt"]
+AgentRole = Literal["reader", "payer"]
 
 
 class _Model(BaseModel):
@@ -27,6 +28,8 @@ class AgentTask(_Model):
     trial_key: str = ""
     prompt_variant: str = "none"
     trial: int = 0  # trial index within the cell; LLM agents derive the seed from it
+    # Delegation runs only: the agent's role. None for single-agent runs.
+    role: AgentRole | None = None
 
 
 class AgentStep(_Model):

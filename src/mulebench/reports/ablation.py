@@ -161,9 +161,18 @@ def not_measurable_guards(agent: Agent) -> list[str]:
     return ["untrusted_content_marking"] if isinstance(agent, ScriptedAgent) else []
 
 
+def single_agent(scenarios: Sequence[Scenario]) -> list[Scenario]:
+    """Scenarios this guard ablation covers. Delegation scenarios have their
+    own ablation of handoff defences (docs/delegation.md): their attack can
+    succeed with every invariant holding (an injected amount within an
+    authorization), which this matrix, judged on invariants, cannot show."""
+    return [s for s in scenarios if s.topology is None]
+
+
 def run_ablation(
     scenarios: Sequence[Scenario], agent: Agent, workloads: Sequence[Workload] = ()
 ) -> AblationReport:
+    scenarios = single_agent(scenarios)
     sets = ablation_presets()
     outcome = run_all(scenarios, agent, presets=sets)
     if outcome.status != "complete":
@@ -191,7 +200,7 @@ def run_cap_sensitivity(
     caps: Sequence[int] = CAP_SENSITIVITY_CENTS,
 ) -> list[SensitivityPoint]:
     presets = cap_sensitivity_presets(caps)
-    outcome = run_all(scenarios, agent, presets=presets)
+    outcome = run_all(single_agent(scenarios), agent, presets=presets)
     if outcome.status != "complete":
         raise RuntimeError(f"sensitivity run aborted: {outcome.abort_reason}")
     trials = run_workloads(workloads, agent, presets)

@@ -50,7 +50,7 @@ TRIALS = 2
 def scenarios() -> list[Scenario]:
     """The pilot-era scenarios (no agent memory). The synthetic policy has no
     memory behavior, and the committed cassettes freeze these runs."""
-    return [s for s in load_builtin() if not s.memory]
+    return [s for s in load_builtin() if not s.memory and s.topology is None]
 
 
 _INJECTED = re.compile(

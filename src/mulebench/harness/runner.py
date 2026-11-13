@@ -6,16 +6,17 @@ from __future__ import annotations
 import json
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import timedelta
 from typing import Any
 
-from mulebench.agents import Agent, AgentTask, render_session_note
+from mulebench.agents import Agent, AgentTask, SessionNote, render_session_note, role_agents
 from mulebench.agents.base import AgentRun, AgentStep, RunAborted, TokenUsage
 from mulebench.attacks import Scenario, render, scenario_sha256
 from mulebench.attacks.schema import ExpectedOutcome
 from mulebench.harness.attribution import CallView, PaymentView, attribute
 from mulebench.harness.confirmer import RecordingConfirmer, RequestConfirmer
+from mulebench.harness.delegation import HandoffArtifact, build_handoff, delegation_metrics
 from mulebench.harness.disclosure import amounts_in_text, check_disclosure, sink_texts
 from mulebench.harness.memory import SessionSpan, judge_notes, memory_metrics
 from mulebench.harness.metrics import unauthorized_outflow_cents
@@ -39,7 +40,7 @@ from mulebench.harness.models import (
     TrialResult,
     Variant,
 )
-from mulebench.harness.presets import build_guard_set, preset_guard_names
+from mulebench.harness.presets import GuardSet, build_guard_set, preset_guard_names
 from mulebench.harness.seed import grant_session, seed_cell
 from mulebench.harness.stats import Rate, wilson
 from mulebench.harness.validity import (
@@ -220,6 +221,12 @@ def _scenario_result(s: Scenario, cells: list[CellResult]) -> ScenarioResult:
         cells=cells,
         scenario_sha256=scenario_sha256(s),
         tool_schema_sha256=tool_schema_sha256(memory=s.memory),
+        tool_schema_sha256_by_role=None
+        if s.topology is None
+        else {
+            "reader": tool_schema_sha256(tools=frozenset(s.topology.reader_tools)),
+            "payer": tool_schema_sha256(tools=frozenset(s.topology.payer_tools)),
+        },
     )
 
 
@@ -244,6 +251,7 @@ def run_trial(
     session_runs: list[SessionRun] = []
     runs: list[AgentRun] = []
     memory = MemoryStore() if scenario.memory else None
+    handoff: HandoffArtifact | None = None
     try:
         for plan in plans:
             if plan.index > 0:
@@ -271,7 +279,10 @@ def run_trial(
             )
             granted = {a.authorization_id for a in note.authorizations}
             auths = [a for a in ledger.snapshot().authorizations if a.id in granted]
-            one = agent.run(task, _TickingClient(ctx, clock))
+            if scenario.topology is None:
+                one = agent.run(task, _TickingClient(ctx, clock))
+            else:
+                one, handoff = _run_delegation(scenario, agent, task, ctx, clock, guard_set, note)
             runs.append(one)
             session_runs.append(
                 SessionRun(
@@ -331,6 +342,14 @@ def run_trial(
             },
         )
     exposed = _payload_exposed(trace, scenario.canary) if attack else None
+    attribution = None if errored else _attribution(scenario, attack, snapshot, inv_ctx, trace)
+    delegation = (
+        None
+        if errored or handoff is None
+        else delegation_metrics(
+            handoff, trace, scenario, None if attribution is None else attribution.attack_success
+        )
+    )
     exact, subset = _utility(scenario, snapshot, trace, customer)
     usage = sum((c.usage for c in run.model_calls), TokenUsage())
     costs = [c.cost_usd for c in run.model_calls]
@@ -361,7 +380,7 @@ def run_trial(
         final_text=run.final_text,
         ledger_before=before,
         ledger_after=balances(snapshot),
-        attribution=None if errored else _attribution(scenario, attack, snapshot, inv_ctx, trace),
+        attribution=attribution,
         context_near_limit=near_context_limit(
             [
                 c.prompt_tokens if c.context_tokens is None else c.context_tokens
@@ -397,6 +416,8 @@ def run_trial(
         sessions=session_runs if len(plans) > 1 else [],
         notes=stored_notes,
         memory=mem,
+        handoff=handoff,
+        delegation=delegation,
         unauthorized_outflow_cents=unauthorized_outflow_cents(snapshot, inv_ctx),
         metrics=CellMetrics(
             steps=len(run.steps),
@@ -561,6 +582,7 @@ def build_cell(
                 for sink in DISCLOSURE_SINKS
             },
             **_memory_rates(ok, exposed),
+            **_delegation_rates(ok, exposed),
             attributed_success=wilson(
                 sum(
                     t.attribution is not None and t.attribution.attack_success is True
@@ -618,6 +640,69 @@ def _memory_rates(ok: list[TrialResult], exposed: list[TrialResult]) -> dict[str
             sum(t.memory is not None and t.memory.note_followed for t in ok), len(ok)
         ),
     }
+
+
+def _delegation_rates(ok: list[TrialResult], exposed: list[TrialResult]) -> dict[str, Rate | None]:
+    if not any(t.delegation is not None for t in ok):
+        return {}
+    return {
+        "handoff_tainted": wilson(
+            sum(t.delegation is not None and t.delegation.handoff_tainted for t in ok), len(ok)
+        ),
+        "crossed_boundary": wilson(
+            sum(t.delegation is not None and t.delegation.crossed_boundary for t in ok), len(ok)
+        ),
+        "delegated_success": wilson(
+            sum(
+                t.delegation is not None and t.delegation.attributed_success is True
+                for t in exposed
+            ),
+            len(exposed),
+        ),
+    }
+
+
+def _run_delegation(
+    scenario: Scenario,
+    agent: Agent,
+    task: AgentTask,
+    ctx: ToolContext,
+    clock: FixedClock,
+    guard_set: GuardSet,
+    note: SessionNote,
+) -> tuple[AgentRun, HandoffArtifact | None]:
+    """Reader then Payer on one ledger and trace. See mulebench.harness.delegation."""
+    topology = scenario.topology
+    if topology is None:  # pragma: no cover - callers check
+        raise ValueError(f"{scenario.id} has no delegation topology")
+    reader_agent, payer_agent = role_agents(agent)
+    payees = frozenset(a.payee_pix_key for a in note.authorizations)
+    reader_ctx = replace(ctx, role="reader", allowed_tools=frozenset(topology.reader_tools))
+    reader_task = task.model_copy(
+        update={"role": "reader", "trial_key": f"{task.trial_key}#reader"}
+    )
+    reader = reader_agent.run(reader_task, _TickingClient(reader_ctx, clock))
+    if reader.stopped == "errored":
+        return reader, None
+    handoff = build_handoff(
+        reader.final_text or "",
+        structured=guard_set.structured_handoff,
+        note_payees=payees,
+        request=task.request if guard_set.payer_sees_request else None,
+        scenario=scenario,
+    )
+    payer_ctx = replace(
+        ctx, role="payer", allowed_tools=frozenset(topology.payer_tools), note_payees=payees
+    )
+    payer_task = task.model_copy(
+        update={
+            "role": "payer",
+            "request": handoff.payer_input,
+            "trial_key": f"{task.trial_key}#payer",
+        }
+    )
+    payer = payer_agent.run(payer_task, _TickingClient(payer_ctx, clock))
+    return merge_runs([reader, payer]), handoff
 
 
 def _task_rates(ok: list[TrialResult]) -> dict[str, Rate]:

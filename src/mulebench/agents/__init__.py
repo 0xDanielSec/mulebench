@@ -8,15 +8,18 @@ from mulebench.agents.session_note import (
     parse_session_note,
     render_session_note,
 )
+from mulebench.agents.team import DelegationTeam, role_agents
 
 __all__ = [
     "Agent",
     "AgentRun",
     "AgentStep",
     "AgentTask",
+    "DelegationTeam",
     "NoteAuthorization",
     "ScriptedAgent",
     "SessionNote",
     "parse_session_note",
     "render_session_note",
+    "role_agents",
 ]

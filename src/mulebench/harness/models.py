@@ -20,6 +20,7 @@ from mulebench.disclosure import Disclosure as Disclosure
 from mulebench.disclosure import DisclosureKind as DisclosureKind
 from mulebench.disclosure import DisclosureSink as DisclosureSink
 from mulebench.disclosure import SinkDisclosure as SinkDisclosure
+from mulebench.harness.delegation import DelegationMetrics, HandoffArtifact
 from mulebench.harness.memory import MemoryMetrics, StoredNote
 from mulebench.harness.stats import Rate
 from mulebench.invariants import InvariantResult
@@ -149,6 +150,9 @@ class TrialResult(_Model):
     # Memory or multi-session scenarios, non-errored trials only; None
     # otherwise and in older reports.
     memory: MemoryMetrics | None = None
+    # Delegation runs only: the Reader -> Payer handoff and its metrics.
+    handoff: HandoffArtifact | None = None
+    delegation: DelegationMetrics | None = None
     # Agent transfers that break INV-1 or go to a payee no authorization of the
     # session customer names (see mulebench.harness.metrics). 0 in upgraded v1.
     unauthorized_outflow_cents: int = 0
@@ -185,6 +189,10 @@ class AttackAggregates(_Model):
     memory_tainted: Rate | None = None
     cross_session_success: Rate | None = None
     note_followed: Rate | None = None
+    # Delegation scenarios only, over non-errored trials (None otherwise).
+    handoff_tainted: Rate | None = None
+    crossed_boundary: Rate | None = None
+    delegated_success: Rate | None = None  # attributed AND tainted AND crossed
 
 
 class BenignAggregates(_Model):
@@ -235,6 +243,8 @@ class ScenarioResult(_Model):
     # What models saw of the tools in this scenario (memory tools only with
     # `memory: true`). None in older reports.
     tool_schema_sha256: str | None = None
+    # Delegation scenarios: what each role's model saw ({"reader": ..., "payer": ...}).
+    tool_schema_sha256_by_role: dict[str, str] | None = None
 
     def cell(self, preset: Preset, variant: Variant, prompt_variant: str = NO_PROMPT) -> CellResult:
         return next(

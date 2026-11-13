@@ -222,6 +222,39 @@
             }
           ],
           "default": null
+        },
+        "handoff_tainted": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "crossed_boundary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "delegated_success": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Rate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -756,6 +789,42 @@
       "title": "CostTotals",
       "type": "object"
     },
+    "DelegationMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "handoff_tainted": {
+          "title": "Handoff Tainted",
+          "type": "boolean"
+        },
+        "crossed_boundary": {
+          "title": "Crossed Boundary",
+          "type": "boolean"
+        },
+        "attributed_success": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Attributed Success"
+        },
+        "tainted_but_stopped": {
+          "title": "Tainted But Stopped",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "handoff_tainted",
+        "crossed_boundary",
+        "attributed_success",
+        "tainted_but_stopped"
+      ],
+      "title": "DelegationMetrics",
+      "type": "object"
+    },
     "Disclosure": {
       "additionalProperties": false,
       "description": "Whether another customer's amounts reached a sink (see\nmulebench.harness.disclosure). Descriptive; separate from INV-2. No text\nis ever stored. The top-level fields are the union over `sinks`; reports\nbefore per-sink checks have no `sinks` and judged the final answer only.",
@@ -809,6 +878,44 @@
         "disclosed"
       ],
       "title": "Disclosure",
+      "type": "object"
+    },
+    "DroppedField": {
+      "additionalProperties": false,
+      "description": "A field the structured handoff refused, with why. `value` is what the\nReader wrote (stored for analysis; never shown to the Payer).",
+      "properties": {
+        "line": {
+          "title": "Line",
+          "type": "integer"
+        },
+        "field": {
+          "enum": [
+            "payee_key",
+            "bill_ref"
+          ],
+          "title": "Field",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "payee_not_authorized",
+            "bill_ref_invalid"
+          ],
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "line",
+        "field",
+        "value",
+        "reason"
+      ],
+      "title": "DroppedField",
       "type": "object"
     },
     "Generator": {
@@ -884,6 +991,119 @@
         "allowed"
       ],
       "title": "GuardDecision",
+      "type": "object"
+    },
+    "HandoffArtifact": {
+      "additionalProperties": false,
+      "properties": {
+        "author": {
+          "const": "reader",
+          "default": "reader",
+          "title": "Author",
+          "type": "string"
+        },
+        "provenance": {
+          "const": "agent_written",
+          "default": "agent_written",
+          "title": "Provenance",
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "free_text",
+            "structured"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "reader_text": {
+          "title": "Reader Text",
+          "type": "string"
+        },
+        "payer_input": {
+          "title": "Payer Input",
+          "type": "string"
+        },
+        "items": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/HandoffItem"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "dropped": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/DroppedField"
+          },
+          "title": "Dropped",
+          "type": "array"
+        },
+        "payer_saw_request": {
+          "default": false,
+          "title": "Payer Saw Request",
+          "type": "boolean"
+        },
+        "tainted": {
+          "default": false,
+          "title": "Tainted",
+          "type": "boolean"
+        },
+        "taint_sources": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Taint Sources",
+          "type": "array"
+        },
+        "reader_tainted": {
+          "default": false,
+          "title": "Reader Tainted",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "mode",
+        "reader_text",
+        "payer_input"
+      ],
+      "title": "HandoffArtifact",
+      "type": "object"
+    },
+    "HandoffItem": {
+      "additionalProperties": false,
+      "description": "One planned payment.",
+      "properties": {
+        "payee_key": {
+          "minLength": 1,
+          "title": "Payee Key",
+          "type": "string"
+        },
+        "amount_cents": {
+          "exclusiveMinimum": 0,
+          "title": "Amount Cents",
+          "type": "integer"
+        },
+        "bill_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bill Ref"
+        }
+      },
+      "required": [
+        "payee_key",
+        "amount_cents"
+      ],
+      "title": "HandoffItem",
       "type": "object"
     },
     "InvariantResult": {
@@ -1489,6 +1709,21 @@
           ],
           "default": null,
           "title": "Tool Schema Sha256"
+        },
+        "tool_schema_sha256_by_role": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Schema Sha256 By Role"
         }
       },
       "required": [
@@ -2399,6 +2634,28 @@
           "anyOf": [
             {
               "$ref": "#/$defs/MemoryMetrics"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "handoff": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HandoffArtifact"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "delegation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DelegationMetrics"
             },
             {
               "type": "null"
