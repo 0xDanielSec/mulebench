@@ -170,33 +170,40 @@ def adapt_trial(
     events += [LedgerAccount(ts=t0, account=a) for a in seed.accounts]
     events += [LedgerAuthorization(ts=a.created_at, authorization=a) for a in seed.authorizations]
     events += [LedgerTransfer(ts=t.created_at, transfer=t) for t in seed.transfers]
-    events.append(SessionStart(ts=t0, session_id=session, customer_id=customer))
-    events.append(CustomerMessage(ts=t0, session_id=session, text=scenario.user_task.request))
+    # Multi-session trials become one monitor session per harness session,
+    # `<trial key>#s<index>`, with the later sessions' grants as stored. The
+    # monitor has no cross-session authorization rule (see docs/monitor.md).
+    stored_sessions = list(trial.get("sessions", []))
 
-    # Multi-session trials: later sessions' grants and requests, as stored.
-    # The monitor sees the trial as one session (no cross-session rule).
-    for s in trial.get("sessions", []):
-        if s["index"] == 0:
-            continue
-        started = _dt(s["started_at"])
-        for a in s.get("authorizations", []):
-            events.append(
-                LedgerAuthorization(
-                    ts=_dt(a["created_at"]),
-                    authorization=Authorization.model_validate(
-                        {**a, "created_at": _dt(a["created_at"])}
-                    ),
+    def sid(index: object) -> str:
+        return f"{session}#s{index}" if stored_sessions else session
+
+    if not stored_sessions:
+        events.append(SessionStart(ts=t0, session_id=session, customer_id=customer))
+        events.append(CustomerMessage(ts=t0, session_id=session, text=scenario.user_task.request))
+    for s in stored_sessions:
+        started = t0 if s["index"] == 0 else _dt(s["started_at"])
+        if s["index"] != 0:
+            for a in s.get("authorizations", []):
+                events.append(
+                    LedgerAuthorization(
+                        ts=_dt(a["created_at"]),
+                        authorization=Authorization.model_validate(
+                            {**a, "created_at": _dt(a["created_at"])}
+                        ),
+                    )
                 )
-            )
-        events.append(CustomerMessage(ts=started, session_id=session, text=s["request"]))
+        events.append(SessionStart(ts=started, session_id=sid(s["index"]), customer_id=customer))
+        events.append(CustomerMessage(ts=started, session_id=sid(s["index"]), text=s["request"]))
 
     trace = list(trial.get("trace", []))
     descriptions: dict[str, str] = {}
+    made_in: dict[str, str] = {}
     for r in trace:
         events.append(
             ToolCall(
                 ts=_dt(r["ts"]),
-                session_id=session,
+                session_id=sid(r.get("session", 0)),
                 seq=r["seq"],
                 tool=r["tool"],
                 args=r["args"],
@@ -208,13 +215,14 @@ def adapt_trial(
         if r["tool"] == "transfer_pix" and isinstance(res.get("transfer_id"), str):
             desc = r["args"].get("description")
             descriptions[res["transfer_id"]] = desc if isinstance(desc, str) else ""
+            made_in[res["transfer_id"]] = sid(r.get("session", 0))
     for c in trial.get("confirmations", []):
         if c.get("session_id", session) != session:
             continue
         events.append(
             Confirmation(
                 ts=_dt(c["ts"]),
-                session_id=session,
+                session_id=sid(c.get("session", 0)),
                 seq=c["seq"],
                 customer_id=c["customer_id"],
                 tool=c["tool"],
@@ -231,7 +239,9 @@ def adapt_trial(
             continue
         t = _transfer(o, by_key, descriptions)
         last = max(last, t.created_at)
-        events.append(LedgerTransfer(ts=t.created_at, transfer=t, session_id=session))
+        events.append(
+            LedgerTransfer(ts=t.created_at, transfer=t, session_id=made_in.get(t.id, sid(0)))
+        )
 
     end_ts = max([last, *(e.ts for e in events)])
     after = trial.get("ledger_after")
@@ -241,9 +251,14 @@ def adapt_trial(
             if acc_id in accounts:
                 updated = accounts[acc_id].model_copy(update={"balance_cents": balance})
                 events.append(LedgerAccount(ts=end_ts, account=updated))
-    if trial.get("final_text") is not None:
-        events.append(FinalAnswer(ts=end_ts, session_id=session, text=trial["final_text"]))
-    events.append(SessionEnd(ts=end_ts, session_id=session))
+    if not stored_sessions:
+        if trial.get("final_text") is not None:
+            events.append(FinalAnswer(ts=end_ts, session_id=session, text=trial["final_text"]))
+        events.append(SessionEnd(ts=end_ts, session_id=session))
+    for s in stored_sessions:
+        if s.get("final_text") is not None:
+            events.append(FinalAnswer(ts=end_ts, session_id=sid(s["index"]), text=s["final_text"]))
+        events.append(SessionEnd(ts=end_ts, session_id=sid(s["index"])))
 
     stored = tuple(trial.get("invariants", []))
     return AdaptedTrial(

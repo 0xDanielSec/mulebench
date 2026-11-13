@@ -28,6 +28,7 @@ from mulebench.invariants import (
 from mulebench.ledger import LedgerSnapshot
 from mulebench.monitor.alerts import Alert, Evidence, make_alert, sort_alerts
 from mulebench.monitor.events import Event
+from mulebench.monitor.memory import memory_findings
 from mulebench.monitor.rules import RULES_BY_ID, invariant_rule
 from mulebench.monitor.state import MonitorState, SessionState, linked_transfer_id
 
@@ -101,6 +102,27 @@ def evaluate_session(
             alerts.append(_violation_alert(state, s, inv_id, v, result.applicable, ts))
     if config.disclosure:
         alerts.extend(_disclosure_alerts(snap, s, s.customer_id, ts))
+    alerts.extend(_memory_alerts(s, ts))
+    return alerts
+
+
+def _memory_alerts(s: SessionState, fallback_ts: datetime) -> list[Alert]:
+    calls = s.ordered_calls()
+    alerts = []
+    for f in memory_findings(calls, list(s.messages)):
+        seqs = [f.call_seq] + ([f.source_seq] if f.source_seq is not None else [])
+        alerts.append(
+            make_alert(
+                f.rule_id,
+                session_id=s.session_id,
+                customer_id=s.customer_id,
+                ts=s.calls[f.call_seq].ts if f.call_seq in s.calls else fallback_ts,
+                evidence=Evidence(
+                    call_seq=sorted(seqs), fields=list(RULES_BY_ID[f.rule_id].fields)
+                ),
+                detail=f.detail,
+            )
+        )
     return alerts
 
 
