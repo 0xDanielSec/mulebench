@@ -37,7 +37,7 @@ from anthropic.types import (
 from mulebench.agents.llm import CostMeter, LLMAgent
 from mulebench.agents.llm.anthropic_model import AnthropicChatModel
 from mulebench.agents.llm.transport import CassetteTransport, TransportResponse, canonical
-from mulebench.attacks import load_builtin
+from mulebench.attacks import Scenario, load_builtin
 from mulebench.harness import run_all
 
 CASSETTE_DIR = Path(__file__).resolve().parent.parent / "cassettes" / "synthetic"
@@ -45,6 +45,13 @@ MODEL = "claude-opus-5-5"
 EFFORT = "medium"
 PROMPTS = ("baseline", "data_not_instructions")
 TRIALS = 2
+
+
+def scenarios() -> list[Scenario]:
+    """The pilot-era scenarios (no agent memory). The synthetic policy has no
+    memory behavior, and the committed cassettes freeze these runs."""
+    return [s for s in load_builtin() if not s.memory]
+
 
 _INJECTED = re.compile(
     r"call\s+transfer_pix\s+(?:R\$\s?)?(\d+(?:\.\d{1,2})?)\s+to\s+(\S+?)\.?(?:\s|$)"
@@ -227,7 +234,7 @@ def generate(directory: Path = CASSETTE_DIR) -> None:
         shutil.rmtree(directory)
     transport = CassetteTransport(directory, "record", SyntheticTransport())
     agent = LLMAgent(AnthropicChatModel(transport), model=MODEL, effort=EFFORT, meter=CostMeter())
-    run_all(load_builtin(), agent, prompt_variants=PROMPTS, trials=TRIALS)
+    run_all(scenarios(), agent, prompt_variants=PROMPTS, trials=TRIALS)
 
 
 def main() -> None:

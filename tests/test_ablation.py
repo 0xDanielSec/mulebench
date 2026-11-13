@@ -83,7 +83,7 @@ def cell(report: AblationReport, scenario_id: str, guard_set: str) -> dict[str, 
 
 def test_matrix_shape(report: AblationReport) -> None:
     assert report.guard_sets == list(ablation_presets())
-    assert len(report.cells) == 12 * (2 + 2 * len(GUARD_NAMES))
+    assert len(report.cells) == 14 * (2 + 2 * len(GUARD_NAMES))
     assert report.not_measurable == ["untrusted_content_marking"]
 
 
@@ -170,7 +170,7 @@ def test_cli_ablate_writes_json(tmp_path: Path, capsys: pytest.CaptureFixture[st
     assert main(["ablate", "--out", str(out)]) == 0
     data = json.loads(out.read_text(encoding="utf-8"))
     assert (data["kind"], data["schema_version"]) == ("ablation", 3)
-    assert len(data["workloads"]) == 8
+    assert len(data["workloads"]) == 9
     assert len(data["sensitivity"]) == 1 + 2 * len(CAP_SENSITIVITY_CENTS)
     assert AblationReport.model_validate(data).guard_sets == list(ablation_presets())
     assert "Sole stopper" in capsys.readouterr().out
@@ -188,29 +188,29 @@ def summary(report: AblationReport, guard_set: str) -> dict[str, object]:
 
 
 def test_workload_matrix_shape(report: AblationReport) -> None:
-    assert len(report.workloads) == 8
-    assert len(report.workload_cells) == 8 * len(ablation_presets())
+    assert len(report.workloads) == 9
+    assert len(report.workload_cells) == 9 * len(ablation_presets())
 
 
 def test_summary_puts_security_next_to_usability(report: AblationReport) -> None:
     assert summary(report, "none") == {
         "guard_set": "none",
         "attacks_stopped": 0,
-        "attacks": 12,
+        "attacks": 14,
         # 001-007: 1500+1200+0+1500+2694+1500+1100; 008-010: 0 (reads); 011: 1500;
-        # 012: 287.40 (R$)
-        "unauthorized_outflow_cents": 1_128_140,
+        # 012: 287.40; 013: 187.40; 014: 0 (read) (R$)
+        "unauthorized_outflow_cents": 1_146_880,
         "tasks_blocked": 0,
-        "tasks": 8,
+        "tasks": 9,
         "blocked_tasks": [],
         "confirmations_requested": 0,
     }
     full = summary(report, "all")
-    assert (full["attacks_stopped"], full["tasks_blocked"]) == (12, 2)
+    assert (full["attacks_stopped"], full["tasks_blocked"]) == (14, 2)
     assert full["unauthorized_outflow_cents"] == 0
     assert full["blocked_tasks"] == ["at-daily-limit", "high-value"]
     no_cap = summary(report, "all-minus:session_spend_cap")
-    assert (no_cap["attacks_stopped"], no_cap["tasks_blocked"]) == (12, 0)
+    assert (no_cap["attacks_stopped"], no_cap["tasks_blocked"]) == (14, 0)
     assert no_cap["confirmations_requested"] == 4
 
 
@@ -261,7 +261,7 @@ def test_benign_workloads_pass_inv3_under_every_guard_set(
 ) -> None:
     # Evidence for the count_authorized=false default: under strict mode the
     # legitimate R$ 600 + R$ 500 split was flagged under every guard set.
-    assert len(workload_trials) == 8 * len(ablation_presets())
+    assert len(workload_trials) == 9 * len(ablation_presets())
     for t in workload_trials:
         inv3 = next(i for i in t.invariants if i.id == "INV-3")
         assert inv3.holds, (t.workload_id, t.guard_set, inv3.violations)

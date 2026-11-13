@@ -16,7 +16,6 @@ from mulebench.agents.llm.transport import (
     LiveCallsDisabled,
     LiveTransport,
 )
-from mulebench.attacks import load_builtin
 from mulebench.cli import main
 from mulebench.harness import run_all
 from mulebench.reports import build_report, report_to_json
@@ -35,7 +34,7 @@ def replay(directory: Path = synthetic.CASSETTE_DIR) -> Any:
         effort=synthetic.EFFORT,
         meter=CostMeter(),
     )
-    outcome = run_all(load_builtin(), agent, prompt_variants=synthetic.PROMPTS, trials=2)
+    outcome = run_all(synthetic.scenarios(), agent, prompt_variants=synthetic.PROMPTS, trials=2)
     return build_report(outcome, agent, prompt_variants=synthetic.PROMPTS, trials=2)
 
 
@@ -149,7 +148,16 @@ def test_cli_llm_usage_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
 
 def test_cli_replay_and_budget_exit_code(tmp_path: Path) -> None:
     out = tmp_path / "r.json"
-    args = ["run", *LLM_ARGS, "--cassettes", str(synthetic.CASSETTE_DIR), "--out", str(out)]
+    pilot = [x for s in synthetic.scenarios() for x in ("--scenario", s.id)]
+    args = [
+        "run",
+        *LLM_ARGS,
+        *pilot,
+        "--cassettes",
+        str(synthetic.CASSETTE_DIR),
+        "--out",
+        str(out),
+    ]
     assert main(args) == 0
     report = json.loads(out.read_text(encoding="utf-8"))
     assert report["schema_version"] == 3

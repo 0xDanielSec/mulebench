@@ -90,7 +90,9 @@ class ToolClient:
 
     @property
     def _memory(self) -> bool:
-        return self._ctx.memory is not None
+        # Test doubles may subclass without a context: no memory tools then.
+        ctx: ToolContext | None = getattr(self, "_ctx", None)
+        return ctx is not None and ctx.memory is not None
 
     def tool_names(self) -> list[str]:
         return sorted(available_tools(self._memory))

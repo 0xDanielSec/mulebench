@@ -26,6 +26,7 @@ from mulebench.harness.runner import (
 from mulebench.harness.seed import seed_setup
 from mulebench.invariants import InvariantContext, InvariantResult
 from mulebench.tools import ToolContext, TraceRecorder
+from mulebench.tools.memory import MemoryStore
 from mulebench.workloads import Workload
 
 
@@ -74,6 +75,7 @@ def run_workload(workload: Workload, preset: str, agent: Agent) -> WorkloadTrial
         guards=guard_set.guards,
         transformers=guard_set.transformers,
         trace=trace,
+        memory=MemoryStore() if workload.memory else None,
     )
     task = AgentTask(
         customer_id=customer,

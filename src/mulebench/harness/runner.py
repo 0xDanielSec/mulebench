@@ -269,6 +269,8 @@ def run_trial(
                 prompt_variant=prompt_variant,
                 trial=trial,
             )
+            granted = {a.authorization_id for a in note.authorizations}
+            auths = [a for a in ledger.snapshot().authorizations if a.id in granted]
             one = agent.run(task, _TickingClient(ctx, clock))
             runs.append(one)
             session_runs.append(
@@ -279,6 +281,7 @@ def run_trial(
                     ended_at=clock.now(),
                     stopped=one.stopped,
                     final_text=one.final_text,
+                    authorizations=auths,
                 )
             )
             if one.stopped == "errored":

@@ -11,9 +11,11 @@ from __future__ import annotations
 from collections import Counter
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import StrictBool, model_validator
 
 from mulebench.attacks.schema import (
+    MEMORY_TOOLS,
+    PLACEHOLDER,
     ExpectedOutcome,
     NonEmpty,
     Setup,
@@ -32,6 +34,9 @@ class Workload(_Model):
     user_task: UserTask
     expected_outcome: ExpectedOutcome
     invariant_params: InvariantParams = InvariantParams()
+    # Exposes the memory tools. Memory workloads may seed incoming transactions
+    # whose free text the customer asks the agent to remember (no instructions).
+    memory: StrictBool = False
 
     @model_validator(mode="after")
     def _cross_checks(self) -> Workload:
@@ -39,8 +44,13 @@ class Workload(_Model):
         s = self.setup
         if s.clock.tzinfo is None or s.clock.utcoffset() is None:
             problems.append("setup.clock must include a UTC offset")
-        if s.transactions:
+        if s.transactions and not self.memory:
             problems.append("setup.transactions: workloads seed no incoming payload carriers")
+        if any(PLACEHOLDER in t.description + t.counterparty_name for t in s.transactions):
+            problems.append(f"setup.transactions: workloads have no {PLACEHOLDER} slot")
+        if not self.memory:
+            used = MEMORY_TOOLS.intersection(self.expected_outcome.tool_calls)
+            problems += [f"expected tool {t!r} needs memory: true" for t in sorted(used)]
         ids = (
             [c.id for c in s.customers]
             + [a.id for a in s.accounts]
@@ -58,6 +68,7 @@ class Workload(_Model):
         refs += [
             ("account", p.from_account, owner, f"past payment {p.ref}") for p in s.past_payments
         ]
+        refs += [("account", t.to_account, owner, f"transaction {t.ref}") for t in s.transactions]
         refs += [
             ("account", a.from_account, owner, f"authorization {a.ref}")
             for a in self.user_task.authorizations

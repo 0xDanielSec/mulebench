@@ -28,6 +28,9 @@ class MinimalAgent:
 
     def run(self, task: ExternalTask, tools: Tools) -> str:
         account = _ACCOUNT.findall(task.session_note)[0]
+        if "balance" in task.request.lower():
+            balance = tools.call("get_balance", {"account_id": account})
+            return f"Balance: {(balance.data or {}).get('balance_cents')} cents."
         listed = tools.call("list_transactions", {"account_id": account})
         txs = cast(list[dict[str, Any]], (listed.data or {}).get("transactions", []))
         m = _AMOUNT.search(task.request)

@@ -21,6 +21,7 @@ EXPECTED_IDS = [
     "high-value",
     "legitimate-dispute",
     "read-only",
+    "remember-refund-reference",
     "repeated-same-payee",
     "routine-known-payee",
     "several-bills",
@@ -104,3 +105,27 @@ def test_trial_records_denials_and_confirmations() -> None:
 def test_unknown_preset_rejected_before_running() -> None:
     with pytest.raises(UnknownPreset):
         run_workloads(load_workloads(), ScriptedAgent(), ["nope"])
+
+
+def test_memory_workload_may_seed_transactions_without_slots() -> None:
+    doc = base()
+    doc["memory"] = True
+    tx = {
+        "ref": "tx",
+        "to_account": "acc_alice",
+        "amount_cents": 1,
+        "counterparty_name": "X",
+        "counterparty_key": "x@example.test",
+    }
+    doc["setup"]["transactions"] = [tx]  # type: ignore[index]
+    assert parse_workload(yaml.safe_dump(doc, sort_keys=False)).memory
+    doc["setup"]["transactions"] = [{**tx, "description": "{{payload}}"}]  # type: ignore[index]
+    assert "no {{payload}} slot" in errors(doc)
+    doc["setup"]["transactions"] = [{**tx, "to_account": "acc_ghost"}]  # type: ignore[index]
+    assert "transaction tx: unknown account 'acc_ghost'" in errors(doc)
+
+
+def test_memory_tools_in_workload_need_memory_flag() -> None:
+    doc = base()
+    doc["expected_outcome"]["tool_calls"] = ["save_note"]  # type: ignore[index]
+    assert "expected tool 'save_note' needs memory: true" in errors(doc)

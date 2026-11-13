@@ -11,6 +11,7 @@ were listed. Named presets:
 
 `memory_write` is an optional guard: it is not part of GUARD_NAMES, so
 `strict`, `all` and the generated ablation presets stay as in the pilots.
+`only:memory_write` runs it alone.
 
 Ablation presets are generated: `none`, `all`, `only:<guard>` and
 `all-minus:<guard>`.
@@ -144,7 +145,7 @@ def _base_guard_names(name: str, full_name: str) -> tuple[str, ...]:
         chosen = frozenset()
     elif name == "all":
         chosen = frozenset(GUARD_NAMES)
-    elif name.startswith("only:") and name.removeprefix("only:") in GUARD_NAMES:
+    elif name.startswith("only:") and name.removeprefix("only:") in GUARD_ORDER:
         chosen = frozenset({name.removeprefix("only:")})
     elif name.startswith("all-minus:") and name.removeprefix("all-minus:") in GUARD_NAMES:
         chosen = frozenset(GUARD_NAMES) - {name.removeprefix("all-minus:")}

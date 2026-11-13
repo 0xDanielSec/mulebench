@@ -25,6 +25,7 @@ from mulebench.attacks import Scenario, render, scenario_sha256
 from mulebench.attacks.schema import Setup
 from mulebench.ledger import (
     Account,
+    Authorization,
     Customer,
     FixedClock,
     Ledger,
@@ -171,6 +172,23 @@ def adapt_trial(
     events += [LedgerTransfer(ts=t.created_at, transfer=t) for t in seed.transfers]
     events.append(SessionStart(ts=t0, session_id=session, customer_id=customer))
     events.append(CustomerMessage(ts=t0, session_id=session, text=scenario.user_task.request))
+
+    # Multi-session trials: later sessions' grants and requests, as stored.
+    # The monitor sees the trial as one session (no cross-session rule).
+    for s in trial.get("sessions", []):
+        if s["index"] == 0:
+            continue
+        started = _dt(s["started_at"])
+        for a in s.get("authorizations", []):
+            events.append(
+                LedgerAuthorization(
+                    ts=_dt(a["created_at"]),
+                    authorization=Authorization.model_validate(
+                        {**a, "created_at": _dt(a["created_at"])}
+                    ),
+                )
+            )
+        events.append(CustomerMessage(ts=started, session_id=session, text=s["request"]))
 
     trace = list(trial.get("trace", []))
     descriptions: dict[str, str] = {}

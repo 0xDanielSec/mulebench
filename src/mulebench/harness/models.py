@@ -23,6 +23,7 @@ from mulebench.disclosure import SinkDisclosure as SinkDisclosure
 from mulebench.harness.memory import StoredNote
 from mulebench.harness.stats import Rate
 from mulebench.invariants import InvariantResult
+from mulebench.ledger import Authorization
 from mulebench.tools import ConfirmationRecord, ToolCallRecord
 
 Preset = str  # a preset name; see mulebench.harness.presets
@@ -60,6 +61,9 @@ class SessionRun(_Model):
     ended_at: datetime
     stopped: str
     final_text: str | None = None
+    # Authorizations granted at the start of this session (session 0: the
+    # seeded ones). Lets trace consumers rebuild the ledger without replaying.
+    authorizations: list[Authorization] = []
 
 
 class CellMetrics(_Model):

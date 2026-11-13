@@ -243,6 +243,48 @@
       "title": "Attribution",
       "type": "object"
     },
+    "Authorization": {
+      "additionalProperties": false,
+      "description": "Explicit customer consent for one transfer, granted via the customer channel.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "customer_id": {
+          "title": "Customer Id",
+          "type": "string"
+        },
+        "from_account_id": {
+          "title": "From Account Id",
+          "type": "string"
+        },
+        "payee_pix_key": {
+          "title": "Payee Pix Key",
+          "type": "string"
+        },
+        "max_amount_cents": {
+          "exclusiveMinimum": 0,
+          "title": "Max Amount Cents",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "customer_id",
+        "from_account_id",
+        "payee_pix_key",
+        "max_amount_cents",
+        "created_at"
+      ],
+      "title": "Authorization",
+      "type": "object"
+    },
     "Axes": {
       "additionalProperties": false,
       "properties": {
@@ -1501,6 +1543,14 @@
           ],
           "default": null,
           "title": "Final Text"
+        },
+        "authorizations": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Authorization"
+          },
+          "title": "Authorizations",
+          "type": "array"
         }
       },
       "required": [
