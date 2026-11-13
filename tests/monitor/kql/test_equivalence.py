@@ -139,5 +139,6 @@ def test_queries_parse_with_kusto_language(tmp_path: Path) -> None:
         text=True,
         check=False,
         timeout=600,
+        env={**os.environ, "DOTNET_CLI_TELEMETRY_OPTOUT": "1", "DOTNET_NOLOGO": "1"},
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr

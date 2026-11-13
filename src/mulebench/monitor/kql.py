@@ -426,7 +426,7 @@ MbParts
     MAmount = AmountCents, MCreated = CreatedAt, MSeq = LinkedSeq)
     on $left.FromAccount == $right.MFrom, $left.Payee == $right.MPayee
 | where MCreated > CreatedAt - Window
-    and (MCreated < CreatedAt or (MCreated == CreatedAt and MId <= TransferId))
+    and (MCreated < CreatedAt or (MCreated == CreatedAt and strcmp(MId, TransferId) <= 0))
 | summarize Total = sum(MAmount), TransferIds = make_set(MId), Members = count(),
     TimeGenerated = max(TransferTime)
     by TransferId, FromAccount, OwnerSession, SessionCustomer

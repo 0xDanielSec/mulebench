@@ -113,3 +113,41 @@ def test_table_columns_cover_the_trace_format() -> None:
 def test_cli_writes_kql(tmp_path: Path) -> None:
     assert main(["monitor", "rules", "--format", "kql", "--out", str(tmp_path)]) == 0
     assert len(list(tmp_path.glob("*.yaml"))) == 25
+
+
+_TS_FIELDS = ("created_at", "ts")
+_RELATIONAL = re.compile(r"(\w+)\s*(<=|>=|<|>)\s*(\w+)")
+
+
+def string_columns(bare: str) -> set[str]:
+    """Columns that hold strings: tostring() results and their plain aliases."""
+    names = set(re.findall(r"(\w+)\s*=\s*tostring\(", bare))
+    names |= {"SessionId", "CustomerId", "EventType", "Tool", "Outcome", "Text"}
+    changed = True
+    while changed:
+        aliases = {a for a, b in re.findall(r"\b(\w+)\s*=\s*(\w+)\b(?!\s*\()", bare) if b in names}
+        changed = not aliases <= names
+        names |= aliases
+    return names
+
+
+@pytest.mark.parametrize("rule", RULES_KQL, ids=IDS)
+def test_dynamic_timestamps_are_cast_and_strings_use_strcmp(rule: object) -> None:
+    """Kusto rejects <, <=, >, >= on strings (KS106). Timestamps read from
+    dynamic columns must go through todatetime(); string ordering must use
+    strcmp()."""
+    query: str = rule.query  # type: ignore[attr-defined]
+    bare = strip_literals(query)
+    for m in re.finditer(rf"\.({'|'.join(_TS_FIELDS)})\b", bare):
+        before = bare[: m.start()]
+        assert re.search(r"todatetime\(\s*\w+$", before), bare[m.start() - 40 : m.end()]
+    strings = string_columns(bare)
+    for left, op, right in _RELATIONAL.findall(bare):
+        assert left not in strings, f"{left} {op} {right}: use strcmp()"
+        assert right not in strings, f"{left} {op} {right}: use strcmp()"
+
+
+def test_string_ordering_check_catches_the_original_bug() -> None:
+    bad = "T | project MId = TransferId | where MId <= TransferId"
+    strings = string_columns(bad + " | extend TransferId = tostring(x)")
+    assert any(a in strings or b in strings for a, _, b in _RELATIONAL.findall(bad))
