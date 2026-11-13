@@ -112,6 +112,5 @@ EVENT_ADAPTER: TypeAdapter[Event] = TypeAdapter(Event)
 
 def trace_json_schema() -> dict[str, object]:
     schema = EVENT_ADAPTER.json_schema()
-    schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
     schema["title"] = f"mulebench monitor trace event (format v{FORMAT_VERSION})"
     return schema

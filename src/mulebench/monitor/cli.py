@@ -5,6 +5,7 @@
                           [--stream [--grace-seconds S]]
     mulebench monitor schema [--out monitor-trace.schema.json]
     mulebench monitor adapt REPORT.json --out DIR [--scenario ID ...]
+    mulebench monitor rules --out DIR
 
 Batch mode (default) reads every event, then writes the alerts once, all
 `firm`. `--stream` processes events as they arrive (pipe a live log into
@@ -69,6 +70,11 @@ def add_parser(
     adapt.add_argument(
         "--scenario", dest="scenario_ids", action="append", help="only this scenario id"
     )
+
+    rules = msub.add_parser(
+        "rules", help="write the Sigma-like rule documents (documentation, not executed)"
+    )
+    rules.add_argument("--out", type=Path, required=True, help="output directory")
 
     schema = msub.add_parser("schema", help="print the trace event JSON Schema")
     schema.add_argument("--out", type=Path, help="write the schema here instead")
@@ -147,6 +153,11 @@ def _adapt(args: argparse.Namespace) -> int:
 def main(args: argparse.Namespace) -> int:
     if args.monitor_command == "adapt":
         return _adapt(args)
+    if args.monitor_command == "rules":
+        from mulebench.monitor.sigma import write_rules
+
+        print(f"wrote {write_rules(args.out)} rule document(s) to {args.out}", file=sys.stderr)
+        return 0
     if args.monitor_command == "schema":
         text = schema_text()
         if args.out:

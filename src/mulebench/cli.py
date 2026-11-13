@@ -16,7 +16,7 @@
     mulebench schema [--out report.schema.json]
     mulebench view REPORT.json [REPORT.json ...] --out DIR [--force]
     mulebench monitor run|adapt|schema ...   (see mulebench.monitor.cli)
-    mulebench monitor eval REPORT.json [...] [--out eval.json] [--markdown eval.md]
+    mulebench monitor eval REPORT.json [...] [--out eval.json] [--markdown eval.md] [--doc DOC.md]
 
 Long runs write a per-trial checkpoint (JSON Lines): --checkpoint FILE, or by
 default `<out>.checkpoint.jsonl` for --agent llm or --agent-module with --out. --resume skips the
@@ -241,6 +241,9 @@ def _parser() -> argparse.ArgumentParser:
     mon_eval.add_argument("reports", nargs="+", type=Path, help="mulebench JSON reports")
     mon_eval.add_argument("--out", type=Path, help="write the JSON result here (default stdout)")
     mon_eval.add_argument("--markdown", type=Path, help="also write markdown tables here")
+    mon_eval.add_argument(
+        "--doc", type=Path, help="replace the generated block of this markdown document"
+    )
     return parser
 
 
@@ -378,7 +381,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "monitor" and args.monitor_command == "eval":
         from mulebench.harness.monitor_eval import main as eval_main
 
-        return eval_main(args.reports, args.out, args.markdown)
+        return eval_main(args.reports, args.out, args.markdown, args.doc)
 
     if args.command == "monitor":
         from mulebench.monitor.cli import main as monitor_main
