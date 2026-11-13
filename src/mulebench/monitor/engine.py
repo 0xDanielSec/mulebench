@@ -94,8 +94,14 @@ def evaluate_session(
     )
     mine = state.session_transfers(session_id)
     alerts: list[Alert] = []
+    # INV-4 pairs this session's confirmations with this session's transfers
+    # only; with the whole ledger, another session's identical transfer could
+    # use up a confirmation.
+    own_snap = snap.model_copy(
+        update={"transfers": tuple(t for t in snap.transfers if t.id in mine)}
+    )
     for inv_id in config.invariants:
-        result = INVARIANTS[inv_id].check(snap, ctx)
+        result = INVARIANTS[inv_id].check(own_snap if inv_id == "INV-4" else snap, ctx)
         for v in result.violations:
             if v.call_seq is None and not (_transfer_ids(v) & mine):
                 continue  # another session's transfer

@@ -260,3 +260,29 @@ def test_cli_run_reports_format_errors(tmp_path: pytest.TempPathFactory) -> None
 
 def test_schema_command_matches_models() -> None:
     assert json.loads(schema_text()) == trace_json_schema()
+
+
+def test_inv4_confirmations_match_within_their_session_only() -> None:
+    """Regression: an identical transfer at the same time in another session
+    must not use up this session's confirmation."""
+    from tests.monitor.kql import cases as k
+
+    events = [
+        *k.BASE,
+        k.start("s_a"),
+        k.start("s_b"),
+        k.confirm("s_a", 1, 0.8, True),
+        *k.pay("s_a", 2, 1, "tx_a", amount=150_000),
+        k.confirm("s_b", 1, 0.8, True),
+        *k.pay("s_b", 2, 1, "tx_b", amount=150_000),
+    ]
+    from mulebench.monitor.events import EVENT_ADAPTER
+
+    parsed = [EVENT_ADAPTER.validate_json(json.dumps(e)) for e in events]
+    assert [a for a in run_batch(parsed) if a.family == "INV-4"] == []
+    # Without its own confirmation, s_b is flagged and s_a is not.
+    no_b = [e for e in parsed if not (e.type == "confirmation" and e.session_id == "s_b")]
+    flagged = [
+        (a.session_id, a.evidence.transfer_ids) for a in run_batch(no_b) if a.family == "INV-4"
+    ]
+    assert flagged == [("s_b", ["tx_b"])]

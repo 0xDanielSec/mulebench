@@ -407,12 +407,9 @@ CASES: list[Case] = [
                 *pay(s, 2, 1, "tx_hit_1", amount=150_000),
                 *pay(s, 3, 2, "tx_hit_2", amount=150_000),
             ],
-            # distinct amount: the engine matches confirmations against every
-            # session's transfers when judging one session (see docs/monitor-kql.md)
-            lambda s: [
-                confirm(s, 1, 0.8, True, amount=160_000),
-                *pay(s, 2, 1, "tx_miss", amount=160_000),
-            ],
+            # identical to the hit session's first transfer: confirmations
+            # are matched within the session only
+            lambda s: [confirm(s, 1, 0.8, True), *pay(s, 2, 1, "tx_miss", amount=150_000)],
         ),
         notes=["Single use: one approved confirmation backs only the first of two transfers."],
     ),
@@ -421,12 +418,9 @@ CASES: list[Case] = [
         "confirmation_declined",
         both(
             lambda s: [confirm(s, 1, 0.8, False), *pay(s, 2, 1, "tx_hit", amount=150_000)],
-            # distinct amount: the engine matches confirmations against every
-            # session's transfers when judging one session (see docs/monitor-kql.md)
-            lambda s: [
-                confirm(s, 1, 0.8, True, amount=160_000),
-                *pay(s, 2, 1, "tx_miss", amount=160_000),
-            ],
+            # identical to the hit session's first transfer: confirmations
+            # are matched within the session only
+            lambda s: [confirm(s, 1, 0.8, True), *pay(s, 2, 1, "tx_miss", amount=150_000)],
         ),
     ),
     # ------------------------------------------------------------- disclosure

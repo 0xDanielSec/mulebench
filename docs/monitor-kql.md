@@ -168,12 +168,6 @@ The case `two_transfers_one_confirmation` (one approved confirmation, two
 identical transfers) is caught by both and is a regular fixture, not a
 divergence.
 
-A separate engine quirk, found while writing the fixtures: when the engine
-judges one session, INV-4 matches that session's confirmations against the
-transfers of every session. So an identical transfer at the same time in
-another session can use up a confirmation. The KQL matches per session. The
-fixtures avoid this case.
-
 ## Verification
 
 - Always run (`tests/monitor/test_kql.py`):
