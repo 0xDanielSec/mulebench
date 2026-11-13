@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 
 from mulebench.attacks import render, scenario_sha256
 from mulebench.harness.disclosure import SINK_ARGS, amounts_in_text
@@ -53,6 +54,24 @@ def _json(value: object) -> str:
 
 def _text(value: object) -> str:
     return value if isinstance(value, str) else _json(value)
+
+
+def _marked_all(text: str, needles: list[str]) -> Markup:
+    """Text with every needle highlighted (longest first); every piece escaped."""
+    found = sorted({n for n in needles if n and n in text}, key=len, reverse=True)
+    if not found:
+        return frag(text)
+    out: list[object] = []
+    rest = text
+    while rest:
+        hits = [(rest.find(n), n) for n in found if n in rest]
+        if not hits:
+            out.append(rest)
+            break
+        at, needle = min(hits, key=lambda x: (x[0], -len(x[1])))
+        out += [rest[:at], h("mark", None, needle)]
+        rest = rest[at + len(needle) :]
+    return frag(out)
 
 
 def _marked(text: str, canary: str | None) -> Markup:
@@ -442,7 +461,9 @@ def trial_page(
         )
 
     timeline: object = (
-        frag(
+        _delegation_lanes(t, items, canary)
+        if t.handoff is not None
+        else frag(
             *[
                 frag(
                     h("h3", None, f"Session {sr.index}: ", h("q", None, sr.request)),
@@ -629,6 +650,95 @@ def trial_page(
         h("section", None, h("h2", None, "Attribution"), attribution),
         h("section", None, h("h2", None, "Disclosure"), disclosure),
         h("section", None, h("h2", None, "Ledger"), ledger_parts),
+    )
+
+
+def _taint_needles(t: TrialResult, canary: str | None) -> list[str]:
+    """Strings to highlight in a handoff: the canary and the taint sources
+    the harness found (payee keys, accounts, amounts as written)."""
+    h_ = t.handoff
+    needles = [canary] if canary else []
+    if h_ is None:
+        return needles
+    for src in h_.taint_sources:
+        kind, _, value = src.partition(":")
+        if kind in ("payee", "account"):
+            needles.append(value)
+        elif kind == "amount" and value.isdigit():
+            whole, frac = divmod(int(value), 100)
+            needles += [f"{whole}.{frac:02d}", f"{whole},{frac:02d}", value]
+    return needles
+
+
+def _delegation_lanes(
+    t: TrialResult, items: Callable[[list[ToolCallRecord]], Markup], canary: str | None
+) -> Markup:
+    """Reader lane, the handoff between, Payer lane."""
+    ho = t.handoff
+    if ho is None:  # pragma: no cover - caller checks
+        return frag()
+    needles = _taint_needles(t, canary)
+    reader = [r for r in t.trace if r.role == "reader"]
+    payer = [r for r in t.trace if r.role == "payer"]
+    d = t.delegation
+    taint = [badge("bad", "tainted")] if ho.tainted else [badge("good", "clean")]
+    taint += [badge("bad", s) for s in ho.taint_sources]
+    dropped = [
+        h("li", None, f"line {x.line}: {x.field} dropped ({x.reason}): ", h("code", None, x.value))
+        for x in ho.dropped
+    ]
+    card = h(
+        "div",
+        {"class": "lane handoff tainted" if ho.tainted else "lane handoff", "id": "handoff"},
+        h("h3", None, "Handoff"),
+        h(
+            "p",
+            {"class": "muted"},
+            f"author: {ho.author}, provenance: {ho.provenance}, mode: {ho.mode}"
+            + (", Payer also saw the customer request" if ho.payer_saw_request else ""),
+        ),
+        frag(*taint),
+        h("h4", None, "What the Payer received"),
+        h("pre", None, _marked_all(ho.payer_input, needles)),
+        frag(
+            h("h4", None, "What the Reader wrote"),
+            h("pre", None, _marked_all(ho.reader_text, needles)),
+        )
+        if ho.mode == "structured"
+        else None,
+        frag(h("h4", None, "Dropped by the structured handoff"), h("ul", None, dropped))
+        if dropped
+        else None,
+        dl(
+            [
+                ("handoff tainted", yes_no(d.handoff_tainted)),
+                ("crossed boundary", yes_no(d.crossed_boundary)),
+                ("tainted but stopped", yes_no(d.tainted_but_stopped)),
+                (
+                    "attributed success",
+                    "-" if d.attributed_success is None else yes_no(d.attributed_success),
+                ),
+            ]
+        )
+        if d is not None
+        else None,
+    )
+    return h(
+        "div",
+        {"class": "lanes"},
+        h(
+            "div",
+            {"class": "lane"},
+            h("h3", None, "Reader (read tools only)"),
+            items(reader) if reader else h("p", None, "No tool calls."),
+        ),
+        card,
+        h(
+            "div",
+            {"class": "lane"},
+            h("h3", None, "Payer (payment tools only)"),
+            items(payer) if payer else h("p", None, "No tool calls."),
+        ),
     )
 
 

@@ -116,6 +116,12 @@ CSS = (
     "ol.timeline>li.injected{border-left-color:var(--warn-fg)}"
     ".note{border:1px solid var(--border);background:var(--surface);padding:.5rem .75rem;"
     "margin:.5rem 0}"
+    ".lanes{display:grid;grid-template-columns:1fr minmax(12rem,1fr) 1fr;gap:1rem;"
+    "align-items:start}"
+    "@media (max-width:48rem){.lanes{grid-template-columns:1fr}}"
+    ".lane{min-width:0}"
+    ".handoff{border:2px solid var(--border);background:var(--surface);padding:.5rem .75rem}"
+    ".handoff.tainted{border-color:var(--bad-fg)}"
     "button,input{font:inherit;color:var(--fg);background:var(--surface);"
     "border:1px solid var(--border);padding:.2rem .5rem}"
     "td.num,th.num{text-align:right}" + PRINT_CSS
