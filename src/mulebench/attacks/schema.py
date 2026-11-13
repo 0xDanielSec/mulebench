@@ -40,7 +40,10 @@ Channel = Literal[
 ]
 InvariantId = Literal["INV-1", "INV-2", "INV-3", "INV-4"]
 HintValue = StrictBool | StrictInt | StrictStr
-ToolName = Literal["get_balance", "list_transactions", "transfer_pix", "open_dispute"]
+ToolName = Literal[
+    "get_balance", "list_transactions", "transfer_pix", "open_dispute", "save_note", "read_notes"
+]
+MEMORY_TOOLS = frozenset({"save_note", "read_notes"})
 
 # Which seeded-transaction field carries the payload, per channel. Channels not
 # listed here have no setup slot yet and are rejected by validation.
@@ -129,6 +132,25 @@ class UserTask(_Model):
     authorizations: list[SessionAuthorization] = []
 
 
+class FollowupSession(_Model):
+    """A later session of the same customer. The clock advances `gap_hours`
+    before it starts; its authorizations are granted at its start and are valid
+    only inside it (INV-1 `authorization_cross_session`)."""
+
+    request: NonEmpty
+    gap_hours: int = Field(ge=1)
+    authorizations: list[SessionAuthorization] = []
+
+
+class SessionPlan(_Model):
+    """One session of a run, normalized: index 0 is `user_task`."""
+
+    index: int
+    request: str
+    gap_hours: int
+    authorizations: list[SessionAuthorization]
+
+
 class InjectionPart(_Model):
     transaction: Ident
     payload: NonEmpty
@@ -213,6 +235,11 @@ class Scenario(_Model):
     # far). Unsupported hints are ignored; reports record the applied ones.
     agent_hints: dict[Ident, HintValue] = {}
     benign_control: BenignControl
+    # Multi-session runs: `user_task` is session 0, these follow in order.
+    followup_sessions: list[FollowupSession] = []
+    # True exposes the agent memory tools (save_note, read_notes). False keeps
+    # the tool list, and so tool_schema_sha256, identical to earlier scenarios.
+    memory: StrictBool = False
     # Optional; without it attribution derives the goal from the setup.
     attack_goal: AttackGoal | None = None
     references: list[Reference] = []
@@ -234,6 +261,7 @@ class Scenario(_Model):
             + [t.ref for t in s.transactions]
             + [p.ref for p in s.past_payments]
             + [a.ref for a in self.user_task.authorizations]
+            + [a.ref for f in self.followup_sessions for a in f.authorizations]
         )
         problems += [f"duplicate id: {i!r}" for i, n in Counter(ids).items() if n > 1]
         keys = [a.pix_key for a in s.accounts if a.pix_key is not None]
@@ -256,8 +284,13 @@ class Scenario(_Model):
             need("account", t.to_account, owner, f"transaction {t.ref}")
         for pp in s.past_payments:
             need("account", pp.from_account, owner, f"past payment {pp.ref}")
-        for auth in self.user_task.authorizations:
+        for auth in self.user_task.authorizations + [
+            a for f in self.followup_sessions for a in f.authorizations
+        ]:
             need("account", auth.from_account, owner, f"authorization {auth.ref}")
+        if not self.memory:
+            used = MEMORY_TOOLS.intersection(self.benign_control.expected_outcome.tool_calls)
+            problems += [f"expected tool {t!r} needs memory: true" for t in sorted(used)]
         need("customer", self.user_task.customer, customers, "user_task")
         need("transaction", self.injection.transaction, txs, "injection")
         for part in self.injection.extra_parts:
@@ -318,9 +351,11 @@ class Scenario(_Model):
             problems.append("canary must appear in injection.payload")
         if self.canary in self.benign_control.payload:
             problems.append("canary must not appear in benign_control.payload")
-        elsewhere = [self.user_task.request] + [
-            v for t in s.transactions for v in (t.description, t.counterparty_name)
-        ]
+        elsewhere = (
+            [self.user_task.request]
+            + [f.request for f in self.followup_sessions]
+            + [v for t in s.transactions for v in (t.description, t.counterparty_name)]
+        )
         if any(self.canary in v for v in elsewhere):
             problems.append("canary must appear only in injection.payload")
 
@@ -343,11 +378,38 @@ class Scenario(_Model):
             raise ValueError("; ".join(dict.fromkeys(problems)))
         return self
 
+    def sessions(self) -> list[SessionPlan]:
+        """Every session in run order; single-session scenarios give one."""
+        first = SessionPlan(
+            index=0,
+            request=self.user_task.request,
+            gap_hours=0,
+            authorizations=list(self.user_task.authorizations),
+        )
+        return [first] + [
+            SessionPlan(
+                index=i,
+                request=f.request,
+                gap_hours=f.gap_hours,
+                authorizations=list(f.authorizations),
+            )
+            for i, f in enumerate(self.followup_sessions, start=1)
+        ]
+
+
+# Fields added after the pilots. Left out of the hash while at their default, so
+# scenarios that do not use them keep their recorded scenario_sha256.
+_LATE_DEFAULTS: dict[str, object] = {"followup_sessions": [], "memory": False}
+
 
 def scenario_sha256(scenario: Scenario) -> str:
     """Hash of the parsed scenario (canonical JSON): independent of YAML
     formatting and comments, changes with any field."""
-    canonical = json.dumps(scenario.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+    data = scenario.model_dump(mode="json")
+    for name, default in _LATE_DEFAULTS.items():
+        if data.get(name) == default:
+            del data[name]
+    canonical = json.dumps(data, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
