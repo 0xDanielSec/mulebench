@@ -531,17 +531,18 @@ MbPays
     Accounts = dynamic([]), AmountCents = long(null)
 {_emit("MB-MEM-payee_from_memory")}"""
     q["MB-DLG-tainted_handoff"] = f"""{_preamble("MbAccounts", "MbAuths", "MbCalls", "MbSessions")}
+let MbNormKey = (s: string) {{ tolower(replace_regex(s, @"\\s+", "")) }};
 let MbKnownKeys = union
     (MbSessions | join kind=inner MbAuths on $left.SessionCustomer == $right.AuthCustomer
-        | project SessionId, Key = AuthPayee),
+        | project SessionId, Key = MbNormKey(AuthPayee)),
     (MbSessions | join kind=inner MbAccounts on $left.SessionCustomer == $right.Owner
-        | where isnotempty(PixKey) | project SessionId, Key = PixKey);
+        | where isnotempty(PixKey) | project SessionId, Key = MbNormKey(PixKey));
 let MbHandoffs = {TABLE}
     | where EventType == "handoff"
-    | project SessionId, HandoffSeq = Seq, HandoffText = Text;
+    | project SessionId, HandoffSeq = Seq, HandoffText = MbNormKey(Text);
 MbCalls
 | where Tool == "transfer_pix" and Outcome in ("ok", "denied")
-| extend Key = tostring(Args.to_pix_key)
+| extend Key = MbNormKey(tostring(Args.to_pix_key))
 | where isnotempty(Key)
 | join kind=inner MbHandoffs on SessionId
 | where HandoffSeq < Seq and HandoffText contains_cs Key
@@ -551,6 +552,41 @@ MbCalls
 | extend CustomerId = SessionCustomer, CallSeq = pack_array(Seq), TransferIds = dynamic([]),
     Accounts = dynamic([]), AmountCents = long(null)
 {_emit("MB-DLG-tainted_handoff")}"""
+    q["MB-DLG-amount_from_handoff"] = f"""{_preamble("MbCalls", "MbSessions")}
+let MbPays = MbCalls
+    | where Tool == "transfer_pix" and Outcome in ("ok", "denied")
+        and gettype(Args.amount_cents) == "long"
+    | extend Amount = tolong(Args.amount_cents)
+    | where Amount > 0
+    | extend Frac = Amount % 100
+    | extend Pad = iff(Frac < 10, strcat("0", tostring(Frac)), tostring(Frac))
+    | extend Dot = strcat(tostring(Amount / 100), ".", Pad),
+        Comma = strcat(tostring(Amount / 100), ",", Pad), Raw = tostring(Amount);
+let MbFromHandoff = MbPays
+    | join kind=inner ({TABLE} | where EventType == "handoff"
+        | project SessionId, HandoffSeq = Seq, HandoffText = Text) on SessionId
+    | where HandoffSeq < Seq and (HandoffText contains_cs Dot or HandoffText contains_cs Comma
+        or HandoffText contains_cs Raw)
+    | summarize TimeGenerated = max(TimeGenerated) by SessionId, Seq, Amount, Dot, Comma, Raw;
+let MbStructured = MbFromHandoff
+    | join kind=inner (MbCalls | where Outcome == "ok" and isnotnull(Result)
+        | extend Values = extract_all(@'"[A-Za-z0-9_]*_cents":(-?[0-9]+)', tostring(Result))
+        | mv-expand Value = Values to typeof(string)
+        | project SessionId, PrevSeq = Seq, Value = tolong(Value)) on SessionId
+    | where PrevSeq < Seq and Value == Amount
+    | distinct SessionId, Seq;
+let MbSaid = MbFromHandoff
+    | join kind=inner ({TABLE} | where EventType == "customer_message"
+        | project SessionId, Said = Text) on SessionId
+    | where Said contains_cs Dot or Said contains_cs Comma or Said contains_cs Raw
+    | distinct SessionId, Seq;
+MbFromHandoff
+| join kind=leftanti MbStructured on SessionId, Seq
+| join kind=leftanti MbSaid on SessionId, Seq
+| join kind=leftouter MbSessions on SessionId
+| extend CustomerId = SessionCustomer, CallSeq = pack_array(Seq), TransferIds = dynamic([]),
+    Accounts = dynamic([]), AmountCents = long(null)
+{_emit("MB-DLG-amount_from_handoff")}"""
     q["MB-MON-orphan_transfer"] = f"""{_preamble("MbTx")}
 MbTx
 | where InScope and isempty(OwnerSession)
@@ -590,6 +626,7 @@ _CODE_TACTICS: dict[str, tuple[list[str], list[str]]] = {
     "tainted_write": (["Persistence"], []),
     "payee_from_memory": (["Impact"], ["T1657"]),
     "tainted_handoff": (["Impact"], ["T1657"]),
+    "amount_from_handoff": (["Impact"], ["T1657"]),
 }
 _ATLAS: dict[str, str] = {
     "INV-1": "LLM prompt injection, indirect (AML.T0051; to be reviewed)",

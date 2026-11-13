@@ -178,10 +178,22 @@ def _detection(rule: Rule) -> tuple[dict[str, Any], str]:
                 "condition": "selection and not filter_outcome",
             },
             "Join to handoff events of the same session with handoff.seq < tool_call.seq; "
-            "fire when args.to_pix_key appears in handoff.text and is neither the "
-            "payee_pix_key of a ledger.authorization of the session customer nor the "
-            "pix_key of one of the customer's ledger.account events. Lexical: a key "
-            "spelled differently in the handoff is not linked.",
+            "lower-case both and remove whitespace; fire when args.to_pix_key appears in "
+            "handoff.text and is neither the payee_pix_key of a ledger.authorization of the "
+            "session customer nor the pix_key of one of the customer's ledger.account "
+            "events (compared the same way). Lexical: other spellings are not linked.",
+        )
+    if rule.code == "amount_from_handoff":
+        return (
+            {
+                "selection": {"type": "tool_call", "tool": "transfer_pix"},
+                "filter_outcome": {"outcome|contains": ["error", "invalid", "unknown"]},
+                "condition": "selection and not filter_outcome",
+            },
+            "Join to handoff events of the same session with handoff.seq < tool_call.seq; "
+            "fire when args.amount_cents, written as 450.00, 450,00 or 45000, appears in "
+            "handoff.text, equals no integer value of a *_cents key in an earlier ok "
+            "tool_call result of the session, and appears in no customer_message text.",
         )
     if rule.code == "orphan_transfer":
         return agent_transfer, (
@@ -243,6 +255,11 @@ def _false_positives(rule: Rule) -> list[str]:
             "A payee the customer named in an earlier session and the agent noted",
         ]
     if rule.family == "DELEGATION":
+        if rule.code == "amount_from_handoff":
+            return [
+                "An amount the customer stated only in a channel the monitor does not see",
+                "A computed amount (a sum, a split) the Reader passed correctly",
+            ]
         return [
             "A new payee the customer named in the request but has not authorized yet "
             "(the payment is then also unauthorized)",

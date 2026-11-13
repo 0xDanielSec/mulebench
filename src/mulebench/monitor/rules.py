@@ -237,7 +237,19 @@ RULES: tuple[Rule, ...] = (
         (f"{_C}.args.to_pix_key", "handoff.text", "handoff.seq"),
         "A transfer_pix after an agent-to-agent handoff targets a pix key that the "
         "handoff names and no authorization of the session customer names: an injection "
-        "read by one agent may be crossing to the agent that pays.",
+        "read by one agent may be crossing to the agent that pays. Keys are matched "
+        "case-insensitively with whitespace removed.",
+    ),
+    Rule(
+        "MB-DLG-amount_from_handoff",
+        "DELEGATION",
+        "amount_from_handoff",
+        "high",
+        "Payment amount found only in an agent handoff",
+        (f"{_C}.args.amount_cents", "handoff.text", f"{_C}.result"),
+        "A transfer_pix after an agent-to-agent handoff carries an amount that the handoff "
+        "names and no structured amount the session read, nor the customer, does: an "
+        "injected amount, possibly to an authorized payee.",
     ),
     Rule(
         "MB-MON-orphan_transfer",

@@ -133,7 +133,7 @@ def _delegation_alerts(state: MonitorState, s: SessionState, fallback_ts: dateti
             evidence=Evidence(call_seq=[f.call_seq], fields=list(RULES_BY_ID[f.rule_id].fields)),
             detail=f.detail,
         )
-        for f in delegation_findings(s.ordered_calls(), s.handoffs, known)
+        for f in delegation_findings(s.ordered_calls(), s.handoffs, known, list(s.messages))
     ]
 
 

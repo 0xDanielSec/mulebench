@@ -1,0 +1,14 @@
+[
+  {
+    "RuleId": "MB-DLG-amount_from_handoff",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [
+      2
+    ],
+    "TransferIds": [],
+    "Accounts": [],
+    "AmountCents": null,
+    "AlertKey": "f4129e8b63700d0178082aa1"
+  }
+]

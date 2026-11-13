@@ -146,7 +146,15 @@ alerts from overlapping query windows.
   - `MB-DLG-tainted_handoff` joins `transfer_pix` calls (ok or denied) to
     `handoff` rows of the same session with a lower `Seq`, keeps keys the
     handoff `Text` contains (`contains_cs`), and drops keys that are an
-    authorization payee or an account key of the session customer. The
+    authorization payee or an account key of the session customer. Keys and
+    text go through `tolower(replace_regex(s, @"\s+", ""))`; the engine uses
+    Python `str.lower` and `\s`, which also cover non-ASCII letters and
+    spaces (not covered by a fixture).
+  - `MB-DLG-amount_from_handoff` spells the call's `amount_cents` three ways
+    (`450.00`, `450,00`, `45000`), keeps calls whose handoff `Text` contains
+    one, and drops calls whose amount equals an integer `*_cents` value in an
+    earlier ok `Result` (extracted from `tostring(Result)` with
+    `"<name>_cents":<digits>`) or appears in a `customer_message`. The
     `handoff` event maps to the existing columns (`seq` to `Seq`, `text` to
     `Text`); no new column.
 - **Monitor:**
