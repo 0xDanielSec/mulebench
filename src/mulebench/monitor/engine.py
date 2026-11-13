@@ -27,6 +27,7 @@ from mulebench.invariants import (
 )
 from mulebench.ledger import LedgerSnapshot
 from mulebench.monitor.alerts import Alert, Evidence, make_alert, sort_alerts
+from mulebench.monitor.delegation import delegation_findings
 from mulebench.monitor.events import Event
 from mulebench.monitor.memory import memory_findings
 from mulebench.monitor.rules import RULES_BY_ID, invariant_rule
@@ -109,7 +110,31 @@ def evaluate_session(
     if config.disclosure:
         alerts.extend(_disclosure_alerts(snap, s, s.customer_id, ts))
     alerts.extend(_memory_alerts(s, ts))
+    alerts.extend(_delegation_alerts(state, s, ts))
     return alerts
+
+
+def _delegation_alerts(state: MonitorState, s: SessionState, fallback_ts: datetime) -> list[Alert]:
+    if not s.handoffs:
+        return []
+    known = frozenset(
+        a.payee_pix_key for a in state.authorizations.values() if a.customer_id == s.customer_id
+    ) | frozenset(
+        a.pix_key
+        for a in state.accounts.values()
+        if a.customer_id == s.customer_id and a.pix_key is not None
+    )
+    return [
+        make_alert(
+            f.rule_id,
+            session_id=s.session_id,
+            customer_id=s.customer_id,
+            ts=s.calls[f.call_seq].ts if f.call_seq in s.calls else fallback_ts,
+            evidence=Evidence(call_seq=[f.call_seq], fields=list(RULES_BY_ID[f.rule_id].fields)),
+            detail=f.detail,
+        )
+        for f in delegation_findings(s.ordered_calls(), s.handoffs, known)
+    ]
 
 
 def _memory_alerts(s: SessionState, fallback_ts: datetime) -> list[Alert]:

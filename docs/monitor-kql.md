@@ -142,6 +142,13 @@ alerts from overlapping query windows.
   - `MB-MEM-payee_from_memory` matches a pix key found in an earlier
     `read_notes` result and in no other earlier result or customer message.
   - `MB-MEM-tainted_write` is a weaker approximation (see below).
+- **Delegation:**
+  - `MB-DLG-tainted_handoff` joins `transfer_pix` calls (ok or denied) to
+    `handoff` rows of the same session with a lower `Seq`, keeps keys the
+    handoff `Text` contains (`contains_cs`), and drops keys that are an
+    authorization payee or an account key of the session customer. The
+    `handoff` event maps to the existing columns (`seq` to `Seq`, `text` to
+    `Text`); no new column.
 - **Monitor:**
   - `orphan_transfer` is an agent transfer that no session claims;
   - `unknown_customer` is a session with events but no `session_start`.

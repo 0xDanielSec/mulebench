@@ -237,6 +237,51 @@
       "title": "FinalAnswer",
       "type": "object"
     },
+    "Handoff": {
+      "additionalProperties": false,
+      "description": "A message from one agent to another in a delegation (Reader -> Payer).\nAgent-written: it may carry content injected into what the Reader read.\n`seq` is the seq of the last tool call before the handoff (0 if none), so\ncalls with a higher seq came after it.",
+      "properties": {
+        "seq": {
+          "minimum": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "session_id": {
+          "minLength": 1,
+          "title": "Session Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "type": {
+          "const": "handoff",
+          "default": "handoff",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ts",
+        "session_id",
+        "seq",
+        "text"
+      ],
+      "title": "Handoff",
+      "type": "object"
+    },
     "LedgerAccount": {
       "additionalProperties": false,
       "properties": {
@@ -612,6 +657,7 @@
       "confirmation": "#/$defs/Confirmation",
       "customer_message": "#/$defs/CustomerMessage",
       "final_answer": "#/$defs/FinalAnswer",
+      "handoff": "#/$defs/Handoff",
       "ledger.account": "#/$defs/LedgerAccount",
       "ledger.authorization": "#/$defs/LedgerAuthorization",
       "ledger.transfer": "#/$defs/LedgerTransfer",
@@ -636,6 +682,9 @@
     },
     {
       "$ref": "#/$defs/FinalAnswer"
+    },
+    {
+      "$ref": "#/$defs/Handoff"
     },
     {
       "$ref": "#/$defs/SessionEnd"

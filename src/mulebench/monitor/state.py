@@ -19,6 +19,7 @@ from mulebench.monitor.events import (
     CustomerMessage,
     Event,
     FinalAnswer,
+    Handoff,
     LedgerAccount,
     LedgerAuthorization,
     LedgerTransfer,
@@ -36,6 +37,7 @@ class SessionState:
     confirmations: dict[int, Confirmation] = field(default_factory=dict)
     messages: list[str] = field(default_factory=list)
     final_text: str | None = None
+    handoffs: list[Handoff] = field(default_factory=list)
     ended: bool = False
     last_ts: datetime | None = None
 
@@ -131,6 +133,8 @@ class MonitorState:
             s.messages.append(e.text)
         elif isinstance(e, FinalAnswer):
             s.final_text = e.text
+        elif isinstance(e, Handoff):
+            s.handoffs.append(e)
         elif isinstance(e, SessionEnd):
             s.ended = True
         return {e.session_id}

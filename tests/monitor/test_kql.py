@@ -43,7 +43,7 @@ def strip_literals(query: str) -> str:
 def test_one_rule_per_monitor_rule_except_documented() -> None:
     assert set(NOT_EXPORTED) == {"MB-INV1-authorization_cross_session"}
     assert sorted(IDS) == sorted(r.id for r in RULES if r.id not in NOT_EXPORTED)
-    assert len(IDS) == 25
+    assert len(IDS) == 26
 
 
 def test_committed_files_match_generator() -> None:
@@ -112,7 +112,7 @@ def test_table_columns_cover_the_trace_format() -> None:
 
 def test_cli_writes_kql(tmp_path: Path) -> None:
     assert main(["monitor", "rules", "--format", "kql", "--out", str(tmp_path)]) == 0
-    assert len(list(tmp_path.glob("*.yaml"))) == 25
+    assert len(list(tmp_path.glob("*.yaml"))) == 26
 
 
 _TS_FIELDS = ("created_at", "ts")

@@ -1,0 +1,14 @@
+[
+  {
+    "RuleId": "MB-DLG-tainted_handoff",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [
+      2
+    ],
+    "TransferIds": [],
+    "Accounts": [],
+    "AmountCents": null,
+    "AlertKey": "f4d8e6870491cf003ccf818f"
+  }
+]

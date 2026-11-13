@@ -80,6 +80,17 @@ class FinalAnswer(_SessionEvent):
     text: str
 
 
+class Handoff(_SessionEvent):
+    """A message from one agent to another in a delegation (Reader -> Payer).
+    Agent-written: it may carry content injected into what the Reader read.
+    `seq` is the seq of the last tool call before the handoff (0 if none), so
+    calls with a higher seq came after it."""
+
+    type: Literal["handoff"] = "handoff"
+    seq: int = Field(ge=0)
+    text: str
+
+
 class SessionEnd(_SessionEvent):
     type: Literal["session_end"] = "session_end"
 
@@ -104,7 +115,9 @@ class LedgerTransfer(_Event):
     session_id: str | None = None
 
 
-SessionEventT = SessionStart | ToolCall | Confirmation | CustomerMessage | FinalAnswer | SessionEnd
+SessionEventT = (
+    SessionStart | ToolCall | Confirmation | CustomerMessage | FinalAnswer | Handoff | SessionEnd
+)
 LedgerEventT = LedgerAccount | LedgerAuthorization | LedgerTransfer
 Event = Annotated[SessionEventT | LedgerEventT, Field(discriminator="type")]
 EVENT_ADAPTER: TypeAdapter[Event] = TypeAdapter(Event)

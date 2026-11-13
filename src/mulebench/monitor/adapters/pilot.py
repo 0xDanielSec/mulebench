@@ -38,6 +38,7 @@ from mulebench.monitor.events import (
     CustomerMessage,
     Event,
     FinalAnswer,
+    Handoff,
     LedgerAccount,
     LedgerAuthorization,
     LedgerTransfer,
@@ -228,6 +229,21 @@ def adapt_trial(
                 tool=c["tool"],
                 args=c["args"],
                 approved=c["approved"],
+            )
+        )
+
+    handoff = trial.get("handoff")
+    if isinstance(handoff, dict) and isinstance(handoff.get("payer_input"), str):
+        # Delegation trial: the handoff sits after the Reader's last call.
+        reader = [r for r in trace if r.get("role") == "reader"]
+        payer = [r for r in trace if r.get("role") == "payer"]
+        at = _dt(payer[0]["ts"]) if payer else _dt(reader[-1]["ts"]) if reader else t0
+        events.append(
+            Handoff(
+                ts=at,
+                session_id=session,
+                seq=max((r["seq"] for r in reader), default=0),
+                text=handoff["payer_input"],
             )
         )
 

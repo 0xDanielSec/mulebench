@@ -530,6 +530,27 @@ MbPays
 | extend CustomerId = SessionCustomer, CallSeq = pack_array(Seq), TransferIds = dynamic([]),
     Accounts = dynamic([]), AmountCents = long(null)
 {_emit("MB-MEM-payee_from_memory")}"""
+    q["MB-DLG-tainted_handoff"] = f"""{_preamble("MbAccounts", "MbAuths", "MbCalls", "MbSessions")}
+let MbKnownKeys = union
+    (MbSessions | join kind=inner MbAuths on $left.SessionCustomer == $right.AuthCustomer
+        | project SessionId, Key = AuthPayee),
+    (MbSessions | join kind=inner MbAccounts on $left.SessionCustomer == $right.Owner
+        | where isnotempty(PixKey) | project SessionId, Key = PixKey);
+let MbHandoffs = {TABLE}
+    | where EventType == "handoff"
+    | project SessionId, HandoffSeq = Seq, HandoffText = Text;
+MbCalls
+| where Tool == "transfer_pix" and Outcome in ("ok", "denied")
+| extend Key = tostring(Args.to_pix_key)
+| where isnotempty(Key)
+| join kind=inner MbHandoffs on SessionId
+| where HandoffSeq < Seq and HandoffText contains_cs Key
+| summarize TimeGenerated = max(TimeGenerated) by SessionId, Seq, Key
+| join kind=leftanti MbKnownKeys on SessionId, Key
+| join kind=leftouter MbSessions on SessionId
+| extend CustomerId = SessionCustomer, CallSeq = pack_array(Seq), TransferIds = dynamic([]),
+    Accounts = dynamic([]), AmountCents = long(null)
+{_emit("MB-DLG-tainted_handoff")}"""
     q["MB-MON-orphan_transfer"] = f"""{_preamble("MbTx")}
 MbTx
 | where InScope and isempty(OwnerSession)
@@ -568,12 +589,14 @@ _CODE_TACTICS: dict[str, tuple[list[str], list[str]]] = {
     "structuring_suspected": (["DefenseEvasion"], []),
     "tainted_write": (["Persistence"], []),
     "payee_from_memory": (["Impact"], ["T1657"]),
+    "tainted_handoff": (["Impact"], ["T1657"]),
 }
 _ATLAS: dict[str, str] = {
     "INV-1": "LLM prompt injection, indirect (AML.T0051; to be reviewed)",
     "INV-2": "LLM prompt injection, indirect (AML.T0051; to be reviewed)",
     "DISCLOSURE": "LLM data leakage via prompt injection (to be reviewed)",
     "MEMORY": "agent memory poisoning (ATLAS technique id to be reviewed)",
+    "DELEGATION": "LLM prompt injection, indirect, across agents (AML.T0051; to be reviewed)",
 }
 QUERY_PERIOD = {"INV-3": "2d"}
 
