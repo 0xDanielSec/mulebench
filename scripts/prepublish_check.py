@@ -48,6 +48,7 @@ DEFAULT_ALLOWED_DOMAINS = frozenset(
         "shields.io",  # README badges
         "pypi.org",  # uv.lock
         "files.pythonhosted.org",  # uv.lock
+        "json-schema.org",  # standard JSON Schema dialect identifier ($schema)
     }
 )
 DEFAULT_ALLOWED_EMAILS = frozenset({"noreply@anthropic.com"})
