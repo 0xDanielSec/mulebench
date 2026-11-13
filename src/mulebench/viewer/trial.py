@@ -147,6 +147,8 @@ def provenance(tool: str, path: str) -> str:
     `reason` of `open_dispute`, the `description` of `transfer_pix`) was
     written by the agent; everything else (incoming Pix descriptions, payee
     and counterparty names, KYC text) came from a third party."""
+    if tool == "read_notes":  # agent memory: written by the agent, maybe from tool output
+        return AGENT_WRITTEN
     return AGENT_WRITTEN if (tool, path) in set(SINK_ARGS.values()) else THIRD_PARTY
 
 
@@ -201,12 +203,69 @@ def _disclosures_by_seq(t: TrialResult) -> dict[int, list[str]]:
     return out
 
 
+def _note_links(r: ToolCallRecord, t: TrialResult) -> list[object]:
+    """Links between a note's write (save_note) and its reads (read_notes)."""
+    if r.outcome != "ok" or r.result is None:
+        return []
+    if r.tool == "save_note":
+        note_id = r.result.get("note_id")
+        readers = [
+            x.seq
+            for x in t.trace
+            if x.tool == "read_notes" and x.outcome == "ok" and note_id in _read_note_ids(x)
+        ]
+        return [
+            h(
+                "p",
+                {"id": f"note-{note_id}"},
+                badge("neutral", f"wrote {note_id}"),
+                " read at ",
+                frag(*[h("a", {"href": f"#call-{s}"}, f"#{s} ") for s in readers])
+                if readers
+                else "no later call",
+            )
+        ]
+    if r.tool == "read_notes":
+        ids = _read_note_ids(r)
+        if not ids:
+            return []
+        writers = {
+            str(x.result.get("note_id")): x.seq
+            for x in t.trace
+            if x.tool == "save_note" and x.outcome == "ok" and x.result is not None
+        }
+        return [
+            h(
+                "p",
+                None,
+                "read notes: ",
+                [
+                    h("a", {"href": f"#call-{writers[i]}"}, f"{i} (written at #{writers[i]}) ")
+                    if i in writers
+                    else f"{i} "
+                    for i in ids
+                ],
+            )
+        ]
+    return []
+
+
+def _read_note_ids(r: ToolCallRecord) -> list[str]:
+    notes = (r.result or {}).get("notes")
+    return (
+        [str(n["note_id"]) for n in notes if isinstance(n, dict) and "note_id" in n]
+        if isinstance(notes, list)
+        else []
+    )
+
+
 def _record_item(
     r: ToolCallRecord,
     origin: str | None,
     violations: list[str],
     canary: str | None,
     disclosures: list[str] | None = None,
+    links: list[object] | None = None,
 ) -> Markup:
     disclosures = disclosures or []
     injected = origin == "tool_output"
@@ -227,6 +286,7 @@ def _record_item(
         badge("warn", "payload entered here") if payload_paths else None,
     )
     parts: list[object] = [head, h("p", {"class": "muted"}, f"origin: {origin or 'unknown'}")]
+    parts += links or []
     parts.append(h("h4", None, "Arguments"))
     parts.append(h("pre", None, _marked(_json(r.args), canary)))
     if r.guard_decisions:
@@ -363,16 +423,46 @@ def trial_page(
     origins = {st.seq: st.origin for st in t.agent_steps}
     pinned, loose = _violations_by_seq(t)
     disclosed_at = _disclosures_by_seq(t)
-    timeline = h(
-        "ol",
-        {"class": "timeline"},
-        [
-            _record_item(
-                r, origins.get(r.seq), pinned.get(r.seq, []), canary, disclosed_at.get(r.seq)
-            )
-            for r in t.trace
-        ],
+
+    def items(records: list[ToolCallRecord]) -> Markup:
+        return h(
+            "ol",
+            {"class": "timeline"},
+            [
+                _record_item(
+                    r,
+                    origins.get(r.seq),
+                    pinned.get(r.seq, []),
+                    canary,
+                    disclosed_at.get(r.seq),
+                    _note_links(r, t),
+                )
+                for r in records
+            ],
+        )
+
+    timeline: object = (
+        frag(
+            *[
+                frag(
+                    h("h3", None, f"Session {sr.index}: ", h("q", None, sr.request)),
+                    h(
+                        "p",
+                        {"class": "muted"},
+                        f"{sr.started_at.isoformat()} to "
+                        f"{sr.ended_at.isoformat()}, stopped: {sr.stopped}",
+                    ),
+                    items([r for r in t.trace if r.session == sr.index])
+                    if any(r.session == sr.index for r in t.trace)
+                    else h("p", None, "No tool calls."),
+                )
+                for sr in t.sessions
+            ]
+        )
+        if t.sessions
+        else items(list(t.trace))
     )
+    memory = _memory_section(t, canary)
 
     invariants = table(
         "Invariants",
@@ -533,9 +623,49 @@ def trial_page(
             h("h3", None, "Violations not tied to one call") if loose else None,
             h("ul", None, [h("li", None, v) for v in loose]) if loose else None,
         ),
+        memory,
         h("section", None, h("h2", None, "Invariants"), invariants),
         h("section", None, h("h2", None, "Confirmations"), confirmations),
         h("section", None, h("h2", None, "Attribution"), attribution),
         h("section", None, h("h2", None, "Disclosure"), disclosure),
         h("section", None, h("h2", None, "Ledger"), ledger_parts),
+    )
+
+
+def _memory_section(t: TrialResult, canary: str | None) -> Markup | None:
+    """Agent memory: notes with taint and links, plus the memory metrics."""
+    if not t.notes and t.memory is None:
+        return None
+    rows = []
+    for n in t.notes:
+        taint = [badge("bad", "canary")] if n.canary else []
+        taint += [badge("bad", a) for a in n.artifacts]
+        rows.append(
+            [
+                n.note.note_id,
+                n.note.session,
+                h("a", {"href": f"#call-{n.note.seq}"}, f"#{n.note.seq}"),
+                h("pre", None, _marked(n.note.text, canary)),
+                frag(*taint) if taint else "clean",
+            ]
+        )
+    m = t.memory
+    return h(
+        "section",
+        None,
+        h("h2", None, "Agent memory"),
+        h("p", {"class": "muted"}, "Notes are agent-written; taint is judged by the harness."),
+        table("Notes", ["Id", "Session", "Written at", "Text", "Taint"], rows)
+        if rows
+        else h("p", None, "No notes saved."),
+        dl(
+            [
+                ("memory tainted", yes_no(m.memory_tainted)),
+                ("violations in sessions", ", ".join(map(str, m.violation_sessions)) or "-"),
+                ("cross-session", m.cross_session or "-"),
+                ("note followed", yes_no(m.note_followed)),
+            ]
+        )
+        if m is not None
+        else None,
     )
