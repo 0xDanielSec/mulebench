@@ -4,6 +4,7 @@
                           [--enforced-confirmation-cents N]
                           [--stream [--grace-seconds S]]
     mulebench monitor schema [--out monitor-trace.schema.json]
+    mulebench monitor adapt REPORT.json --out DIR [--scenario ID ...]
 
 Batch mode (default) reads every event, then writes the alerts once, all
 `firm`. `--stream` processes events as they arrive (pipe a live log into
@@ -58,6 +59,13 @@ def add_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None
         help="streaming: event-time lateness tolerated before an alert is firm (default 300)",
     )
 
+    adapt = msub.add_parser("adapt", help="write each trial of a mulebench report as a JSONL trace")
+    adapt.add_argument("report", type=Path, help="mulebench JSON report")
+    adapt.add_argument("--out", type=Path, required=True, help="output directory")
+    adapt.add_argument(
+        "--scenario", dest="scenario_ids", action="append", help="only this scenario id"
+    )
+
     schema = msub.add_parser("schema", help="print the trace event JSON Schema")
     schema.add_argument("--out", type=Path, help="write the schema here instead")
 
@@ -106,7 +114,34 @@ def _stream(args: argparse.Namespace) -> int:
     return exit_code(emitted)
 
 
+def _adapt(args: argparse.Namespace) -> int:
+    from mulebench.attacks import load_builtin
+    from mulebench.monitor.adapters.pilot import adapt_report, iter_events, trial_file_name
+    from mulebench.monitor.ingest import write_events
+
+    try:
+        report = json.loads(args.report.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.scenario_ids:
+        wanted = set(args.scenario_ids)
+        report["scenarios"] = [s for s in report["scenarios"] if s["scenario_id"] in wanted]
+    result = adapt_report(report, {s.id: s for s in load_builtin()})
+    args.out.mkdir(parents=True, exist_ok=True)
+    for t in result.trials:
+        path = args.out / trial_file_name(t)
+        with path.open("w", encoding="utf-8", newline="\n") as f:
+            write_events(iter_events(t), f)
+    for scenario_id, reason in result.skipped:
+        print(f"skipped {scenario_id}: {reason}", file=sys.stderr)
+    print(f"wrote {len(result.trials)} trace(s) to {args.out}", file=sys.stderr)
+    return 0
+
+
 def main(args: argparse.Namespace) -> int:
+    if args.monitor_command == "adapt":
+        return _adapt(args)
     if args.monitor_command == "schema":
         text = schema_text()
         if args.out:
