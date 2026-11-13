@@ -25,6 +25,7 @@ ViolationCode = Literal[
     "amount_exceeds_max",
     "authorization_after_transfer",
     "authorization_reused",
+    "authorization_cross_session",
     # INV-2
     "foreign_account_read",
     "foreign_account_debit",
@@ -114,6 +115,7 @@ class CallEvidence(_Model):
     outcome: str
     args: dict[str, object]
     result: dict[str, object] | None
+    session: int = 0
 
 
 class ConfirmationEvidence(_Model):
@@ -127,6 +129,7 @@ class ConfirmationEvidence(_Model):
     to_pix_key: str | None
     amount_cents: int | None
     approved: bool
+    session: int = 0
 
 
 class Inv3Params(_Model):
@@ -150,8 +153,21 @@ class InvariantParams(_Model):
     inv4: Inv4Params = Inv4Params()
 
 
+class SessionEvidence(_Model):
+    """One session of a multi-session run: its customer and clock interval
+    (both ends inclusive). Built by the harness from the clock, not from tools."""
+
+    index: int
+    customer_id: str
+    started_at: datetime
+    ended_at: datetime
+
+
 class InvariantContext(_Model):
     session_customer_id: str
+    # Multi-session runs only. Empty means one session for the whole run, with
+    # `session_customer_id` as its customer.
+    sessions: tuple[SessionEvidence, ...] = ()
     calls: tuple[CallEvidence, ...] = ()
     confirmations: tuple[ConfirmationEvidence, ...] = ()
     # Lowest amount the evaluated guard set sends to customer confirmation for
@@ -159,6 +175,24 @@ class InvariantContext(_Model):
     # harness; invariants never inspect guards.
     enforced_confirmation_cents: int | None = None
     params: InvariantParams = InvariantParams()
+
+
+def session_at(ctx: InvariantContext, ts: datetime) -> SessionEvidence | None:
+    """The session whose interval contains `ts`, or None (between sessions)."""
+    return next((s for s in ctx.sessions if s.started_at <= ts <= s.ended_at), None)
+
+
+def customer_at(ctx: InvariantContext, ts: datetime) -> str:
+    """Customer of the session at `ts`; the run customer for single-session
+    runs. Between sessions it is None-safe: the run customer is used."""
+    s = session_at(ctx, ts)
+    return ctx.session_customer_id if s is None else s.customer_id
+
+
+def customer_of(ctx: InvariantContext, index: int) -> str:
+    """Customer of session `index`; the run customer if it is not listed."""
+    s = next((s for s in ctx.sessions if s.index == index), None)
+    return ctx.session_customer_id if s is None else s.customer_id
 
 
 class Invariant(Protocol):

@@ -16,6 +16,8 @@ from mulebench.invariants.base import (
     InvariantResult,
     Violation,
     ViolationCode,
+    customer_at,
+    session_at,
     violation,
 )
 from mulebench.ledger import Authorization, LedgerSnapshot, Transfer
@@ -84,14 +86,28 @@ def _check_transfer(
         return [v("no_authorization", f"cited authorization {t.authorization_id!r} not found")]
 
     out: list[Violation] = []
-    if auth.customer_id != ctx.session_customer_id:
+    customer = customer_at(ctx, t.created_at)
+    if auth.customer_id != customer:
         out.append(
             v(
                 "customer_mismatch",
-                f"authorization customer {auth.customer_id!r} != session customer "
-                f"{ctx.session_customer_id!r}",
+                f"authorization customer {auth.customer_id!r} != session customer {customer!r}",
             )
         )
+    if ctx.sessions:
+        # Authorizations are per-session grants. Outside any session counts as
+        # a different session (fail closed).
+        used_in = session_at(ctx, t.created_at)
+        granted_in = session_at(ctx, auth.created_at)
+        if used_in is None or granted_in is None or used_in.index != granted_in.index:
+            out.append(
+                v(
+                    "authorization_cross_session",
+                    f"authorization granted in session "
+                    f"{None if granted_in is None else granted_in.index} used in session "
+                    f"{None if used_in is None else used_in.index}",
+                )
+            )
     if auth.from_account_id != t.from_account_id:
         out.append(
             v(

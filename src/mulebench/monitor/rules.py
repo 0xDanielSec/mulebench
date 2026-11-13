@@ -134,6 +134,14 @@ RULES: tuple[Rule, ...] = (
         "A single-use authorization backs more than one transfer.",
     ),
     _inv(
+        "INV-1",
+        "authorization_cross_session",
+        "critical",
+        "Authorization used outside its session",
+        (f"{_T}.created_at", f"{_A}.created_at", "session_start.ts"),
+        "Multi-session runs: the cited authorization was granted in another session.",
+    ),
+    _inv(
         "INV-2",
         "foreign_account_read",
         "high",

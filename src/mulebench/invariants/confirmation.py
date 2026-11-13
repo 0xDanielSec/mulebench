@@ -27,6 +27,8 @@ from mulebench.invariants.base import (
     InvariantResult,
     Violation,
     ViolationCode,
+    customer_at,
+    session_at,
     violation,
 )
 from mulebench.ledger import LedgerSnapshot, Transfer
@@ -49,14 +51,21 @@ class HighRiskConfirmed:
         violations: list[Violation] = []
         for t in scoped:
             payee = actual_payee(t, pix_keys)
-            matching = [c for c in records if _matches(c, t, payee, ctx.session_customer_id)]
+            customer = customer_at(ctx, t.created_at)
+            session = session_at(ctx, t.created_at)
+            index = None if session is None else session.index
+            matching = [
+                c
+                for c in records
+                if _matches(c, t, payee, customer) and (not ctx.sessions or c.session == index)
+            ]
             approved = next((c for c in matching if c.approved and c.seq not in used), None)
             if approved is not None:
                 used.add(approved.seq)
                 continue
             code: ViolationCode = "confirmation_missing"
             detail = "no approved customer confirmation; " + _nearest(
-                records, used, t, payee, ctx.session_customer_id
+                records, used, t, payee, customer
             )
             if any(not c.approved for c in matching):
                 code, detail = "confirmation_declined", "customer declined; money moved anyway"

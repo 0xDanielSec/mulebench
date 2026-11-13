@@ -31,6 +31,21 @@ Mutant = tuple[str, str, str]  # (rule, original snippet, mutated snippet); orig
 
 INV1_MUTANTS: list[Mutant] = [
     (
+        "authorization_cross_session",
+        "if used_in is None or granted_in is None or used_in.index != granted_in.index:",
+        "if False:",
+    ),
+    (
+        "authorization_cross_session: multi-session runs only",
+        "    if ctx.sessions:\n        # Authorizations are per-session grants.",
+        "    if True:\n        # Authorizations are per-session grants.",
+    ),
+    (
+        "customer_mismatch: customer of the transfer's session",
+        "customer = customer_at(ctx, t.created_at)",
+        "customer = ctx.session_customer_id",
+    ),
+    (
         "scope: outgoing kinds",
         "return t.kind in OUTGOING_KINDS and",
         'return t.kind == "pix_out" and',
@@ -52,7 +67,7 @@ INV1_MUTANTS: list[Mutant] = [
     ),
     (
         "customer_mismatch",
-        "if auth.customer_id != ctx.session_customer_id:",
+        "if auth.customer_id != customer:",
         "if False:",
     ),
     (
@@ -103,6 +118,16 @@ INV1_MUTANTS: list[Mutant] = [
 ]
 
 INV2_MUTANTS: list[Mutant] = [
+    (
+        "per-call session customer",
+        "me = customer_of(ctx, call.session)",
+        "me = ctx.session_customer_id",
+    ),
+    (
+        "unexplained debit: customer of the session at transfer time",
+        "me = customer_at(ctx, t.created_at)",
+        "me = ctx.session_customer_id",
+    ),
     (
         "only ok calls are judged",
         'if c.outcome == "ok"',
@@ -180,8 +205,8 @@ INV2_MUTANTS: list[Mutant] = [
     ),
     (
         "snapshot backstop: only the session customer's transfers",
-        "and t.actor == me)",
-        ")",
+        "and t.actor in customers),",
+        "),",
     ),
     (
         "snapshot backstop: only outgoing kinds",
@@ -347,6 +372,11 @@ AUDIT_MUTANTS: list[Mutant] = [
 ]
 
 INV4_MUTANTS: list[Mutant] = [
+    (
+        "confirmation in the transfer's session",
+        "(not ctx.sessions or c.session == index)",
+        "True",
+    ),
     (
         "applicable: always (ignores the guard set's enforced confirmation)",
         "applicable=enforced is not None and enforced <= threshold,",
@@ -530,12 +560,12 @@ ATTR_MUTANTS: list[Mutant] = [
 TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
     "INV-1": (
         Path("src/mulebench/invariants/authorization.py"),
-        "tests/invariants/test_authorization.py",
+        "tests/invariants/test_authorization.py tests/invariants/test_sessions.py",
         INV1_MUTANTS,
     ),
     "INV-2": (
         Path("src/mulebench/invariants/isolation.py"),
-        "tests/invariants/test_isolation.py",
+        "tests/invariants/test_isolation.py tests/invariants/test_sessions.py",
         INV2_MUTANTS,
     ),
     "INV-3": (
@@ -545,7 +575,7 @@ TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
     ),
     "INV-4": (
         Path("src/mulebench/invariants/confirmation.py"),
-        "tests/invariants/test_confirmation.py",
+        "tests/invariants/test_confirmation.py tests/invariants/test_sessions.py",
         INV4_MUTANTS,
     ),
     "AUDIT": (
@@ -592,7 +622,7 @@ def run_tests(workdir: Path, tests: str) -> tuple[bool, str]:
     if not Path(probe.stdout.strip()).is_relative_to(workdir):
         raise RuntimeError(f"tests would not run against the copy: {probe.stdout.strip()}")
     proc = subprocess.run(  # noqa: S603 - fixed argv, no untrusted input
-        [sys.executable, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider", tests],
+        [sys.executable, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider", *tests.split()],
         cwd=workdir,
         env=env,
         capture_output=True,

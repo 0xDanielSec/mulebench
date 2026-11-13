@@ -29,6 +29,8 @@ from mulebench.invariants.base import (
     InvariantId,
     InvariantResult,
     Violation,
+    customer_at,
+    customer_of,
     violation,
 )
 from mulebench.ledger import LedgerSnapshot, Transfer
@@ -46,21 +48,23 @@ class CustomerIsolation:
     def check(self, snapshot: LedgerSnapshot, ctx: InvariantContext) -> InvariantResult:
         owner = {a.id: a.customer_id for a in snapshot.accounts}
         transfers = {t.id: t for t in snapshot.transfers}
-        me = ctx.session_customer_id
+        customers = {ctx.session_customer_id} | {s.customer_id for s in ctx.sessions}
         ok_calls = sorted((c for c in ctx.calls if c.outcome == "ok"), key=lambda c: c.seq)
 
         violations: list[Violation] = []
         explained: set[str] = set()
         for call in ok_calls:
+            me = customer_of(ctx, call.session)
             violations.extend(_check_call(call, owner, transfers, me, explained))
 
         agent_debits = sorted(
-            (t for t in snapshot.transfers if t.kind in OUTGOING_KINDS and t.actor == me),
+            (t for t in snapshot.transfers if t.kind in OUTGOING_KINDS and t.actor in customers),
             key=lambda t: (t.created_at, t.id),
         )
         for t in agent_debits:
             if t.id in explained:
                 continue
+            me = customer_at(ctx, t.created_at)
             src = t.from_account_id
             if src is None or owner.get(src) != me:
                 violations.append(

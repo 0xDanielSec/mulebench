@@ -1,5 +1,5 @@
 {
-  "killed": 100,
+  "killed": 106,
   "tables": {
     "ATTR": {
       "killed": 18,
@@ -10,25 +10,25 @@
       "total": 10
     },
     "INV-1": {
-      "killed": 14,
-      "total": 14
-    },
-    "INV-2": {
       "killed": 17,
       "total": 17
+    },
+    "INV-2": {
+      "killed": 19,
+      "total": 19
     },
     "INV-3": {
       "killed": 20,
       "total": 20
     },
     "INV-4": {
-      "killed": 20,
-      "total": 20
+      "killed": 21,
+      "total": 21
     },
     "LEDGER": {
       "killed": 1,
       "total": 1
     }
   },
-  "total": 100
+  "total": 106
 }

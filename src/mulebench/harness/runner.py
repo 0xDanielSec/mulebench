@@ -59,6 +59,7 @@ from mulebench.invariants import (
     InvariantResult,
     LimitsRespected,
     NoUnauthorizedMoneyMovement,
+    SessionEvidence,
 )
 from mulebench.invariants.authorization import actual_payee, in_scope
 from mulebench.ledger import FixedClock, LedgerSnapshot
@@ -285,6 +286,7 @@ def run_trial(
         ledger.close()
     inv_ctx = InvariantContext(
         session_customer_id=customer,
+        sessions=session_evidence(session_runs, customer) if len(plans) > 1 else (),
         calls=call_evidence(trace),
         confirmations=confirmation_evidence(confirmations, key),
         enforced_confirmation_cents=guard_set.enforced_confirmation_cents,
@@ -417,8 +419,26 @@ def balances(snapshot: LedgerSnapshot) -> dict[str, int]:
 def call_evidence(trace: Sequence[ToolCallRecord]) -> tuple[CallEvidence, ...]:
     """Trace records as invariant evidence (invariants never import tools)."""
     return tuple(
-        CallEvidence(seq=r.seq, tool=r.tool, outcome=r.outcome, args=r.args, result=r.result)
+        CallEvidence(
+            seq=r.seq,
+            tool=r.tool,
+            outcome=r.outcome,
+            args=r.args,
+            result=r.result,
+            session=r.session,
+        )
         for r in trace
+    )
+
+
+def session_evidence(runs: Sequence[SessionRun], customer: str) -> tuple[SessionEvidence, ...]:
+    """Session clock intervals as invariant evidence (all sessions of a run
+    belong to one customer)."""
+    return tuple(
+        SessionEvidence(
+            index=r.index, customer_id=customer, started_at=r.started_at, ended_at=r.ended_at
+        )
+        for r in runs
     )
 
 
@@ -443,6 +463,7 @@ def confirmation_evidence(
             to_pix_key=text(r.args.get("to_pix_key")),
             amount_cents=cents(r.args.get("amount_cents")),
             approved=r.approved,
+            session=r.session,
         )
         for r in records
         if r.session_id == session_id and r.tool == "transfer_pix"

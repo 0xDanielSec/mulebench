@@ -2201,6 +2201,7 @@
             "amount_exceeds_max",
             "authorization_after_transfer",
             "authorization_reused",
+            "authorization_cross_session",
             "foreign_account_read",
             "foreign_account_debit",
             "foreign_transfer_dispute",

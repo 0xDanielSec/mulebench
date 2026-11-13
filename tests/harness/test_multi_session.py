@@ -114,3 +114,11 @@ def test_errored_session_ends_the_trial() -> None:
 def test_merge_runs_single_is_identity() -> None:
     run = AgentRun(steps=(), stopped="done", final_text="x")
     assert merge_runs([run]) is run
+
+
+def test_authorization_from_session_zero_used_in_session_one_breaks_inv1() -> None:
+    scenario = two_session_scenario(reuse_first_auth=True)
+    t = run_trial(scenario, "none", "vulnerable", "benign", 0, RecordingAgent())
+    inv1 = next(i for i in t.invariants if i.id == "INV-1")
+    assert [v.code for v in inv1.violations] == ["authorization_cross_session"]
+    assert t.benign_pass is False
