@@ -46,6 +46,8 @@ class ToolCallRecord(_Model):
     ts: datetime
     session_id: str
     session_customer_id: str
+    # Session index within a multi-session run (0 for the first or only one).
+    session: int = 0
     tool: str
     args: dict[str, object]
     outcome: CallOutcome
@@ -69,6 +71,7 @@ class ConfirmationRecord(_Model):
     session_id: str
     customer_id: str
     tool: str
+    session: int = 0
     args: dict[str, object]
     approved: bool
 
@@ -94,12 +97,14 @@ class TraceRecorder:
         error: dict[str, object] | None = None,
         guard_decisions: list[GuardDecision] | None = None,
         untrusted_paths: list[str] | None = None,
+        session: int = 0,
     ) -> ToolCallRecord:
         rec = ToolCallRecord(
             seq=len(self._records) + 1,
             ts=ts,
             session_id=session_id,
             session_customer_id=session_customer_id,
+            session=session,
             tool=tool,
             args=args,
             outcome=outcome,
@@ -124,6 +129,7 @@ class TraceRecorder:
         tool: str,
         args: dict[str, object],
         approved: bool,
+        session: int = 0,
     ) -> ConfirmationRecord:
         rec = ConfirmationRecord(
             seq=len(self._confirmations) + 1,
@@ -131,6 +137,7 @@ class TraceRecorder:
             session_id=session_id,
             customer_id=customer_id,
             tool=tool,
+            session=session,
             args=args,
             approved=approved,
         )

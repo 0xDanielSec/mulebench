@@ -543,6 +543,11 @@
           "title": "Tool",
           "type": "string"
         },
+        "session": {
+          "default": 0,
+          "title": "Session",
+          "type": "integer"
+        },
         "args": {
           "additionalProperties": true,
           "title": "Args",
@@ -1400,6 +1405,55 @@
       "title": "ServerMeta",
       "type": "object"
     },
+    "SessionRun": {
+      "additionalProperties": false,
+      "description": "One session of a multi-session trial. Trace records, steps and\nconfirmations carry the same `index` in their `session` field.",
+      "properties": {
+        "index": {
+          "title": "Index",
+          "type": "integer"
+        },
+        "request": {
+          "title": "Request",
+          "type": "string"
+        },
+        "started_at": {
+          "format": "date-time",
+          "title": "Started At",
+          "type": "string"
+        },
+        "ended_at": {
+          "format": "date-time",
+          "title": "Ended At",
+          "type": "string"
+        },
+        "stopped": {
+          "title": "Stopped",
+          "type": "string"
+        },
+        "final_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Final Text"
+        }
+      },
+      "required": [
+        "index",
+        "request",
+        "started_at",
+        "ended_at",
+        "stopped"
+      ],
+      "title": "SessionRun",
+      "type": "object"
+    },
     "SinkDisclosure": {
       "additionalProperties": false,
       "properties": {
@@ -1691,6 +1745,11 @@
         "session_customer_id": {
           "title": "Session Customer Id",
           "type": "string"
+        },
+        "session": {
+          "default": 0,
+          "title": "Session",
+          "type": "integer"
         },
         "tool": {
           "title": "Tool",
@@ -2087,6 +2146,14 @@
             "$ref": "#/$defs/ConfirmationRecord"
           },
           "title": "Confirmations",
+          "type": "array"
+        },
+        "sessions": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SessionRun"
+          },
+          "title": "Sessions",
           "type": "array"
         },
         "unauthorized_outflow_cents": {

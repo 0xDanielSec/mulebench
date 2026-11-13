@@ -39,6 +39,12 @@ class RecordingConfirmer:
         self._inner = inner
         self._trace = trace
         self._clock = clock
+        self._session = 0
+
+    def start_session(self, index: int, inner: Confirmer) -> None:
+        """Answer for a later session of the same customer, from its request."""
+        self._session = index
+        self._inner = inner
 
     def confirm(self, request: ConfirmationRequest) -> bool:
         approved = self._inner.confirm(request)
@@ -49,5 +55,6 @@ class RecordingConfirmer:
             tool=request.tool,
             args=dict(request.args),
             approved=approved,
+            session=self._session,
         )
         return approved

@@ -11,7 +11,7 @@ from datetime import timedelta
 from typing import Any
 
 from mulebench.agents import Agent, AgentTask, render_session_note
-from mulebench.agents.base import AgentRun, RunAborted, TokenUsage
+from mulebench.agents.base import AgentRun, AgentStep, RunAborted, TokenUsage
 from mulebench.attacks import Scenario, render, scenario_sha256
 from mulebench.attacks.schema import ExpectedOutcome
 from mulebench.harness.attribution import CallView, PaymentView, attribute
@@ -34,11 +34,12 @@ from mulebench.harness.models import (
     Preset,
     RunStatus,
     ScenarioResult,
+    SessionRun,
     TrialResult,
     Variant,
 )
 from mulebench.harness.presets import build_guard_set, preset_guard_names
-from mulebench.harness.seed import seed_cell
+from mulebench.harness.seed import grant_session, seed_cell
 from mulebench.harness.stats import Rate, wilson
 from mulebench.harness.validity import (
     coerced_counts,
@@ -227,31 +228,56 @@ def run_trial(
     agent: Agent,
 ) -> TrialResult:
     key = trial_key(scenario.id, prompt_variant, preset, variant, trial)
-    ledger, clock, note = seed_cell(scenario, render(scenario, variant))
+    rendered = render(scenario, variant)
+    ledger, clock, note = seed_cell(scenario, rendered)
     before = balances(ledger.snapshot())
     customer = scenario.user_task.customer
-    request = scenario.user_task.request
+    plans = scenario.sessions()
+    request = "\n".join(p.request for p in plans)
     trace_recorder = TraceRecorder()
-    confirmer = RecordingConfirmer(RequestConfirmer(request), trace_recorder, clock)
+    confirmer = RecordingConfirmer(RequestConfirmer(plans[0].request), trace_recorder, clock)
     guard_set = build_guard_set(preset, confirmer, key)
-    ctx = ToolContext(
-        customer_id=customer,
-        session_id=key,
-        ledger=ledger,
-        guards=guard_set.guards,
-        transformers=guard_set.transformers,
-        trace=trace_recorder,
-    )
-    task = AgentTask(
-        customer_id=customer,
-        request=request,
-        session_note=render_session_note(note),
-        trial_key=key,
-        prompt_variant=prompt_variant,
-        trial=trial,
-    )
+    session_runs: list[SessionRun] = []
+    runs: list[AgentRun] = []
     try:
-        run = agent.run(task, _TickingClient(ctx, clock))
+        for plan in plans:
+            if plan.index > 0:
+                clock.advance(timedelta(hours=plan.gap_hours))
+                confirmer.start_session(plan.index, RequestConfirmer(plan.request))
+                note = grant_session(ledger, rendered.setup, customer, plan.authorizations)
+            started = clock.now()
+            ctx = ToolContext(
+                customer_id=customer,
+                session_id=key,
+                ledger=ledger,
+                guards=guard_set.guards,
+                transformers=guard_set.transformers,
+                trace=trace_recorder,
+                session_index=plan.index,
+            )
+            task = AgentTask(
+                customer_id=customer,
+                request=plan.request,
+                session_note=render_session_note(note),
+                trial_key=key if plan.index == 0 else f"{key}#s{plan.index}",
+                prompt_variant=prompt_variant,
+                trial=trial,
+            )
+            one = agent.run(task, _TickingClient(ctx, clock))
+            runs.append(one)
+            session_runs.append(
+                SessionRun(
+                    index=plan.index,
+                    request=plan.request,
+                    started_at=started,
+                    ended_at=clock.now(),
+                    stopped=one.stopped,
+                    final_text=one.final_text,
+                )
+            )
+            if one.stopped == "errored":
+                break
+        run = merge_runs(runs)
         snapshot = ledger.snapshot()
         trace = list(ctx.trace.records())
         confirmations = list(ctx.trace.confirmations())
@@ -332,6 +358,7 @@ def run_trial(
         agent_steps=list(run.steps),
         trace=trace,
         confirmations=confirmations,
+        sessions=session_runs if len(plans) > 1 else [],
         unauthorized_outflow_cents=unauthorized_outflow_cents(snapshot, inv_ctx),
         metrics=CellMetrics(
             steps=len(run.steps),
@@ -348,6 +375,39 @@ def run_trial(
 
 
 _INV1 = NoUnauthorizedMoneyMovement()
+
+
+def merge_runs(runs: Sequence[AgentRun]) -> AgentRun:
+    """One AgentRun for a whole trial. A single session is returned unchanged.
+
+    Steps and model calls are concatenated (step seq renumbered), counts are
+    summed, the final texts are joined, and the trial stops as its last session
+    did (an errored session ends the trial)."""
+    if len(runs) == 1:
+        return runs[0]
+    last = runs[-1]
+    steps: list[AgentStep] = []
+    for r in runs:
+        for s in r.steps:
+            steps.append(s.model_copy(update={"seq": len(steps) + 1}))
+    malformed: Counter[str] = Counter()
+    coerced: Counter[str] = Counter()
+    for r in runs:
+        malformed.update(r.malformed_tool_calls)
+        coerced.update(r.coerced_args)
+    texts = [r.final_text for r in runs if r.final_text]
+    return last.model_copy(
+        update={
+            "steps": tuple(steps),
+            "model_calls": tuple(c for r in runs for c in r.model_calls),
+            "model_calls_recorded": all(r.model_calls_recorded for r in runs),
+            "tool_calls_total": sum(r.tool_calls_total for r in runs),
+            "malformed_tool_calls": dict(malformed),
+            "coerced_calls": sum(r.coerced_calls for r in runs),
+            "coerced_args": dict(coerced),
+            "final_text": "\n\n".join(texts) if texts else None,
+        }
+    )
 
 
 def balances(snapshot: LedgerSnapshot) -> dict[str, int]:

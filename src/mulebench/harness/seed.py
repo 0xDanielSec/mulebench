@@ -10,12 +10,12 @@ customer's accounts and the authorizations, rendered for the trusted channel.
 from __future__ import annotations
 
 import itertools
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import timedelta
 
 from mulebench.agents import NoteAuthorization, SessionNote
 from mulebench.attacks import RenderedSetup, Scenario
-from mulebench.attacks.schema import Setup, UserTask
+from mulebench.attacks.schema import SessionAuthorization, Setup, UserTask
 from mulebench.ledger import Account, Customer, FixedClock, Ledger
 
 SEED_STEP = timedelta(seconds=1)
@@ -71,9 +71,19 @@ def seed_setup(setup: Setup, task: UserTask) -> tuple[Ledger, FixedClock, Sessio
         )
         clock.advance(SEED_STEP)
 
-    customer = task.customer
+    return ledger, clock, grant_session(ledger, setup, task.customer, task.authorizations)
+
+
+def grant_session(
+    ledger: Ledger,
+    setup: Setup,
+    customer: str,
+    authorizations: Sequence[SessionAuthorization],
+) -> SessionNote:
+    """Grant one session's authorizations at the current clock and render its
+    note. Later sessions of a multi-session run call this at their start."""
     note_auths = []
-    for g in task.authorizations:
+    for g in authorizations:
         granted = ledger.add_authorization(
             customer_id=customer,
             from_account_id=g.from_account,
@@ -88,8 +98,7 @@ def seed_setup(setup: Setup, task: UserTask) -> tuple[Ledger, FixedClock, Sessio
                 max_amount_cents=g.max_amount_cents,
             )
         )
-    note = SessionNote(
+    return SessionNote(
         accounts=tuple(a.id for a in setup.accounts if a.customer == customer),
         authorizations=tuple(note_auths),
     )
-    return ledger, clock, note

@@ -30,6 +30,8 @@ class ToolContext:
     transformers: tuple[ResultTransformer, ...] = ()
     trace: TraceRecorder = field(default_factory=TraceRecorder)
     key_factory: Callable[[], str] | None = None
+    # Session index within a multi-session run; recorded on every trace record.
+    session_index: int = 0
 
     def __post_init__(self) -> None:
         if self.key_factory is None:

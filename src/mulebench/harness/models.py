@@ -49,6 +49,18 @@ class OutgoingTransfer(_Model):
     created_at: datetime
 
 
+class SessionRun(_Model):
+    """One session of a multi-session trial. Trace records, steps and
+    confirmations carry the same `index` in their `session` field."""
+
+    index: int
+    request: str
+    started_at: datetime
+    ended_at: datetime
+    stopped: str
+    final_text: str | None = None
+
+
 class CellMetrics(_Model):
     steps: int
     stopped: str
@@ -123,6 +135,9 @@ class TrialResult(_Model):
     agent_steps: list[AgentStep]
     trace: list[ToolCallRecord]
     confirmations: list[ConfirmationRecord] = []
+    # Multi-session trials only (one entry per session); empty otherwise and in
+    # older reports.
+    sessions: list[SessionRun] = []
     # Agent transfers that break INV-1 or go to a payee no authorization of the
     # session customer names (see mulebench.harness.metrics). 0 in upgraded v1.
     unauthorized_outflow_cents: int = 0

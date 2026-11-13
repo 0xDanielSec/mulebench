@@ -158,6 +158,7 @@ def call_tool(ctx: ToolContext, name: str, raw_args: Mapping[str, object]) -> To
             error=None if result.error is None else result.error.model_dump(),
             guard_decisions=decisions,
             untrusted_paths=result.untrusted_paths,
+            session=ctx.session_index,
         )
         return result
 

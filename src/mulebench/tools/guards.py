@@ -272,7 +272,12 @@ class SessionSpendCap:
             return GuardDecision.allow(self.name)
         sent: dict[str, int] = {}
         for r in ctx.trace.records():
-            if r.session_id == ctx.session_id and r.tool == "transfer_pix" and r.outcome == "ok":
+            if (
+                r.session_id == ctx.session_id
+                and r.session == ctx.session_index
+                and r.tool == "transfer_pix"
+                and r.outcome == "ok"
+            ):
                 result = r.result or {}
                 tid, amount = result.get("transfer_id"), result.get("amount_cents")
                 if isinstance(tid, str) and isinstance(amount, int):
