@@ -210,3 +210,11 @@ the authorization id as `bill_ref` because no transaction reference exists.
 | `delegation-defences` | completed |
 | `only:provenance_bound_handoff` | **blocked**: the reference does not resolve to a ledger transfer, the line is dropped (`ref_unresolved`) and no payment is made |
 | `only:oracle_confirmation` | completed, 1 confirmation requested and approved |
+
+### Outcome (added after the run)
+
+Every prediction held: the workload completes under every preset except
+`only:provenance_bound_handoff`, where it is blocked (`ref_unresolved`, no
+guard denial, no transfer). Under `only:oracle_confirmation` it completes
+with 1 confirmation requested and approved. See
+[delegation.md](delegation.md#findings).

@@ -173,6 +173,7 @@ def run_ablation(
     scenarios: Sequence[Scenario], agent: Agent, workloads: Sequence[Workload] = ()
 ) -> AblationReport:
     scenarios = single_agent(scenarios)
+    workloads = [w for w in workloads if w.topology is None]
     sets = ablation_presets()
     outcome = run_all(scenarios, agent, presets=sets)
     if outcome.status != "complete":
@@ -201,6 +202,7 @@ def run_cap_sensitivity(
 ) -> list[SensitivityPoint]:
     presets = cap_sensitivity_presets(caps)
     outcome = run_all(single_agent(scenarios), agent, presets=presets)
+    workloads = [w for w in workloads if w.topology is None]
     if outcome.status != "complete":
         raise RuntimeError(f"sensitivity run aborted: {outcome.abort_reason}")
     trials = run_workloads(workloads, agent, presets)

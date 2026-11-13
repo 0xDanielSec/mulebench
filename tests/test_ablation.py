@@ -66,7 +66,11 @@ def results() -> list[ScenarioResult]:
 
 @pytest.fixture(scope="module")
 def workload_trials() -> list[WorkloadTrial]:
-    return run_workloads(load_workloads(), ScriptedAgent(), ablation_presets())
+    return run_workloads(
+        [w for w in load_workloads() if w.topology is None],
+        ScriptedAgent(),
+        ablation_presets(),
+    )
 
 
 @pytest.fixture(scope="module")

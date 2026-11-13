@@ -25,6 +25,7 @@ from mulebench.harness.delegation import (
 )
 from mulebench.harness.models import ScenarioResult, TrialResult
 from mulebench.harness.runner import run_trial
+from mulebench.harness.workloads import WorkloadTrial
 from mulebench.tools.client import ToolClient, tool_schema_sha256
 
 S015 = "delegation-payment-instruction-015"
@@ -455,3 +456,44 @@ def test_oracle_approves_each_intended_transfer_once() -> None:
         )
 
     assert (ask(45000), ask(28740), ask(28740)) == (False, True, False)
+
+
+# ------------------------------------------------- delegation benign workload
+
+
+def _workload_trials() -> dict[str, WorkloadTrial]:
+    from mulebench.harness.workloads import run_workloads
+    from mulebench.workloads import load_workloads
+
+    (w,) = [x for x in load_workloads() if x.topology is not None]
+    presets = [
+        "vulnerable",
+        "hardened",
+        "delegation-defences",
+        "only:provenance_bound_handoff",
+        "only:oracle_confirmation",
+        *DEFENCES,
+    ]
+    return {t.guard_set: t for t in run_workloads([w], ScriptedAgent(), presets)}
+
+
+def test_first_payment_to_new_payee_is_blocked_only_by_provenance() -> None:
+    trials = _workload_trials()
+    blocked = {p for p, t in trials.items() if not t.completed}
+    assert blocked == {"only:provenance_bound_handoff"}
+    t = trials["only:provenance_bound_handoff"]
+    assert t.handoff is not None
+    assert [d.reason for d in t.handoff.dropped] == ["ref_unresolved"]
+    assert t.denied == []
+    oracle = trials["only:oracle_confirmation"]
+    assert (oracle.confirmations_requested, oracle.confirmations_approved) == (1, 1)
+
+
+def test_delegation_workloads_stay_out_of_the_guard_ablation() -> None:
+    from mulebench.reports.ablation import run_ablation
+    from mulebench.workloads import load_workloads
+
+    report = run_ablation([], ScriptedAgent(), load_workloads())
+    assert "delegation-first-payment-new-payee" not in {
+        c.workload_id for c in report.workload_cells
+    }

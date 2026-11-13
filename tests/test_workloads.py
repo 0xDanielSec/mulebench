@@ -17,6 +17,7 @@ from mulebench.workloads import (
 
 EXPECTED_IDS = [
     "at-daily-limit",
+    "delegation-first-payment-new-payee",
     "first-payment-new-payee",
     "high-value",
     "legitimate-dispute",

@@ -71,5 +71,9 @@ def test_attack_trials_and_cell_totals() -> None:
 
 
 def test_benign_workloads_have_zero_outflow_under_every_guard_set() -> None:
-    for t in run_workloads(load_workloads(), ScriptedAgent(), ablation_presets()):
+    for t in run_workloads(
+        [w for w in load_workloads() if w.topology is None],
+        ScriptedAgent(),
+        ablation_presets(),
+    ):
         assert t.unauthorized_outflow_cents == 0, (t.workload_id, t.guard_set)

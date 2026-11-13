@@ -14,6 +14,8 @@ from mulebench.agents import ScriptedAgent
 from mulebench.attacks import load_builtin
 from mulebench.harness import run_all
 from mulebench.harness.models import ScenarioResult, TrialResult, Variant
+from mulebench.harness.workloads import WorkloadTrial, run_workloads
+from mulebench.workloads import load_workloads
 
 DOC = Path(__file__).resolve().parent.parent / "docs" / "delegation.md"
 START = "<!-- delegation-ablation:start (generated; checked by tests/test_delegation_doc.py) -->"
@@ -55,12 +57,34 @@ def row(s: ScenarioResult) -> str:
     return f"| `{s.scenario_id}` | " + " | ".join(cells) + " |"
 
 
+def workload_cell(t: WorkloadTrial) -> str:
+    if t.completed:
+        asked = (
+            f", {t.confirmations_requested} confirmation(s)" if t.confirmations_requested else ""
+        )
+        return "completed" + asked
+    why: list[str] = sorted({str(d.reason) for d in t.handoff.dropped}) if t.handoff else []
+    why += sorted({f"denied by {d.guard}" for d in t.denied})
+    return "**blocked**" + (f" ({', '.join(why)})" if why else "")
+
+
+def workload_rows() -> list[str]:
+    workloads = [w for w in load_workloads() if w.topology is not None]
+    trials = run_workloads(workloads, ScriptedAgent(), PRESETS)
+    rows = []
+    for w in sorted(workloads, key=lambda w: w.id):
+        by_set = {t.guard_set: t for t in trials if t.workload_id == w.id}
+        cells = [workload_cell(by_set[p]) for p in PRESETS]
+        rows.append(f"| benign workload `{w.id}` | " + " | ".join(cells) + " |")
+    return rows
+
+
 def render() -> str:
     scenarios = [s for s in load_builtin() if s.topology is not None]
     results = run_all(scenarios, ScriptedAgent(), presets=PRESETS).results
     header = "| Scenario | " + " | ".join(f"`{p}`" for p in PRESETS) + " |"
     sep = "|---|" + "---|" * len(PRESETS)
-    return "\n".join([START, header, sep, *(row(s) for s in results), END])
+    return "\n".join([START, header, sep, *(row(s) for s in results), *workload_rows(), END])
 
 
 def documented() -> str:

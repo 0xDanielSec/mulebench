@@ -13,7 +13,7 @@ from typing import Any
 from mulebench.agents import Agent, AgentTask, SessionNote, render_session_note, role_agents
 from mulebench.agents.base import AgentRun, AgentStep, RunAborted, TokenUsage
 from mulebench.attacks import Scenario, render, scenario_sha256
-from mulebench.attacks.schema import ExpectedOutcome
+from mulebench.attacks.schema import ExpectedOutcome, Topology
 from mulebench.harness.attribution import CallView, PaymentView, attribute
 from mulebench.harness.confirmer import OracleConfirmer, RecordingConfirmer, RequestConfirmer
 from mulebench.harness.delegation import (
@@ -304,7 +304,9 @@ def run_trial(
             if scenario.topology is None:
                 one = agent.run(task, _TickingClient(ctx, clock))
             else:
-                one, handoff = _run_delegation(scenario, agent, task, ctx, clock, guard_set, note)
+                one, handoff = _run_delegation(
+                    scenario.topology, scenario, agent, task, ctx, clock, guard_set, note
+                )
             runs.append(one)
             session_runs.append(
                 SessionRun(
@@ -685,7 +687,8 @@ def _delegation_rates(ok: list[TrialResult], exposed: list[TrialResult]) -> dict
 
 
 def _run_delegation(
-    scenario: Scenario,
+    topology: Topology,
+    scenario: Scenario | None,
     agent: Agent,
     task: AgentTask,
     ctx: ToolContext,
@@ -693,10 +696,8 @@ def _run_delegation(
     guard_set: GuardSet,
     note: SessionNote,
 ) -> tuple[AgentRun, HandoffArtifact | None]:
-    """Reader then Payer on one ledger and trace. See mulebench.harness.delegation."""
-    topology = scenario.topology
-    if topology is None:  # pragma: no cover - callers check
-        raise ValueError(f"{scenario.id} has no delegation topology")
+    """Reader then Payer on one ledger and trace. See mulebench.harness.delegation.
+    `scenario` is None for benign workloads (no taint to look for)."""
     reader_agent, payer_agent = role_agents(agent)
     payees = frozenset(a.payee_pix_key for a in note.authorizations)
     reader_ctx = replace(ctx, role="reader", allowed_tools=frozenset(topology.reader_tools))

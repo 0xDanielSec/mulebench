@@ -104,7 +104,7 @@ def build_handoff(
     structured: bool,
     note_payees: frozenset[str],
     request: str | None,
-    scenario: Scenario,
+    scenario: Scenario | None,
     resolve: Resolver | None = None,
 ) -> HandoffArtifact:
     """The artifact for one Reader answer; `request` is set only when the
@@ -179,8 +179,11 @@ def ledger_resolver(
     return table.get
 
 
-def taint_sources(text: str, scenario: Scenario) -> list[str]:
+def taint_sources(text: str, scenario: Scenario | None) -> list[str]:
+    """Attack artifacts in `text`; none for benign workloads (no scenario)."""
     found: list[str] = []
+    if scenario is None:
+        return found
     if scenario.canary in text:
         found.append("canary")
     goal = scenario.attack_goal

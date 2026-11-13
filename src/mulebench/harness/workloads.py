@@ -13,11 +13,13 @@ from collections.abc import Sequence
 from pydantic import BaseModel, ConfigDict
 
 from mulebench.agents import Agent, AgentTask, render_session_note
-from mulebench.harness.confirmer import RecordingConfirmer, RequestConfirmer
+from mulebench.harness.confirmer import OracleConfirmer, RecordingConfirmer, RequestConfirmer
+from mulebench.harness.delegation import HandoffArtifact
 from mulebench.harness.metrics import unauthorized_outflow_cents
 from mulebench.harness.presets import build_guard_set, preset_guard_names
 from mulebench.harness.runner import (
     INVARIANTS,
+    _run_delegation,
     _TickingClient,
     call_evidence,
     confirmation_evidence,
@@ -25,7 +27,7 @@ from mulebench.harness.runner import (
 )
 from mulebench.harness.seed import seed_setup
 from mulebench.invariants import InvariantContext, InvariantResult
-from mulebench.tools import ToolContext, TraceRecorder
+from mulebench.tools import Confirmer, ToolContext, TraceRecorder
 from mulebench.tools.memory import MemoryStore
 from mulebench.workloads import Workload
 
@@ -54,6 +56,8 @@ class WorkloadTrial(_Model):
     tool_calls: int
     unauthorized_outflow_cents: int
     invariants: list[InvariantResult]
+    # Delegation workloads only.
+    handoff: HandoffArtifact | None = None
 
 
 def workload_key(workload_id: str, preset: str) -> str:
@@ -66,7 +70,17 @@ def run_workload(workload: Workload, preset: str, agent: Agent) -> WorkloadTrial
     customer = workload.user_task.customer
     request = workload.user_task.request
     trace = TraceRecorder()
-    confirmer = RecordingConfirmer(RequestConfirmer(request), trace, clock)
+    customer_side: Confirmer = (
+        OracleConfirmer(
+            [
+                (e.from_account, e.to_pix_key, e.amount_cents)
+                for e in workload.expected_outcome.transfers
+            ]
+        )
+        if "oracle_confirmation" in preset_guard_names(preset)
+        else RequestConfirmer(request)
+    )
+    confirmer = RecordingConfirmer(customer_side, trace, clock)
     guard_set = build_guard_set(preset, confirmer, key)
     ctx = ToolContext(
         customer_id=customer,
@@ -83,8 +97,14 @@ def run_workload(workload: Workload, preset: str, agent: Agent) -> WorkloadTrial
         session_note=render_session_note(note),
         trial_key=key,
     )
+    handoff: HandoffArtifact | None = None
     try:
-        run = agent.run(task, _TickingClient(ctx, clock))
+        if workload.topology is None:
+            run = agent.run(task, _TickingClient(ctx, clock))
+        else:
+            run, handoff = _run_delegation(
+                workload.topology, None, agent, task, ctx, clock, guard_set, note
+            )
         snapshot = ledger.snapshot()
         records = list(trace.records())
         confirmations = list(trace.confirmations())
@@ -117,6 +137,7 @@ def run_workload(workload: Workload, preset: str, agent: Agent) -> WorkloadTrial
         tool_calls=len(records),
         unauthorized_outflow_cents=unauthorized_outflow_cents(snapshot, inv_ctx),
         invariants=[inv.check(snapshot, inv_ctx) for inv in INVARIANTS.values()],
+        handoff=handoff,
     )
 
 

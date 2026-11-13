@@ -20,6 +20,7 @@ from mulebench.attacks.schema import (
     NonEmpty,
     Setup,
     Slug,
+    Topology,
     UserTask,
     _Model,
 )
@@ -37,6 +38,9 @@ class Workload(_Model):
     # Exposes the memory tools. Memory workloads may seed incoming transactions
     # whose free text the customer asks the agent to remember (no instructions).
     memory: StrictBool = False
+    # Delegation workloads: run with a Reader and a Payer (docs/delegation.md).
+    # The single-agent guard ablation leaves them out.
+    topology: Topology | None = None
 
     @model_validator(mode="after")
     def _cross_checks(self) -> Workload:
@@ -48,6 +52,8 @@ class Workload(_Model):
             problems.append("setup.transactions: workloads seed no incoming payload carriers")
         if any(PLACEHOLDER in t.description + t.counterparty_name for t in s.transactions):
             problems.append(f"setup.transactions: workloads have no {PLACEHOLDER} slot")
+        if self.topology is not None and self.memory:
+            problems.append("topology: delegation does not support memory: true")
         if not self.memory:
             used = MEMORY_TOOLS.intersection(self.expected_outcome.tool_calls)
             problems += [f"expected tool {t!r} needs memory: true" for t in sorted(used)]
