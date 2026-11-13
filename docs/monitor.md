@@ -150,5 +150,5 @@ Applications, LGPD, BACEN Res. 4.893) are indicative and **to be reviewed**.
   monitor session `<trial key>#s<index>`. The monitor has no cross-session
   authorization rule; `MB-INV1-authorization_cross_session` is emitted by the
   offline harness only.
-- Future work, not implemented: export as KQL / Microsoft Sentinel analytic
-  rules (ADR 0005).
+- KQL export for Microsoft Sentinel: `mulebench monitor rules --format kql`
+  ([monitor-kql.md](monitor-kql.md)). A starting point, not production-validated.

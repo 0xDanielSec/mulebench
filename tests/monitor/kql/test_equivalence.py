@@ -96,6 +96,11 @@ def test_divergences_are_documented() -> None:
         assert d["rule_id"] in EXPORTED
         assert d["reason"]
         assert d["kql_behavior"]
+    doc = (ROOT / "docs" / "monitor-kql.md").read_text(encoding="utf-8")
+    for c in cases.DIVERGENCE_CASES:
+        assert c.name in doc, f"docs/monitor-kql.md does not mention divergence {c.name}"
+    assert "not production-validated" in doc
+    assert "## Cost and rollout" in doc
 
 
 def test_fixture_events_map_to_table_columns() -> None:

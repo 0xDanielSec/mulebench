@@ -72,7 +72,9 @@ AST test enforces it. The disclosure check moved from the harness to
 - Re-running every check on each event is quadratic per session; fine at
   pilot scale, revisit if sessions get long.
 
-## Future work (not in this batch)
+## Follow-up
 
-- Export of the rules as KQL / Microsoft Sentinel analytic rules, next to the
-  Sigma-like documents.
+- Implemented later: export of the rules as Microsoft Sentinel KQL analytic
+  rules (`mulebench monitor rules --format kql`), next to the Sigma-like
+  documents. A starting point, not production-validated; see
+  `docs/monitor-kql.md`.

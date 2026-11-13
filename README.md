@@ -47,7 +47,9 @@ handles a user request through the tools, which a guard preset may wrap. The
 harness then evaluates every invariant against the snapshot and the trace.
 Browse a report as a static site: [`docs/viewer.md`](docs/viewer.md).
 Run the same invariants over agent logs as a detector:
-[`docs/monitor.md`](docs/monitor.md).
+[`docs/monitor.md`](docs/monitor.md). The rules also export as Microsoft
+Sentinel KQL analytic rules (starting point, not production-validated):
+[`docs/monitor-kql.md`](docs/monitor-kql.md).
 Details: [`docs/harness.md`](docs/harness.md), [`docs/ledger.md`](docs/ledger.md),
 [`docs/tools.md`](docs/tools.md).
 
