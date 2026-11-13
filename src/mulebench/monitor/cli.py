@@ -34,7 +34,11 @@ from mulebench.monitor.ingest import TraceFormatError, read_events
 from mulebench.monitor.stream import DEFAULT_GRACE, StreamingMonitor
 
 
-def add_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+def add_parser(
+    sub: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> argparse._SubParsersAction[argparse.ArgumentParser]:
+    """Add `monitor` and return its subcommand parsers (mulebench.cli adds
+    `eval`, which lives in the harness)."""
     monitor = sub.add_parser("monitor", help="detect invariant violations in agent traces")
     msub = monitor.add_subparsers(dest="monitor_command", required=True)
 
@@ -68,6 +72,7 @@ def add_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None
 
     schema = msub.add_parser("schema", help="print the trace event JSON Schema")
     schema.add_argument("--out", type=Path, help="write the schema here instead")
+    return msub
 
 
 def schema_text() -> str:

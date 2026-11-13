@@ -58,6 +58,9 @@ class AdaptedTrial:
     session_id: str
     errored: bool
     scenario_verified: bool
+    # False in older reports, which judged disclosure on a final answer they
+    # did not store: the monitor cannot see that answer.
+    final_text_stored: bool
     events: tuple[Event, ...]
     config: SessionConfig
     # The stored harness results this trial can be compared with.
@@ -234,6 +237,7 @@ def adapt_trial(
         session_id=session,
         errored=bool(trial.get("errored")),
         scenario_verified=verified,
+        final_text_stored=trial.get("final_text") is not None,
         events=tuple(events),
         config=_config(scenario, stored),
         stored_invariants=stored,
