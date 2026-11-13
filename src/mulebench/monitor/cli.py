@@ -2,7 +2,14 @@
 
     mulebench monitor run [--in TRACE.jsonl|-] [--out ALERTS.jsonl|-]
                           [--enforced-confirmation-cents N]
+                          [--stream [--grace-seconds S]]
     mulebench monitor schema [--out monitor-trace.schema.json]
+
+Batch mode (default) reads every event, then writes the alerts once, all
+`firm`. `--stream` processes events as they arrive (pipe a live log into
+stdin, e.g. `tail -f trace.jsonl | mulebench monitor run --stream`) and writes
+every alert transition (provisional, firm, retracted) as soon as it happens;
+keep the latest line per alert_id.
 
 Exit codes for `run`: 0 = no applicable alert of severity high or above;
 1 = at least one; 2 = usage or trace format error. An alert is a finding.
@@ -15,6 +22,7 @@ import contextlib
 import json
 import sys
 from collections.abc import Iterator
+from datetime import timedelta
 from pathlib import Path
 from typing import TextIO, cast
 
@@ -22,6 +30,7 @@ from mulebench.monitor.alerts import Alert, at_least, write_alerts
 from mulebench.monitor.engine import SessionConfig, constant_config, run_batch
 from mulebench.monitor.events import trace_json_schema
 from mulebench.monitor.ingest import TraceFormatError, read_events
+from mulebench.monitor.stream import DEFAULT_GRACE, StreamingMonitor
 
 
 def add_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -37,6 +46,16 @@ def add_parser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None
         default=None,
         help="lowest amount the deployment always sends to customer confirmation "
         "(makes INV-4 applicable)",
+    )
+
+    run.add_argument(
+        "--stream", action="store_true", help="streaming mode: emit alerts as events arrive"
+    )
+    run.add_argument(
+        "--grace-seconds",
+        type=float,
+        default=DEFAULT_GRACE.total_seconds(),
+        help="streaming: event-time lateness tolerated before an alert is firm (default 300)",
     )
 
     schema = msub.add_parser("schema", help="print the trace event JSON Schema")
@@ -61,7 +80,30 @@ def config_from(args: argparse.Namespace) -> SessionConfig:
 
 
 def exit_code(alerts: list[Alert]) -> int:
-    return int(any(a.applicable and a.status == "firm" and at_least(a, "high") for a in alerts))
+    """1 when the latest version of some alert is a firm, applicable finding
+    of severity high or above."""
+    latest = {a.alert_id: a for a in alerts}
+    return int(
+        any(a.applicable and a.status == "firm" and at_least(a, "high") for a in latest.values())
+    )
+
+
+def _stream(args: argparse.Namespace) -> int:
+    monitor = StreamingMonitor(
+        constant_config(config_from(args)), grace=timedelta(seconds=args.grace_seconds)
+    )
+    emitted: list[Alert] = []
+    with _open(args.input, "r") as f, _open(args.out, "w") as out:
+        try:
+            for alert in monitor.run(read_events(f)):
+                write_alerts([alert], out)
+                out.flush()
+                emitted.append(alert)
+        except KeyboardInterrupt:
+            final = monitor.flush()
+            write_alerts(final, out)
+            emitted += final
+    return exit_code(emitted)
 
 
 def main(args: argparse.Namespace) -> int:
@@ -73,6 +115,8 @@ def main(args: argparse.Namespace) -> int:
             sys.stdout.write(text)
         return 0
     try:
+        if args.stream:
+            return _stream(args)
         with _open(args.input, "r") as f:
             alerts = run_batch(read_events(f), constant_config(config_from(args)))
     except (TraceFormatError, OSError) as exc:
