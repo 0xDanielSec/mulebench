@@ -118,6 +118,7 @@ INV1_MUTANTS: list[Mutant] = [
 ]
 
 INV2_MUTANTS: list[Mutant] = [
+    ("memory tools touch no account", "if call.tool in MEMORY_TOOLS:", "if False:"),
     (
         "per-call session customer",
         "me = customer_of(ctx, call.session)",

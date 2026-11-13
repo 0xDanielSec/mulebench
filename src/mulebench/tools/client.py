@@ -15,9 +15,9 @@ from pydantic import ValidationError
 
 from mulebench.tools.context import ToolContext
 from mulebench.tools.registry import (
-    TOOLS,
     ToolError,
     ToolResult,
+    available_tools,
     call_tool,
     describe_validation_error,
 )
@@ -42,10 +42,11 @@ def strip_untrusted_markers(schema: object) -> object:
     return schema
 
 
-def model_tool_schemas() -> list[dict[str, Any]]:
+def model_tool_schemas(memory: bool = False) -> list[dict[str, Any]]:
     """Tool definitions for a model: name, description, input schema.
 
     Sorted by name for a stable request prefix. No `x-untrusted` markers.
+    `memory` adds the memory tools (scenarios with `memory: true` only).
     """
     return [
         {
@@ -53,14 +54,15 @@ def model_tool_schemas() -> list[dict[str, Any]]:
             "description": spec.description,
             "input_schema": strip_untrusted_markers(spec.input_schema()),  # dict in, dict out
         }
-        for spec in sorted(TOOLS.values(), key=lambda s: s.name)
+        for spec in sorted(available_tools(memory).values(), key=lambda s: s.name)
     ]
 
 
-def tool_schema_sha256() -> str:
-    """Version of what models see of the tools (names, descriptions, schemas)."""
+def tool_schema_sha256(memory: bool = False) -> str:
+    """Version of what models see of the tools (names, descriptions, schemas).
+    Without memory it is the value frozen by the pilots."""
     canonical = json.dumps(
-        model_tool_schemas(), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        model_tool_schemas(memory), sort_keys=True, separators=(",", ":"), ensure_ascii=False
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
@@ -77,7 +79,7 @@ class ToolClient:
 
         Kinds: "unknown_tool", "schema". Nothing is executed or traced.
         """
-        spec = TOOLS.get(tool)
+        spec = available_tools(self._memory).get(tool)
         if spec is None:
             return "unknown_tool", f"unknown tool: {tool!r}"
         try:
@@ -86,8 +88,12 @@ class ToolClient:
             return "schema", describe_validation_error(exc)
         return None
 
+    @property
+    def _memory(self) -> bool:
+        return self._ctx.memory is not None
+
     def tool_names(self) -> list[str]:
-        return sorted(TOOLS)
+        return sorted(available_tools(self._memory))
 
     def model_tool_schemas(self) -> list[dict[str, Any]]:
-        return model_tool_schemas()
+        return model_tool_schemas(self._memory)

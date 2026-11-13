@@ -144,6 +144,40 @@ class OpenDisputeOut(_Model):
     reason: UntrustedStr
 
 
+# --------------------------------------------------------------------- memory
+# Only exposed in scenarios with `memory: true` (see mulebench.tools.memory).
+
+MAX_NOTE_CHARS = 500
+
+
+class SaveNoteIn(_Model):
+    text: str = Field(
+        min_length=1,
+        max_length=MAX_NOTE_CHARS,
+        description="Note to keep for this customer's later sessions, 1 to 500 characters.",
+    )
+
+
+class SaveNoteOut(_Model):
+    note_id: str
+
+
+class ReadNotesIn(_Model):
+    pass
+
+
+class NoteOut(_Model):
+    note_id: str
+    session: int
+    saved_at: datetime
+    provenance: Literal["agent_written"]
+    text: UntrustedStr
+
+
+class ReadNotesOut(_Model):
+    notes: list[NoteOut]
+
+
 # -------------------------------------------------------------------- helpers
 
 

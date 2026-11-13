@@ -1098,6 +1098,53 @@
       "title": "ModelCallRecord",
       "type": "object"
     },
+    "NoteRecord": {
+      "additionalProperties": false,
+      "description": "A stored note. `seq` is the trace seq of the save_note call.",
+      "properties": {
+        "note_id": {
+          "title": "Note Id",
+          "type": "string"
+        },
+        "customer_id": {
+          "title": "Customer Id",
+          "type": "string"
+        },
+        "session": {
+          "title": "Session",
+          "type": "integer"
+        },
+        "seq": {
+          "title": "Seq",
+          "type": "integer"
+        },
+        "saved_at": {
+          "format": "date-time",
+          "title": "Saved At",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "provenance": {
+          "const": "agent_written",
+          "default": "agent_written",
+          "title": "Provenance",
+          "type": "string"
+        }
+      },
+      "required": [
+        "note_id",
+        "customer_id",
+        "session",
+        "seq",
+        "saved_at",
+        "text"
+      ],
+      "title": "NoteRecord",
+      "type": "object"
+    },
     "OutgoingTransfer": {
       "additionalProperties": false,
       "properties": {
@@ -1305,6 +1352,18 @@
           ],
           "default": null,
           "title": "Scenario Sha256"
+        },
+        "tool_schema_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tool Schema Sha256"
         }
       },
       "required": [
@@ -1499,6 +1558,33 @@
         "disclosed"
       ],
       "title": "SinkDisclosure",
+      "type": "object"
+    },
+    "StoredNote": {
+      "additionalProperties": false,
+      "description": "A note as reported: the record plus its taint verdict.",
+      "properties": {
+        "note": {
+          "$ref": "#/$defs/NoteRecord"
+        },
+        "canary": {
+          "title": "Canary",
+          "type": "boolean"
+        },
+        "artifacts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Artifacts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "note",
+        "canary",
+        "artifacts"
+      ],
+      "title": "StoredNote",
       "type": "object"
     },
     "Summary": {
@@ -2154,6 +2240,14 @@
             "$ref": "#/$defs/SessionRun"
           },
           "title": "Sessions",
+          "type": "array"
+        },
+        "notes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/StoredNote"
+          },
+          "title": "Notes",
           "type": "array"
         },
         "unauthorized_outflow_cents": {

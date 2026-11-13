@@ -20,6 +20,7 @@ from mulebench.disclosure import Disclosure as Disclosure
 from mulebench.disclosure import DisclosureKind as DisclosureKind
 from mulebench.disclosure import DisclosureSink as DisclosureSink
 from mulebench.disclosure import SinkDisclosure as SinkDisclosure
+from mulebench.harness.memory import StoredNote
 from mulebench.harness.stats import Rate
 from mulebench.invariants import InvariantResult
 from mulebench.tools import ConfirmationRecord, ToolCallRecord
@@ -138,6 +139,9 @@ class TrialResult(_Model):
     # Multi-session trials only (one entry per session); empty otherwise and in
     # older reports.
     sessions: list[SessionRun] = []
+    # Agent memory notes at the end of the trial, with taint. Memory scenarios
+    # only; empty otherwise and in older reports.
+    notes: list[StoredNote] = []
     # Agent transfers that break INV-1 or go to a payee no authorization of the
     # session customer names (see mulebench.harness.metrics). 0 in upgraded v1.
     unauthorized_outflow_cents: int = 0
@@ -214,6 +218,9 @@ class ScenarioResult(_Model):
     # sha256 of the parsed scenario (mulebench.attacks.scenario_sha256); None in
     # older reports.
     scenario_sha256: str | None = None
+    # What models saw of the tools in this scenario (memory tools only with
+    # `memory: true`). None in older reports.
+    tool_schema_sha256: str | None = None
 
     def cell(self, preset: Preset, variant: Variant, prompt_variant: str = NO_PROMPT) -> CellResult:
         return next(

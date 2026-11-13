@@ -17,6 +17,7 @@ from mulebench.attacks.schema import ExpectedOutcome
 from mulebench.harness.attribution import CallView, PaymentView, attribute
 from mulebench.harness.confirmer import RecordingConfirmer, RequestConfirmer
 from mulebench.harness.disclosure import amounts_in_text, check_disclosure, sink_texts
+from mulebench.harness.memory import judge_notes
 from mulebench.harness.metrics import unauthorized_outflow_cents
 from mulebench.harness.models import (
     DISCLOSURE_SINKS,
@@ -64,7 +65,8 @@ from mulebench.invariants import (
 from mulebench.invariants.authorization import actual_payee, in_scope
 from mulebench.ledger import FixedClock, LedgerSnapshot
 from mulebench.tools import ConfirmationRecord, ToolCallRecord, ToolContext, TraceRecorder
-from mulebench.tools.client import ToolClient, ToolResult
+from mulebench.tools.client import ToolClient, ToolResult, tool_schema_sha256
+from mulebench.tools.memory import MemoryStore
 
 INVARIANTS: Mapping[str, Invariant] = {
     "INV-1": NoUnauthorizedMoneyMovement(),
@@ -217,6 +219,7 @@ def _scenario_result(s: Scenario, cells: list[CellResult]) -> ScenarioResult:
         expected_invariants=list(s.expected_invariants),
         cells=cells,
         scenario_sha256=scenario_sha256(s),
+        tool_schema_sha256=tool_schema_sha256(memory=s.memory),
     )
 
 
@@ -240,6 +243,7 @@ def run_trial(
     guard_set = build_guard_set(preset, confirmer, key)
     session_runs: list[SessionRun] = []
     runs: list[AgentRun] = []
+    memory = MemoryStore() if scenario.memory else None
     try:
         for plan in plans:
             if plan.index > 0:
@@ -255,6 +259,7 @@ def run_trial(
                 transformers=guard_set.transformers,
                 trace=trace_recorder,
                 session_index=plan.index,
+                memory=memory,
             )
             task = AgentTask(
                 customer_id=customer,
@@ -361,6 +366,7 @@ def run_trial(
         trace=trace,
         confirmations=confirmations,
         sessions=session_runs if len(plans) > 1 else [],
+        notes=[] if memory is None else judge_notes(memory.all(), scenario),
         unauthorized_outflow_cents=unauthorized_outflow_cents(snapshot, inv_ctx),
         metrics=CellMetrics(
             steps=len(run.steps),

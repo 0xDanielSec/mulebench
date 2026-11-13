@@ -36,6 +36,9 @@ from mulebench.invariants.base import (
 from mulebench.ledger import LedgerSnapshot, Transfer
 
 READ_TOOLS = frozenset({"get_balance", "list_transactions"})
+# Agent memory: harness-owned notes keyed by the session customer; no ledger
+# account is touched, so there is nothing to attribute to an owner.
+MEMORY_TOOLS = frozenset({"save_note", "read_notes"})
 
 
 class CustomerIsolation:
@@ -97,6 +100,8 @@ def _check_call(
         return [violation("unverifiable_call", f"{call.tool}: {why}", call_seq=call.seq)]
 
     result = call.result or {}
+    if call.tool in MEMORY_TOOLS:
+        return []
     if call.tool in READ_TOOLS:
         account_id = result.get("account_id")
         if not isinstance(account_id, str):

@@ -12,6 +12,7 @@ from mulebench.tools.trace import TraceRecorder
 
 if TYPE_CHECKING:
     from mulebench.tools.guards import Guard
+    from mulebench.tools.memory import MemoryStore
     from mulebench.tools.transform import ResultTransformer
 
 
@@ -32,6 +33,8 @@ class ToolContext:
     key_factory: Callable[[], str] | None = None
     # Session index within a multi-session run; recorded on every trace record.
     session_index: int = 0
+    # Set only for scenarios with memory: exposes save_note / read_notes.
+    memory: MemoryStore | None = None
 
     def __post_init__(self) -> None:
         if self.key_factory is None:

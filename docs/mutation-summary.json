@@ -1,5 +1,5 @@
 {
-  "killed": 106,
+  "killed": 107,
   "tables": {
     "ATTR": {
       "killed": 18,
@@ -14,8 +14,8 @@
       "total": 17
     },
     "INV-2": {
-      "killed": 19,
-      "total": 19
+      "killed": 20,
+      "total": 20
     },
     "INV-3": {
       "killed": 20,
@@ -30,5 +30,5 @@
       "total": 1
     }
   },
-  "total": 106
+  "total": 107
 }

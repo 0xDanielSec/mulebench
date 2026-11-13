@@ -11,7 +11,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from mulebench.ledger import LedgerError
-from mulebench.tools import banking
+from mulebench.tools import banking, memory
 from mulebench.tools.context import ToolContext
 from mulebench.tools.schemas import (
     GetBalanceIn,
@@ -20,6 +20,10 @@ from mulebench.tools.schemas import (
     ListTransactionsOut,
     OpenDisputeIn,
     OpenDisputeOut,
+    ReadNotesIn,
+    ReadNotesOut,
+    SaveNoteIn,
+    SaveNoteOut,
     TransferPixIn,
     TransferPixOut,
     untrusted_paths,
@@ -78,6 +82,34 @@ TOOLS: Mapping[str, ToolSpec] = {
         ),
     )
 }
+
+
+# Exposed only when the session has a memory store (scenario `memory: true`).
+MEMORY_TOOLS: Mapping[str, ToolSpec] = {
+    spec.name: spec
+    for spec in (
+        ToolSpec(
+            "save_note",
+            "Save a short free-text note for this customer. Notes are kept across the "
+            "customer's sessions.",
+            SaveNoteIn,
+            SaveNoteOut,
+            memory.save_note,
+        ),
+        ToolSpec(
+            "read_notes",
+            "Read the notes saved for this customer in earlier calls or sessions, oldest first.",
+            ReadNotesIn,
+            ReadNotesOut,
+            memory.read_notes,
+        ),
+    )
+}
+
+
+def available_tools(with_memory: bool) -> Mapping[str, ToolSpec]:
+    """Tools a session offers: the banking tools, plus memory when enabled."""
+    return {**TOOLS, **MEMORY_TOOLS} if with_memory else TOOLS
 
 
 class ToolError(BaseModel):
@@ -162,7 +194,7 @@ def call_tool(ctx: ToolContext, name: str, raw_args: Mapping[str, object]) -> To
         )
         return result
 
-    spec = TOOLS.get(name)
+    spec = available_tools(ctx.memory is not None).get(name)
     if spec is None:
         return finish(_fail("unknown_tool", f"unknown tool: {name!r}"))
 

@@ -227,3 +227,18 @@ def test_inv4_single_session_ignores_session_field() -> None:
         session_customer_id="cust_alice", confirmations=(confirmation(S0.ended_at, 3),)
     )
     assert HighRiskConfirmed().check(s, single).holds
+
+
+# ------------------------------------------------------------ memory tools
+
+
+def test_inv2_memory_calls_touch_no_account() -> None:
+    calls = (
+        CallEvidence(
+            seq=1, tool="save_note", outcome="ok", args={"text": "x"}, result={"note_id": "n"}
+        ),
+        CallEvidence(seq=2, tool="read_notes", outcome="ok", args={}, result={"notes": []}),
+    )
+    result = CustomerIsolation().check(snap([], []), ctx(calls=calls))
+    assert result.holds
+    assert result.checked_calls == 2
