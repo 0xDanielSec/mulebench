@@ -7,7 +7,8 @@ tests for that module run there. A mutant is "killed"
 when at least one test fails. The working tree is never modified.
 
 Usage: uv run python scripts/mutation_check.py [INV-1] [INV-2] [INV-3] [INV-4] [AUDIT]
-       [LEDGER] [MEMGUARD] [MEMTAINT] [ATTR] [DELEG] [ROLE] [PAYGUARD] [DLGMON]
+       [LEDGER] [MEMGUARD] [MEMTAINT] [ATTR] [DELEG] [ROLE] [PAYGUARD]
+       [ORACLE] [DLGMON]
 With no arguments every table runs and docs/mutation-summary.json is rewritten
 (per-table killed/total; no dates, so it is deterministic). The README's mutant
 count is rendered from it. Exit code is 0 only if every mutant of every
@@ -722,6 +723,25 @@ DELEG_MUTANTS: list[Mutant] = [
     ),
 ]
 
+PROV_MUTANTS: list[Mutant] = [
+    ("provenance: unresolved lines dropped", "if ref is None or found is None:", "if ref is None:"),
+    (
+        "provenance: payee and amount from the ledger",
+        "items.append(HandoffItem(payee_key=payee, amount_cents=amount, bill_ref=ref))",
+        "items.append(item)",
+    ),
+    (
+        "provenance: own accounts only",
+        "if source in own and payee is not None",
+        "if payee is not None",
+    ),
+]
+
+ORACLE_MUTANTS: list[Mutant] = [
+    ("oracle: intended transfers only", "if self._left[key] <= 0:", "if self._left[key] < 0:"),
+    ("oracle: each approval used once", "self._left[key] -= 1", "pass"),
+]
+
 ROLE_MUTANTS: list[Mutant] = [
     (
         "role scope enforced",
@@ -756,11 +776,47 @@ DLGMON_MUTANTS: list[Mutant] = [
     ),
     (
         "known keys excluded",
-        "if not isinstance(key, str) or not key or key in known_keys:",
-        "if not isinstance(key, str) or not key:",
+        "if isinstance(key, str) and key and normalize_key(key) not in known:",
+        "if isinstance(key, str) and key:",
     ),
-    ("handoff before the call", "if h.seq < c.seq and key in h.text", "if key in h.text"),
-    ("key named in the handoff", "if h.seq < c.seq and key in h.text", "if h.seq < c.seq"),
+    (
+        "handoff before the call",
+        "before = [h for h in ordered if h.seq < c.seq]",
+        "before = ordered",
+    ),
+    (
+        "key named in the handoff",
+        "source = next((h for h in before if norm in normalize_key(h.text)), None)",
+        "source = next(iter(before), None)",
+    ),
+    ("normalise: case", 'return _WS.sub("", text).lower()', 'return _WS.sub("", text)'),
+    ("normalise: whitespace", 'return _WS.sub("", text).lower()', "return text.lower()"),
+    (
+        "amount: named in the handoff",
+        "source = next((h for h in before if any(s in h.text for s in spellings)), None)",
+        "source = next(iter(before), None)",
+    ),
+    (
+        "amount: spellings",
+        'return (f"{whole}.{frac:02d}", f"{whole},{frac:02d}", str(cents))',
+        "return (str(cents),)",
+    ),
+    (
+        "amount: customer said it",
+        "if source is None or any(s in said for s in spellings):",
+        "if source is None:",
+    ),
+    ("amount: structured values excluded", "if amount not in structured:", "if True:"),
+    (
+        "amount: structured values read before the call",
+        'v for e in calls if e.seq < c.seq and e.outcome == "ok" for v in _cents_values(e.result)',
+        'v for e in calls if e.outcome == "ok" for v in _cents_values(e.result)',
+    ),
+    (
+        "amount: only *_cents keys",
+        'if isinstance(k, str) and k.endswith("_cents") and type(v) is int:',
+        "if type(v) is int:",
+    ),
 ]
 
 TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
@@ -813,7 +869,7 @@ TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
     "DELEG": (
         Path("src/mulebench/harness/delegation.py"),
         "tests/harness/test_delegation.py",
-        DELEG_MUTANTS,
+        DELEG_MUTANTS + PROV_MUTANTS,
     ),
     "ROLE": (
         Path("src/mulebench/tools/registry.py"),
@@ -824,6 +880,11 @@ TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
         Path("src/mulebench/tools/guards.py"),
         "tests/tools/test_role_scope.py",
         PAYGUARD_MUTANTS,
+    ),
+    "ORACLE": (
+        Path("src/mulebench/harness/confirmer.py"),
+        "tests/harness/test_delegation.py",
+        ORACLE_MUTANTS,
     ),
     "DLGMON": (
         Path("src/mulebench/monitor/delegation.py"),

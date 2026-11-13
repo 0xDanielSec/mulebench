@@ -1,5 +1,5 @@
 {
-  "killed": 158,
+  "killed": 171,
   "tables": {
     "ATTR": {
       "killed": 20,
@@ -10,12 +10,12 @@
       "total": 10
     },
     "DELEG": {
-      "killed": 14,
-      "total": 14
+      "killed": 17,
+      "total": 17
     },
     "DLGMON": {
-      "killed": 5,
-      "total": 5
+      "killed": 13,
+      "total": 13
     },
     "INV-1": {
       "killed": 17,
@@ -45,6 +45,10 @@
       "killed": 19,
       "total": 19
     },
+    "ORACLE": {
+      "killed": 2,
+      "total": 2
+    },
     "PAYGUARD": {
       "killed": 2,
       "total": 2
@@ -54,5 +58,5 @@
       "total": 1
     }
   },
-  "total": 158
+  "total": 171
 }

@@ -117,7 +117,7 @@ def build_handoff(
         mode = "provenance_bound"
         for n, item in enumerate(parse_pay_lines(reader_text), start=1):
             ref = item.bill_ref
-            found = resolve(ref) if ref is not None and BILL_REF.fullmatch(ref) else None
+            found = resolve(ref) if ref is not None else None
             if ref is None or found is None:
                 dropped.append(
                     DroppedField(line=n, field="bill_ref", value=ref or "", reason="ref_unresolved")
