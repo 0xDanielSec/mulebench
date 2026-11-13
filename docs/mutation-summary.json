@@ -1,5 +1,5 @@
 {
-  "killed": 115,
+  "killed": 134,
   "tables": {
     "ATTR": {
       "killed": 18,
@@ -32,7 +32,11 @@
     "MEMGUARD": {
       "killed": 8,
       "total": 8
+    },
+    "MEMTAINT": {
+      "killed": 19,
+      "total": 19
     }
   },
-  "total": 115
+  "total": 134
 }

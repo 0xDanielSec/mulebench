@@ -7,7 +7,7 @@ tests for that module run there. A mutant is "killed"
 when at least one test fails. The working tree is never modified.
 
 Usage: uv run python scripts/mutation_check.py [INV-1] [INV-2] [INV-3] [INV-4] [AUDIT]
-       [LEDGER] [MEMGUARD] [ATTR]
+       [LEDGER] [MEMGUARD] [MEMTAINT] [ATTR]
 With no arguments every table runs and docs/mutation-summary.json is rewritten
 (per-table killed/total; no dates, so it is deterministic). The README's mutant
 count is rendered from it. Exit code is 0 only if every mutant of every
@@ -585,6 +585,76 @@ MEMGUARD_MUTANTS: list[Mutant] = [
     ("min_chars positive", "if min_chars < 1:", "if False:"),
 ]
 
+MEMTAINT_MUTANTS: list[Mutant] = [
+    ("taint: canary", "canary=scenario.canary in n.text,", "canary=False,"),
+    ("taint: artifacts", "artifacts=[a for a in artifacts if a in n.text],", "artifacts=[],"),
+    (
+        "tainted: canary or artifact",
+        "return self.canary or bool(self.artifacts)",
+        "return self.canary",
+    ),
+    (
+        "artifacts: goal accounts",
+        "sorted(set(goal.payees) | set(goal.accounts))",
+        "sorted(set(goal.payees))",
+    ),
+    (
+        "session interval: inclusive start",
+        "if s.started_at <= ts <= s.ended_at)",
+        "if s.started_at < ts <= s.ended_at)",
+    ),
+    (
+        "violations: counted results only",
+        "if inv.holds or not inv.applicable:",
+        "if inv.holds:",
+    ),
+    (
+        "violations: by call seq",
+        "if v.call_seq is not None and v.call_seq in by_seq:",
+        "if False:",
+    ),
+    (
+        "violations: group transfers",
+        "for tid in (v.transfer_id, *v.transfer_ids):",
+        "for tid in (v.transfer_id,):",
+    ),
+    ("cross-session: attack only", "if attack and sessions:", "if sessions:"),
+    (
+        "cross-session: later sessions",
+        "later = [k for k in sessions if k >= 1]",
+        "later = sessions",
+    ),
+    (
+        "cross-session: re-exposure check",
+        "elif any(canary not in _outputs(trace, k) for k in later):",
+        "elif True:",
+    ),
+    (
+        "re-exposure ignores memory output",
+        "and r.tool not in MEMORY_TOOL_NAMES]",
+        "]",
+    ),
+    (
+        "followed: denied attempts count",
+        'frozenset({"ok", "denied", "ledger_error"})',
+        'frozenset({"ok"})',
+    ),
+    (
+        "followed: invalid calls excluded",
+        'frozenset({"ok", "denied", "ledger_error"})',
+        'frozenset({"ok", "denied", "ledger_error", "invalid_input"})',
+    ),
+    (
+        "followed: later sessions only",
+        "if r.outcome in _ATTEMPTED and k >= 1:",
+        "if r.outcome in _ATTEMPTED:",
+    ),
+    ("followed: value in notes", 'and value in notes_text.get(k, "")', "and True"),
+    ("followed: no other tool source", 'and value not in other_text.get(k, "")', "and True"),
+    ("followed: not in the request", 'and value not in requests.get(k, "")', "and True"),
+    ("followed: not already known", "and value not in known.get(k, set())", "and True"),
+]
+
 TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
     "INV-1": (
         Path("src/mulebench/invariants/authorization.py"),
@@ -620,6 +690,12 @@ TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
         Path("src/mulebench/tools/guards.py"),
         "tests/tools/test_memory_guard.py",
         MEMGUARD_MUTANTS,
+    ),
+    "MEMTAINT": (
+        Path("src/mulebench/harness/memory.py"),
+        "tests/harness/test_memory_metrics.py tests/tools/test_memory.py "
+        "tests/harness/test_memory_scenarios.py",
+        MEMTAINT_MUTANTS,
     ),
     "ATTR": (
         Path("src/mulebench/harness/attribution.py"),

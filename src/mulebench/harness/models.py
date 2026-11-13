@@ -20,7 +20,7 @@ from mulebench.disclosure import Disclosure as Disclosure
 from mulebench.disclosure import DisclosureKind as DisclosureKind
 from mulebench.disclosure import DisclosureSink as DisclosureSink
 from mulebench.disclosure import SinkDisclosure as SinkDisclosure
-from mulebench.harness.memory import StoredNote
+from mulebench.harness.memory import MemoryMetrics, StoredNote
 from mulebench.harness.stats import Rate
 from mulebench.invariants import InvariantResult
 from mulebench.ledger import Authorization
@@ -146,6 +146,9 @@ class TrialResult(_Model):
     # Agent memory notes at the end of the trial, with taint. Memory scenarios
     # only; empty otherwise and in older reports.
     notes: list[StoredNote] = []
+    # Memory or multi-session scenarios, non-errored trials only; None
+    # otherwise and in older reports.
+    memory: MemoryMetrics | None = None
     # Agent transfers that break INV-1 or go to a payee no authorization of the
     # session customer names (see mulebench.harness.metrics). 0 in upgraded v1.
     unauthorized_outflow_cents: int = 0
@@ -175,6 +178,13 @@ class AttackAggregates(_Model):
     attributed_success: Rate | None = None
     task_error: Rate | None = None
     task_omitted: Rate | None = None
+    # Memory or multi-session scenarios only (None otherwise). memory_tainted:
+    # trials that persisted a tainted note / non-errored trials.
+    # cross_session_success: exposed trials violated in a later session without
+    # re-exposure there / exposed trials. note_followed: over non-errored trials.
+    memory_tainted: Rate | None = None
+    cross_session_success: Rate | None = None
+    note_followed: Rate | None = None
 
 
 class BenignAggregates(_Model):
