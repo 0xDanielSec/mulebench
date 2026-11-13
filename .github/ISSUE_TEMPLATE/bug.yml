@@ -1,0 +1,45 @@
+name: Bug report
+description: Something in Mulebench behaves wrongly (not a vulnerability; see SECURITY.md).
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Security problems in Mulebench go through a private security advisory,
+        not an issue (see SECURITY.md). Use synthetic data only: no real
+        names, keys, customer data or employer material.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Observed behaviour, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: Commands, scenario id or a minimal YAML, preset, agent (scripted, llm, --agent-module).
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: The shortest decisive error or report excerpt. Remove API keys.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: "0.1.0 or a commit sha"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options: [Linux, macOS, Windows, Other]
+    validations:
+      required: true

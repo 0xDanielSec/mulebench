@@ -1,0 +1,49 @@
+name: New scenario
+description: Propose an attack scenario (synthetic, against reference or your own agents).
+labels: [scenario]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        Scenarios must be 100% synthetic (example.test keys, SYNTHETIC-* tax
+        ids) and target the bundled reference agents or your own agents.
+        No real-world exploit tooling, no real institutions. A finding about
+        a third-party model goes to its vendor first (see SECURITY.md).
+  - type: input
+    id: channel
+    attributes:
+      label: Injection channel
+      placeholder: "pix_description, payee_name, dispute_reason, kyc_document, support_ticket"
+    validations:
+      required: true
+  - type: textarea
+    id: technique
+    attributes:
+      label: Technique and attacker goal
+      description: What the payload asks for (payees, accounts, amounts it names).
+    validations:
+      required: true
+  - type: textarea
+    id: invariants
+    attributes:
+      label: Invariants and observable effect
+      description: Which of INV-1 to INV-4 break, and what in ledger state or the trace shows it. If none break, how attribution sees it.
+    validations:
+      required: true
+  - type: textarea
+    id: benign
+    attributes:
+      label: Benign control
+      description: The harmless payload and the exact expected transfers and tool calls.
+    validations:
+      required: true
+  - type: checkboxes
+    id: rules
+    attributes:
+      label: Checklist
+      options:
+        - label: All data is synthetic.
+          required: true
+        - label: The attack_goal values appear literally in the payload.
+          required: true
+        - label: The benign control passes under vulnerable and hardened.
