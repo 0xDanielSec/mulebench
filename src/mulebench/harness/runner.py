@@ -15,8 +15,13 @@ from mulebench.agents.base import AgentRun, AgentStep, RunAborted, TokenUsage
 from mulebench.attacks import Scenario, render, scenario_sha256
 from mulebench.attacks.schema import ExpectedOutcome
 from mulebench.harness.attribution import CallView, PaymentView, attribute
-from mulebench.harness.confirmer import RecordingConfirmer, RequestConfirmer
-from mulebench.harness.delegation import HandoffArtifact, build_handoff, delegation_metrics
+from mulebench.harness.confirmer import OracleConfirmer, RecordingConfirmer, RequestConfirmer
+from mulebench.harness.delegation import (
+    HandoffArtifact,
+    build_handoff,
+    delegation_metrics,
+    ledger_resolver,
+)
 from mulebench.harness.disclosure import amounts_in_text, check_disclosure, sink_texts
 from mulebench.harness.memory import SessionSpan, judge_notes, memory_metrics
 from mulebench.harness.metrics import unauthorized_outflow_cents
@@ -65,7 +70,13 @@ from mulebench.invariants import (
 )
 from mulebench.invariants.authorization import actual_payee, in_scope
 from mulebench.ledger import FixedClock, LedgerSnapshot
-from mulebench.tools import ConfirmationRecord, ToolCallRecord, ToolContext, TraceRecorder
+from mulebench.tools import (
+    ConfirmationRecord,
+    Confirmer,
+    ToolCallRecord,
+    ToolContext,
+    TraceRecorder,
+)
 from mulebench.tools.client import ToolClient, ToolResult, tool_schema_sha256
 from mulebench.tools.memory import MemoryStore
 
@@ -246,7 +257,18 @@ def run_trial(
     plans = scenario.sessions()
     request = "\n".join(p.request for p in plans)
     trace_recorder = TraceRecorder()
-    confirmer = RecordingConfirmer(RequestConfirmer(plans[0].request), trace_recorder, clock)
+    oracle = "oracle_confirmation" in preset_guard_names(preset)
+    customer_side: Confirmer = (
+        OracleConfirmer(
+            [
+                (e.from_account, e.to_pix_key, e.amount_cents)
+                for e in scenario.benign_control.expected_outcome.transfers
+            ]
+        )
+        if oracle
+        else RequestConfirmer(plans[0].request)
+    )
+    confirmer = RecordingConfirmer(customer_side, trace_recorder, clock)
     guard_set = build_guard_set(preset, confirmer, key)
     session_runs: list[SessionRun] = []
     runs: list[AgentRun] = []
@@ -684,12 +706,25 @@ def _run_delegation(
     reader = reader_agent.run(reader_task, _TickingClient(reader_ctx, clock))
     if reader.stopped == "errored":
         return reader, None
+    resolve = None
+    if guard_set.provenance_bound_handoff:
+        snap = ctx.ledger.snapshot()
+        own = {a.id for a in snap.accounts if a.customer_id == ctx.customer_id}
+        resolve = ledger_resolver(
+            [
+                (t.id, t.from_account_id, t.counterparty_key, t.amount_cents)
+                for t in snap.transfers
+                if t.kind in OUTGOING_KINDS
+            ],
+            own,
+        )
     handoff = build_handoff(
         reader.final_text or "",
         structured=guard_set.structured_handoff,
         note_payees=payees,
         request=task.request if guard_set.payer_sees_request else None,
         scenario=scenario,
+        resolve=resolve,
     )
     payer_ctx = replace(
         ctx, role="payer", allowed_tools=frozenset(topology.payer_tools), note_payees=payees

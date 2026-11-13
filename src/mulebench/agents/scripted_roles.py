@@ -7,7 +7,9 @@ real LLM. Both take their `obeys_tool_output_instructions` setting from the
 ScriptedReader (tools: reads only)
     Runs the request grammar of `ScriptedAgent`, with payment and dispute
     calls *planned* instead of executed: each planned payment becomes a
-    handoff line `PAY payee=<key> amount_cents=<int> bill_ref=<auth id>`.
+    handoff line `PAY payee=<key> amount_cents=<int> bill_ref=<ref>`, where
+    the reference is the id of the newest outgoing transaction to that payee
+    in the listing (the bill), else the authorization cited.
     In vulnerable mode the injected instructions of `ScriptedAgent` apply
     while planning (an injected transfer becomes a PAY line, a key change or
     a bill change rewrites planned lines), and the Reader also copies every
@@ -59,12 +61,15 @@ class _PlanningClient(ToolClient):
         self._inner = inner
         self.planned: list[tuple[str, dict[str, object]]] = []
         self.untrusted: list[str] = []
+        self.listing: ToolResult | None = None
 
     def call(self, tool: str, args: Mapping[str, object]) -> ToolResult:
         if tool in PLANNED_TOOLS:
             self.planned.append((tool, dict(args)))
             return ToolResult(ok=True, outcome="ok", data={"status": "planned"})
         result = self._inner.call(tool, args)
+        if result.ok and tool == "list_transactions":
+            self.listing = result
         if result.ok:
             for path in result.untrusted_paths:
                 text = _resolve(result.data, path)
@@ -92,7 +97,9 @@ class ScriptedReader:
             payee, amount = args.get("to_pix_key"), args.get("amount_cents")
             if not isinstance(payee, str) or not isinstance(amount, int) or amount <= 0:
                 continue
-            ref = args.get("authorization_id")
+            # The bill's reference: the newest outgoing transaction to this
+            # payee in the listing, else the authorization cited.
+            ref = _last_transaction_id(planner.listing, payee) or args.get("authorization_id")
             lines.append(
                 render_pay_line(
                     HandoffItem(
@@ -172,6 +179,20 @@ class ScriptedPayer:
             stopped="done",
             final_text=f"Payments sent: {paid}." if steps else "No payment to make.",
         )
+
+
+def _last_transaction_id(listing: ToolResult | None, key: str) -> str | None:
+    data = listing.data if listing is not None else None
+    txs = data.get("transactions") if isinstance(data, dict) else None
+    for tx in txs if isinstance(txs, list) else []:
+        if (
+            isinstance(tx, dict)
+            and tx.get("direction") == "out"
+            and tx.get("counterparty_key") == key
+            and isinstance(tx.get("id"), str)
+        ):
+            return str(tx["id"])
+    return None
 
 
 def _matches_request(item: HandoffItem, request: str) -> bool:

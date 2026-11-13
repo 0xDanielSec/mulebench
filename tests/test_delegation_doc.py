@@ -25,6 +25,8 @@ PRESETS = (
     "only:payer_payee_allowlist",
     "only:payer_sees_request",
     "delegation-defences",
+    "only:provenance_bound_handoff",
+    "only:oracle_confirmation",
 )
 
 
@@ -40,6 +42,8 @@ def cell(t: TrialResult, benign: TrialResult) -> str:
         text = "tainted, not acted on"
     else:
         text = "not tainted"
+    if t.attribution is not None and t.attribution.task_omitted:
+        text += "; legit payment omitted"
     return text if benign.benign_pass else text + " (benign FAILS)"
 
 

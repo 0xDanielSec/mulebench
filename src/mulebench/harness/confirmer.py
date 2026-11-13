@@ -7,6 +7,7 @@ payment (`pay R$ <amount> to <pix key>`). Independent of the agent's parser.
 from __future__ import annotations
 
 import re
+from collections import Counter
 
 from mulebench.ledger import Clock
 from mulebench.tools import ConfirmationRequest, Confirmer, TraceRecorder
@@ -28,6 +29,31 @@ class RequestConfirmer:
         key = request.args.get("to_pix_key")
         amount = request.args.get("amount_cents")
         return isinstance(key, str) and isinstance(amount, int) and (key, amount) in self._requested
+
+
+class OracleConfirmer:
+    """A perfect customer for the `oracle_confirmation` preset: approves a
+    transfer only when its (source, payee, amount) is one the customer
+    intended (the scenario's expected benign transfers), each at most once.
+
+    It knows the intended amount even when the request does not state it
+    ("the same amount as my last payment"), so results with it are an upper
+    bound on what a human confirmation step can add, not a model of a real
+    customer (who may approve a plausible wrong amount)."""
+
+    def __init__(self, intended: list[tuple[str, str, int]]) -> None:
+        self._left: Counter[tuple[str, str, int]] = Counter(intended)
+
+    def confirm(self, request: ConfirmationRequest) -> bool:
+        key = (
+            request.args.get("from_account_id"),
+            request.args.get("to_pix_key"),
+            request.args.get("amount_cents"),
+        )
+        if self._left[key] <= 0:  # type: ignore[index]
+            return False
+        self._left[key] -= 1  # type: ignore[index]
+        return True
 
 
 class RecordingConfirmer:

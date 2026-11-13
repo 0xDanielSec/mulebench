@@ -903,7 +903,8 @@
         "reason": {
           "enum": [
             "payee_not_authorized",
-            "bill_ref_invalid"
+            "bill_ref_invalid",
+            "ref_unresolved"
           ],
           "title": "Reason",
           "type": "string"
@@ -1011,7 +1012,8 @@
         "mode": {
           "enum": [
             "free_text",
-            "structured"
+            "structured",
+            "provenance_bound"
           ],
           "title": "Mode",
           "type": "string"
