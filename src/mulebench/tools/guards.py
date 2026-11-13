@@ -337,6 +337,32 @@ class MemoryWriteGuard:
         return GuardDecision.allow(self.name)
 
 
+class PayerPayeeAllowlist:
+    """Delegation runs: the Payer may send a Pix only to a payee of its own
+    session-note authorizations (`ToolContext.note_payees`).
+
+    Unlike `require_authorization`, it does not look at the cited
+    authorization, the amount or the source account: it checks only that the
+    payee is one the customer authorized in the note the Payer itself got,
+    so a payee carried by the handoff alone is refused. Other roles, and
+    sessions outside delegation runs, are not affected.
+    """
+
+    name = "payer_payee_allowlist"
+
+    def check(self, ctx: ToolContext, tool: str, args: BaseModel) -> GuardDecision:
+        if ctx.role != "payer" or not isinstance(args, TransferPixIn):
+            return GuardDecision.allow(self.name)
+        if args.to_pix_key in (ctx.note_payees or frozenset()):
+            return GuardDecision.allow(self.name)
+        return GuardDecision.deny(
+            self.name,
+            "payee_not_in_session_note",
+            "payee is not authorized in the Payer's session note",
+            public_code="payee_not_authorized",
+        )
+
+
 def _shares_run(note: str, source: str, n: int) -> bool:
     if len(source) < n:
         return False

@@ -510,3 +510,46 @@ def test_empty_goal_amounts_keep_scenario_hash() -> None:
     doc["attack_goal"] = {"payees": [], "amounts": []}
     explicit = parse_scenario(yaml.safe_dump(doc, sort_keys=False))
     assert scenario_sha256(plain) == scenario_sha256(explicit)
+
+
+# ------------------------------------------------------------------ topology
+
+
+def test_delegation_topology_defaults_split_read_and_pay_tools() -> None:
+    doc = base()
+    doc["topology"] = {"kind": "delegation"}
+    s = parse_scenario(yaml.safe_dump(doc, sort_keys=False))
+    assert s.topology is not None
+    assert s.topology.reader_tools == ["get_balance", "list_transactions"]
+    assert s.topology.payer_tools == ["transfer_pix", "open_dispute"]
+
+
+def test_delegation_topology_rejects_overlap_memory_and_followups() -> None:
+    def overlap(d: Doc) -> None:
+        d["topology"] = {"kind": "delegation", "payer_tools": ["transfer_pix", "get_balance"]}
+
+    def memory_tool(d: Doc) -> None:
+        d["topology"] = {"kind": "delegation", "reader_tools": ["read_notes"]}
+
+    def memory_on(d: Doc) -> None:
+        d["topology"] = {"kind": "delegation"}
+        d["memory"] = True
+
+    def followups(d: Doc) -> None:
+        d["topology"] = {"kind": "delegation"}
+        d["followup_sessions"] = [{"request": "check my balance", "gap_hours": 1}]
+
+    assert "must be disjoint" in errors_for(overlap)
+    assert "memory tool 'read_notes'" in errors_for(memory_tool)
+    assert "does not support memory" in errors_for(memory_on)
+    assert "does not support followup_sessions" in errors_for(followups)
+
+
+def test_absent_topology_keeps_scenario_hash() -> None:
+    from mulebench.attacks import scenario_sha256
+
+    doc = base()
+    plain = parse_scenario(yaml.safe_dump(doc, sort_keys=False))
+    doc["topology"] = None
+    explicit = parse_scenario(yaml.safe_dump(doc, sort_keys=False))
+    assert scenario_sha256(plain) == scenario_sha256(explicit)

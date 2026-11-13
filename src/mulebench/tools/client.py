@@ -42,11 +42,14 @@ def strip_untrusted_markers(schema: object) -> object:
     return schema
 
 
-def model_tool_schemas(memory: bool = False) -> list[dict[str, Any]]:
+def model_tool_schemas(
+    memory: bool = False, tools: frozenset[str] | None = None
+) -> list[dict[str, Any]]:
     """Tool definitions for a model: name, description, input schema.
 
     Sorted by name for a stable request prefix. No `x-untrusted` markers.
     `memory` adds the memory tools (scenarios with `memory: true` only).
+    `tools` restricts the list to one delegation role's tools.
     """
     return [
         {
@@ -54,15 +57,15 @@ def model_tool_schemas(memory: bool = False) -> list[dict[str, Any]]:
             "description": spec.description,
             "input_schema": strip_untrusted_markers(spec.input_schema()),  # dict in, dict out
         }
-        for spec in sorted(available_tools(memory).values(), key=lambda s: s.name)
+        for spec in sorted(available_tools(memory, tools).values(), key=lambda s: s.name)
     ]
 
 
-def tool_schema_sha256(memory: bool = False) -> str:
+def tool_schema_sha256(memory: bool = False, tools: frozenset[str] | None = None) -> str:
     """Version of what models see of the tools (names, descriptions, schemas).
-    Without memory it is the value frozen by the pilots."""
+    Without memory and role restriction it is the value frozen by the pilots."""
     canonical = json.dumps(
-        model_tool_schemas(memory), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        model_tool_schemas(memory, tools), sort_keys=True, separators=(",", ":"), ensure_ascii=False
     )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
@@ -79,7 +82,7 @@ class ToolClient:
 
         Kinds: "unknown_tool", "schema". Nothing is executed or traced.
         """
-        spec = available_tools(self._memory).get(tool)
+        spec = available_tools(self._memory, self._allowed).get(tool)
         if spec is None:
             return "unknown_tool", f"unknown tool: {tool!r}"
         try:
@@ -94,8 +97,13 @@ class ToolClient:
         ctx: ToolContext | None = getattr(self, "_ctx", None)
         return ctx is not None and ctx.memory is not None
 
+    @property
+    def _allowed(self) -> frozenset[str] | None:
+        ctx: ToolContext | None = getattr(self, "_ctx", None)
+        return None if ctx is None else ctx.allowed_tools
+
     def tool_names(self) -> list[str]:
-        return sorted(available_tools(self._memory))
+        return sorted(available_tools(self._memory, self._allowed))
 
     def model_tool_schemas(self) -> list[dict[str, Any]]:
-        return model_tool_schemas(self._memory)
+        return model_tool_schemas(self._memory, self._allowed)

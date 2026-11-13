@@ -1970,6 +1970,18 @@
           "title": "Session",
           "type": "integer"
         },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
         "tool": {
           "title": "Tool",
           "type": "string"

@@ -226,6 +226,22 @@ class BrazilContext(_Model):
     notes: str = ""
 
 
+# ----------------------------------------------------------------- topology
+
+READER_TOOLS: tuple[ToolName, ...] = ("get_balance", "list_transactions")
+PAYER_TOOLS: tuple[ToolName, ...] = ("transfer_pix", "open_dispute")
+
+
+class Topology(_Model):
+    """Two-agent delegation: a Reader with read tools writes a handoff that,
+    with the trusted session note, is the only input of a Payer with payment
+    tools. See docs/delegation.md."""
+
+    kind: Literal["delegation"]
+    reader_tools: list[ToolName] = list(READER_TOOLS)
+    payer_tools: list[ToolName] = list(PAYER_TOOLS)
+
+
 # ------------------------------------------------------------------ scenario
 
 
@@ -252,6 +268,8 @@ class Scenario(_Model):
     memory: StrictBool = False
     # Optional; without it attribution derives the goal from the setup.
     attack_goal: AttackGoal | None = None
+    # None: one agent. "delegation": Reader and Payer agents with a handoff.
+    topology: Topology | None = None
     references: list[Reference] = []
     brazil_context: BrazilContext | None = None
 
@@ -394,6 +412,22 @@ class Scenario(_Model):
             for acc in self.attack_goal.accounts:
                 need("account", acc, owner, "attack_goal.accounts")
 
+        # Delegation topology.
+        if self.topology is not None:
+            reader, payer = self.topology.reader_tools, self.topology.payer_tools
+            if not reader or not payer:
+                problems.append("topology: each role needs at least one tool")
+            if set(reader) & set(payer):
+                problems.append("topology: reader_tools and payer_tools must be disjoint")
+            for tool in sorted(MEMORY_TOOLS.intersection(reader + payer)):
+                problems.append(f"topology: memory tool {tool!r} is not supported in delegation")
+            if len(set(reader)) != len(reader) or len(set(payer)) != len(payer):
+                problems.append("topology: duplicate tool in a role")
+            if self.memory:
+                problems.append("topology: delegation does not support memory: true")
+            if self.followup_sessions:
+                problems.append("topology: delegation does not support followup_sessions")
+
         if problems:
             raise ValueError("; ".join(dict.fromkeys(problems)))
         return self
@@ -419,7 +453,11 @@ class Scenario(_Model):
 
 # Fields added after the pilots. Left out of the hash while at their default, so
 # scenarios that do not use them keep their recorded scenario_sha256.
-_LATE_DEFAULTS: dict[str, object] = {"followup_sessions": [], "memory": False}
+_LATE_DEFAULTS: dict[str, object] = {
+    "followup_sessions": [],
+    "memory": False,
+    "topology": None,
+}
 
 
 def scenario_sha256(scenario: Scenario) -> str:

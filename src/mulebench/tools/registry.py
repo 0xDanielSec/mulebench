@@ -107,9 +107,15 @@ MEMORY_TOOLS: Mapping[str, ToolSpec] = {
 }
 
 
-def available_tools(with_memory: bool) -> Mapping[str, ToolSpec]:
-    """Tools a session offers: the banking tools, plus memory when enabled."""
-    return {**TOOLS, **MEMORY_TOOLS} if with_memory else TOOLS
+def available_tools(
+    with_memory: bool, allowed: frozenset[str] | None = None
+) -> Mapping[str, ToolSpec]:
+    """Tools a session offers: the banking tools, plus memory when enabled,
+    restricted to `allowed` when given (an agent role in a delegation run)."""
+    tools = {**TOOLS, **MEMORY_TOOLS} if with_memory else TOOLS
+    if allowed is None:
+        return tools
+    return {name: spec for name, spec in tools.items() if name in allowed}
 
 
 class ToolError(BaseModel):
@@ -191,12 +197,23 @@ def call_tool(ctx: ToolContext, name: str, raw_args: Mapping[str, object]) -> To
             guard_decisions=decisions,
             untrusted_paths=result.untrusted_paths,
             session=ctx.session_index,
+            role=ctx.role,
         )
         return result
 
     spec = available_tools(ctx.memory is not None).get(name)
     if spec is None:
         return finish(_fail("unknown_tool", f"unknown tool: {name!r}"))
+    if ctx.allowed_tools is not None and name not in ctx.allowed_tools:
+        # Role scope is enforced before the guards: the role cannot call it at all.
+        decisions.append(
+            GuardDecision.deny(
+                "role_scope",
+                "role_scope",
+                f"tool {name!r} is not available to role {ctx.role!r}",
+            )
+        )
+        return finish(_fail("denied", "denied: role_scope"))
 
     try:
         args = spec.input_model.model_validate(dict(raw_args))

@@ -35,6 +35,13 @@ class ToolContext:
     session_index: int = 0
     # Set only for scenarios with memory: exposes save_note / read_notes.
     memory: MemoryStore | None = None
+    # Delegation runs: the agent role, recorded on every trace record, and the
+    # tools that role may call (None: every tool of the session).
+    role: str | None = None
+    allowed_tools: frozenset[str] | None = None
+    # Payees of the session note's authorizations, as handed to this agent
+    # (read by PayerPayeeAllowlist; None outside delegation runs).
+    note_payees: frozenset[str] | None = None
 
     def __post_init__(self) -> None:
         if self.key_factory is None:

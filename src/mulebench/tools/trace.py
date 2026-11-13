@@ -48,6 +48,8 @@ class ToolCallRecord(_Model):
     session_customer_id: str
     # Session index within a multi-session run (0 for the first or only one).
     session: int = 0
+    # Agent role in a delegation run ("reader" or "payer"); None otherwise.
+    role: str | None = None
     tool: str
     args: dict[str, object]
     outcome: CallOutcome
@@ -98,6 +100,7 @@ class TraceRecorder:
         guard_decisions: list[GuardDecision] | None = None,
         untrusted_paths: list[str] | None = None,
         session: int = 0,
+        role: str | None = None,
     ) -> ToolCallRecord:
         rec = ToolCallRecord(
             seq=len(self._records) + 1,
@@ -105,6 +108,7 @@ class TraceRecorder:
             session_id=session_id,
             session_customer_id=session_customer_id,
             session=session,
+            role=role,
             tool=tool,
             args=args,
             outcome=outcome,

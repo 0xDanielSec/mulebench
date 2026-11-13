@@ -8,10 +8,16 @@ were listed. Named presets:
     hardened    account_ownership, require_authorization, human_confirmation
     strict      every guard and transformer of GUARD_NAMES
     memguard    hardened plus memory_write (memory scenarios; for ablation)
+    delegation-defences
+                structured_handoff, payer_payee_allowlist and payer_sees_request
+                (delegation scenarios; for ablation)
 
 `memory_write` is an optional guard: it is not part of GUARD_NAMES, so
 `strict`, `all` and the generated ablation presets stay as in the pilots.
-`only:memory_write` runs it alone.
+`only:memory_write` runs it alone. The delegation defences are optional in
+the same way. `payer_payee_allowlist` is a tool guard; `structured_handoff`
+and `payer_sees_request` are harness switches for delegation runs (see
+mulebench.harness.delegation) and do nothing in single-agent runs.
 
 Ablation presets are generated: `none`, `all`, `only:<guard>` and
 `all-minus:<guard>`.
@@ -37,6 +43,7 @@ from mulebench.tools import (
     HumanConfirmation,
     MemoryWriteGuard,
     NewPayeeGuard,
+    PayerPayeeAllowlist,
     RequireAuthorization,
     ResultTransformer,
     SessionSpendCap,
@@ -57,7 +64,17 @@ GUARD_NAMES: tuple[str, ...] = (
 )
 
 # Guards installed only by name, never by strict/all/ablation generation.
-OPTIONAL_GUARDS: tuple[str, ...] = ("memory_write",)
+OPTIONAL_GUARDS: tuple[str, ...] = (
+    "memory_write",
+    "structured_handoff",
+    "payer_payee_allowlist",
+    "payer_sees_request",
+)
+DELEGATION_DEFENCES: tuple[str, ...] = (
+    "structured_handoff",
+    "payer_payee_allowlist",
+    "payer_sees_request",
+)
 GUARD_ORDER: tuple[str, ...] = GUARD_NAMES + OPTIONAL_GUARDS
 
 _HARDENED = frozenset({"account_ownership", "require_authorization", "human_confirmation"})
@@ -66,6 +83,7 @@ NAMED_PRESETS: Mapping[str, frozenset[str]] = {
     "hardened": _HARDENED,
     "strict": frozenset(GUARD_NAMES),
     "memguard": _HARDENED | {"memory_write"},
+    "delegation-defences": frozenset(DELEGATION_DEFENCES),
 }
 
 DEFAULT_PRESETS: tuple[str, ...] = ("vulnerable", "hardened")
@@ -161,6 +179,9 @@ class GuardSet:
     # Amount at or above which EVERY transfer goes to customer confirmation
     # (human_confirmation's threshold), or None. Handed to INV-4 as plain data.
     enforced_confirmation_cents: int | None = None
+    # Delegation harness switches (no effect on single-agent runs).
+    structured_handoff: bool = False
+    payer_sees_request: bool = False
 
 
 def build_guard_set(
@@ -185,10 +206,17 @@ def build_guard_set(
         "new_payee": NewPayeeGuard(confirmer),
         "human_confirmation": HumanConfirmation(threshold_cents, confirmer),
         "memory_write": MemoryWriteGuard(),
+        "payer_payee_allowlist": PayerPayeeAllowlist(),
     }
     guards = tuple(factories[g] for g in names if g in factories)
     transformers: tuple[ResultTransformer, ...] = ()
     if "untrusted_content_marking" in names:
         transformers = (UntrustedContentMarking(marking_nonce(trial_key)),)
     enforced = threshold_cents if "human_confirmation" in names else None
-    return GuardSet(guards=guards, transformers=transformers, enforced_confirmation_cents=enforced)
+    return GuardSet(
+        guards=guards,
+        transformers=transformers,
+        enforced_confirmation_cents=enforced,
+        structured_handoff="structured_handoff" in names,
+        payer_sees_request="payer_sees_request" in names,
+    )
