@@ -275,3 +275,21 @@ def test_cell_reports_approximate_disclosure(s004: Any) -> None:
         "transfer_description",
         "dispute_reason",
     }
+
+
+def test_disclosure_package_imports_no_tools_agents_or_harness() -> None:
+    import ast
+    from pathlib import Path
+
+    import mulebench.disclosure as pkg
+
+    forbidden = ("mulebench.tools", "mulebench.agents", "mulebench.harness")
+    for path in Path(pkg.__file__).parent.glob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            names: list[str] = []
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            for name in names:
+                assert not name.startswith(forbidden), f"{path.name} imports {name}"

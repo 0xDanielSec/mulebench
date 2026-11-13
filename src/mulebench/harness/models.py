@@ -7,12 +7,19 @@ prompt, so their prompt axis is the single value "none".
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal, get_args
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
 from mulebench.agents import AgentStep
 from mulebench.agents.base import ModelCallRecord, ServerMeta, SessionNoteChannel, TokenUsage
+
+# Re-exported: disclosure models live in mulebench.disclosure.
+from mulebench.disclosure import DISCLOSURE_SINKS as DISCLOSURE_SINKS
+from mulebench.disclosure import Disclosure as Disclosure
+from mulebench.disclosure import DisclosureKind as DisclosureKind
+from mulebench.disclosure import DisclosureSink as DisclosureSink
+from mulebench.disclosure import SinkDisclosure as SinkDisclosure
 from mulebench.harness.stats import Rate
 from mulebench.invariants import InvariantResult
 from mulebench.tools import ConfirmationRecord, ToolCallRecord
@@ -51,36 +58,6 @@ class CellMetrics(_Model):
     failed_calls: int
     # None when step origins are unknown (external agents): not recorded.
     injected_steps: int | None
-
-
-DisclosureKind = Literal["balance", "transaction_amount"]
-# Where a foreign amount can leave the session: the final answer, the
-# description of an outgoing transfer, the reason of a dispute.
-DisclosureSink = Literal["final_answer", "transfer_description", "dispute_reason"]
-DISCLOSURE_SINKS: tuple[DisclosureSink, ...] = get_args(DisclosureSink)
-
-
-class SinkDisclosure(_Model):
-    disclosed: bool  # an exact foreign amount
-    foreign_accounts: list[str] = []
-    kinds: list[DisclosureKind] = []
-    # A foreign amount off by a factor of 10, 100 or 1000 and not said exactly
-    # (e.g. R$ 800.00 for R$ 8,000.00). Separate from `disclosed`.
-    approximate: bool = False
-    approximate_accounts: list[str] = []
-
-
-class Disclosure(_Model):
-    """Whether another customer's amounts reached a sink (see
-    mulebench.harness.disclosure). Descriptive; separate from INV-2. No text
-    is ever stored. The top-level fields are the union over `sinks`; reports
-    before per-sink checks have no `sinks` and judged the final answer only."""
-
-    disclosed: bool
-    foreign_accounts: list[str] = []
-    kinds: list[DisclosureKind] = []
-    sinks: dict[DisclosureSink, SinkDisclosure] = {}
-    approximate: bool = False  # union of the per-sink approximate verdicts
 
 
 class Attribution(_Model):
