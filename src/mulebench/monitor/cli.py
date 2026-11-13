@@ -5,7 +5,7 @@
                           [--stream [--grace-seconds S]]
     mulebench monitor schema [--out monitor-trace.schema.json]
     mulebench monitor adapt REPORT.json --out DIR [--scenario ID ...]
-    mulebench monitor rules --out DIR
+    mulebench monitor rules --out DIR [--format sigma|kql]
 
 Batch mode (default) reads every event, then writes the alerts once, all
 `firm`. `--stream` processes events as they arrive (pipe a live log into
@@ -72,9 +72,12 @@ def add_parser(
     )
 
     rules = msub.add_parser(
-        "rules", help="write the Sigma-like rule documents (documentation, not executed)"
+        "rules",
+        help="write the rule documents: Sigma-like (documentation) or Microsoft Sentinel KQL "
+        "analytic rules (starting point, not production-validated)",
     )
     rules.add_argument("--out", type=Path, required=True, help="output directory")
+    rules.add_argument("--format", choices=("sigma", "kql"), default="sigma")
 
     schema = msub.add_parser("schema", help="print the trace event JSON Schema")
     schema.add_argument("--out", type=Path, help="write the schema here instead")
@@ -154,6 +157,12 @@ def main(args: argparse.Namespace) -> int:
     if args.monitor_command == "adapt":
         return _adapt(args)
     if args.monitor_command == "rules":
+        if args.format == "kql":
+            from mulebench.monitor.kql import write_kql_rules
+
+            n = write_kql_rules(args.out)
+            print(f"wrote {n} KQL analytic rule(s) to {args.out}", file=sys.stderr)
+            return 0
         from mulebench.monitor.sigma import write_rules
 
         print(f"wrote {write_rules(args.out)} rule document(s) to {args.out}", file=sys.stderr)
