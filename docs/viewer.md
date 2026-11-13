@@ -34,6 +34,10 @@ site, in the order given; `index.html` lists them.
     the result, the field where the payload (the scenario canary) entered,
     steps the agent took on instructions from tool output, and the violations
     pinned to the call or transfer where the invariant broke;
+  - multi-session trials: one timeline per session, headed by its request and
+    time span. Each `save_note` links to the `read_notes` calls that returned
+    the note, and back. An **Agent memory** section lists the notes with
+    their taint (canary, attacker artifacts) and the memory metrics;
   - invariants, confirmations, attribution and disclosure per sink;
   - a ledger diff: balances before and after, and the transfers made.
 - **Ablation** (`a<k>/index.html`): guard-set matrix, scenario flags,

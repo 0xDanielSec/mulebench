@@ -137,7 +137,11 @@ uv run pytest                                      # offline, no API keys
   `all@session_spend_cap=100000`.
 - **Ablation**: `mulebench ablate` runs every scenario under 16 guard sets and
   reports which guard stops which attack, alone and in combination.
-- **Workloads**: eight legitimate customer tasks
+- **Multi-session and memory**: scenarios can span sessions of one customer;
+  `memory: true` adds agent note tools. 013 (memory poisoning) and 014
+  (persistent exfiltration) cross the session boundary through memory
+  (`docs/memory.md`).
+- **Workloads**: nine legitimate customer tasks
   (`src/mulebench/workloads/builtin/`) run under the same guard sets, so
   security is always reported next to usability cost.
 

@@ -93,13 +93,19 @@ the trace's guard decisions and never shown to the agent.
   (see `docs/agents.md`); every cell records its agent descriptor, whose
   `params["agent_hints"]` holds the hints actually applied.
 
+- **Multi-session and memory:** `sessions` (per-session request, interval,
+  stop reason, final answer, granted authorizations), `notes` (agent notes
+  with taint) and `memory` (`memory_tainted`, `violation_sessions`,
+  `cross_session`, `note_followed`). See `docs/memory.md`.
+
 ## Aggregates per cell
 
 Exposure (over non-errored trials), attack success and refusal (over exposed
 trials), attack utility and benign utility (over non-errored trials), each as
 `k/n` with a **Wilson 95% interval**. 0/n prints only the upper bound, for example
 `0/10 (<=28% upper 95%)`: it never means safe. Headline numbers need at least 30
-trials per cell.
+trials per cell. Memory and multi-session cells add `memory_tainted`,
+`cross_session_success` and `note_followed`.
 
 ## Report
 

@@ -3,7 +3,7 @@
 `mulebench ablate [directory] [--out ablation.json]` runs every scenario with
 the scripted agent under 16 guard sets: `none`, each guard alone
 (`only:<guard>`), each guard removed from the full set (`all-minus:<guard>`),
-and `all`. It also runs the eight built-in benign workloads
+and `all`. It also runs the nine built-in benign workloads
 (`src/mulebench/workloads/builtin/`) under the same 16 sets. It prints the
 attack table, then the usability tables, and writes a JSON report
 (`kind: "ablation"`, `schema_version: 3`, model `AblationReport` in
@@ -12,6 +12,12 @@ attack table, then the usability tables, and writes a JSON report
 Guards, in installation order: `account_ownership`, `require_authorization`,
 `session_spend_cap`, `velocity`, `new_payee`, `human_confirmation`, and the
 result transformer `untrusted_content_marking`. See `docs/tools.md`.
+
+`memory_write` (MemoryWriteGuard) is optional and not in these 16 sets, which
+stay as in the pilots. Run it with `--preset memguard` (hardened plus
+memory_write) or `--preset only:memory_write`. Its known limitation, that a
+paraphrase evades the substring rule, is shown by 014; its false-positive
+cost by the `remember-refund-reference` workload. See `docs/memory.md`.
 
 ## Reading the table
 
@@ -125,7 +131,7 @@ limits, payload amounts).
   (`new_payee`, `velocity`, `human_confirmation`) look stronger here than with
   real, fallible humans.
 - One deterministic trial per cell: these are outcomes, not rates.
-- **Eight author-written workloads.** Friction on real customer behavior may
+- **Nine author-written workloads.** Friction on real customer behavior may
   differ; the perfect confirmer also means a confirmation request never blocks
   a legitimate task here, so "confirmations" is the only cost
   confirmation-based guards can show.

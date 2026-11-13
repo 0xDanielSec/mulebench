@@ -34,6 +34,10 @@ user_task:
   authorizations:                      # customer-channel grants (see below)
     - {ref, from_account, payee_pix_key, max_amount_cents}
 
+followup_sessions:                     # optional later sessions, same customer
+  - {request, gap_hours, authorizations?}   # gap_hours >= 1; see docs/memory.md
+memory: false                          # true exposes save_note / read_notes
+
 injection:
   transaction: <tx ref>                # the seeded transaction holding {{payload}}
   payload: <str>

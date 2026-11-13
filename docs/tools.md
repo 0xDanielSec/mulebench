@@ -58,6 +58,12 @@ checks completeness, a list of defensive keywords and the examples.
 `tool_schema_sha256()` versions this view; LLM reports record it in
 `llm.tool_schema_sha256`, and it is part of the checkpoint fingerprint.
 
+The memory tools `save_note` and `read_notes` exist only in sessions whose
+`ToolContext.memory` is set, which happens for scenarios with `memory: true`.
+Elsewhere they are unknown tools and absent from `model_tool_schemas()`, so
+pilot scenarios present exactly the pilot tool list. Each scenario result
+records `tool_schema_sha256(memory=...)`. See `docs/memory.md`.
+
 ## Session identity and idempotency
 
 `ToolContext.customer_id` is the authenticated customer of the session. The
