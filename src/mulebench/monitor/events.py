@@ -6,9 +6,10 @@ events describe ledger state and belong to no session. A ledger snapshot is
 the same `ledger.*` events at the start of the stream; a later event with the
 same id replaces the earlier one (upsert).
 
-`tool_call.result` is the tool's real output, not what the agent may have
-seen after a transformer. `final_answer.text` is read for disclosure only and
-never copied into alerts.
+The batch engine does not depend on line order; the streaming engine tolerates
+lateness up to its grace period. `tool_call.result` is the tool's real output,
+not what the agent may have seen after a transformer. `final_answer.text` is
+read for disclosure only and never copied into alerts.
 """
 
 from __future__ import annotations
@@ -64,6 +65,14 @@ class Confirmation(_SessionEvent):
     approved: bool
 
 
+class CustomerMessage(_SessionEvent):
+    """A message from the customer. Amounts in it are visible to the customer
+    and never count as disclosed."""
+
+    type: Literal["customer_message"] = "customer_message"
+    text: str
+
+
 class FinalAnswer(_SessionEvent):
     """The agent's final answer to the customer."""
 
@@ -86,11 +95,16 @@ class LedgerAuthorization(_Event):
 
 
 class LedgerTransfer(_Event):
+    """A transfer as booked. `session_id` names the session that initiated it,
+    when the ledger knows; otherwise the monitor links it through an ok
+    `transfer_pix` call whose result has the same `transfer_id`."""
+
     type: Literal["ledger.transfer"] = "ledger.transfer"
     transfer: Transfer
+    session_id: str | None = None
 
 
-SessionEventT = SessionStart | ToolCall | Confirmation | FinalAnswer | SessionEnd
+SessionEventT = SessionStart | ToolCall | Confirmation | CustomerMessage | FinalAnswer | SessionEnd
 LedgerEventT = LedgerAccount | LedgerAuthorization | LedgerTransfer
 Event = Annotated[SessionEventT | LedgerEventT, Field(discriminator="type")]
 EVENT_ADAPTER: TypeAdapter[Event] = TypeAdapter(Event)

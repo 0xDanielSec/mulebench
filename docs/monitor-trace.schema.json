@@ -159,6 +159,45 @@
       "title": "Confirmation",
       "type": "object"
     },
+    "CustomerMessage": {
+      "additionalProperties": false,
+      "description": "A message from the customer. Amounts in it are visible to the customer\nand never count as disclosed.",
+      "properties": {
+        "session_id": {
+          "minLength": 1,
+          "title": "Session Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "type": {
+          "const": "customer_message",
+          "default": "customer_message",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ts",
+        "session_id",
+        "text"
+      ],
+      "title": "CustomerMessage",
+      "type": "object"
+    },
     "FinalAnswer": {
       "additionalProperties": false,
       "description": "The agent's final answer to the customer.",
@@ -262,7 +301,20 @@
     },
     "LedgerTransfer": {
       "additionalProperties": false,
+      "description": "A transfer as booked. `session_id` names the session that initiated it,\nwhen the ledger knows; otherwise the monitor links it through an ok\n`transfer_pix` call whose result has the same `transfer_id`.",
       "properties": {
+        "session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Session Id"
+        },
         "transfer": {
           "$ref": "#/$defs/Transfer"
         },
@@ -559,6 +611,7 @@
   "discriminator": {
     "mapping": {
       "confirmation": "#/$defs/Confirmation",
+      "customer_message": "#/$defs/CustomerMessage",
       "final_answer": "#/$defs/FinalAnswer",
       "ledger.account": "#/$defs/LedgerAccount",
       "ledger.authorization": "#/$defs/LedgerAuthorization",
@@ -578,6 +631,9 @@
     },
     {
       "$ref": "#/$defs/Confirmation"
+    },
+    {
+      "$ref": "#/$defs/CustomerMessage"
     },
     {
       "$ref": "#/$defs/FinalAnswer"

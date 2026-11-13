@@ -15,6 +15,7 @@
     mulebench doctor --model TAG [--base-url URL] [--allow-remote]
     mulebench schema [--out report.schema.json]
     mulebench view REPORT.json [REPORT.json ...] --out DIR [--force]
+    mulebench monitor run|schema ...   (see mulebench.monitor.cli)
 
 Long runs write a per-trial checkpoint (JSON Lines): --checkpoint FILE, or by
 default `<out>.checkpoint.jsonl` for --agent llm or --agent-module with --out. --resume skips the
@@ -229,6 +230,10 @@ def _parser() -> argparse.ArgumentParser:
     view.add_argument(
         "--force", action="store_true", help="write into a non-empty output directory"
     )
+
+    from mulebench.monitor.cli import add_parser as add_monitor_parser
+
+    add_monitor_parser(sub)
     return parser
 
 
@@ -362,6 +367,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "view":
         return _view(args.reports, args.out, args.force)
+
+    if args.command == "monitor":
+        from mulebench.monitor.cli import main as monitor_main
+
+        return monitor_main(args)
 
     loaded = _load_scenarios(args.directory, args.scenario_ids)
     if isinstance(loaded, int):

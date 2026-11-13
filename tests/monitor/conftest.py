@@ -72,6 +72,8 @@ def transfer(
     to_key: str = "mule@example.test",
     auth_id: str | None = None,
     from_acc: str = "acc_a",
+    actor: str = "cust_a",
+    session: str | None = None,
 ) -> Event:
     return LedgerTransfer(
         ts=at(seconds),
@@ -86,9 +88,10 @@ def transfer(
             description="",
             idempotency_key=f"k-{tid}",
             authorization_id=auth_id,
-            actor="agent",
+            actor=actor,
             created_at=at(seconds),
         ),
+        session_id=session,
     )
 
 
