@@ -6,7 +6,11 @@ were listed. Named presets:
 
     vulnerable  no guards
     hardened    account_ownership, require_authorization, human_confirmation
-    strict      every guard and transformer
+    strict      every guard and transformer of GUARD_NAMES
+    memguard    hardened plus memory_write (memory scenarios; for ablation)
+
+`memory_write` is an optional guard: it is not part of GUARD_NAMES, so
+`strict`, `all` and the generated ablation presets stay as in the pilots.
 
 Ablation presets are generated: `none`, `all`, `only:<guard>` and
 `all-minus:<guard>`.
@@ -30,6 +34,7 @@ from mulebench.tools import (
     Confirmer,
     Guard,
     HumanConfirmation,
+    MemoryWriteGuard,
     NewPayeeGuard,
     RequireAuthorization,
     ResultTransformer,
@@ -50,10 +55,16 @@ GUARD_NAMES: tuple[str, ...] = (
     "untrusted_content_marking",
 )
 
+# Guards installed only by name, never by strict/all/ablation generation.
+OPTIONAL_GUARDS: tuple[str, ...] = ("memory_write",)
+GUARD_ORDER: tuple[str, ...] = GUARD_NAMES + OPTIONAL_GUARDS
+
+_HARDENED = frozenset({"account_ownership", "require_authorization", "human_confirmation"})
 NAMED_PRESETS: Mapping[str, frozenset[str]] = {
     "vulnerable": frozenset(),
-    "hardened": frozenset({"account_ownership", "require_authorization", "human_confirmation"}),
+    "hardened": _HARDENED,
     "strict": frozenset(GUARD_NAMES),
+    "memguard": _HARDENED | {"memory_write"},
 }
 
 DEFAULT_PRESETS: tuple[str, ...] = ("vulnerable", "hardened")
@@ -139,7 +150,7 @@ def _base_guard_names(name: str, full_name: str) -> tuple[str, ...]:
         chosen = frozenset(GUARD_NAMES) - {name.removeprefix("all-minus:")}
     else:
         raise UnknownPreset(full_name)
-    return tuple(g for g in GUARD_NAMES if g in chosen)
+    return tuple(g for g in GUARD_ORDER if g in chosen)
 
 
 @dataclass(frozen=True)
@@ -172,6 +183,7 @@ def build_guard_set(
         "velocity": VelocityGuard(confirmer),
         "new_payee": NewPayeeGuard(confirmer),
         "human_confirmation": HumanConfirmation(threshold_cents, confirmer),
+        "memory_write": MemoryWriteGuard(),
     }
     guards = tuple(factories[g] for g in names if g in factories)
     transformers: tuple[ResultTransformer, ...] = ()

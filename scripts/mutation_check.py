@@ -7,7 +7,7 @@ tests for that module run there. A mutant is "killed"
 when at least one test fails. The working tree is never modified.
 
 Usage: uv run python scripts/mutation_check.py [INV-1] [INV-2] [INV-3] [INV-4] [AUDIT]
-       [LEDGER] [ATTR]
+       [LEDGER] [MEMGUARD] [ATTR]
 With no arguments every table runs and docs/mutation-summary.json is rewritten
 (per-table killed/total; no dates, so it is deterministic). The README's mutant
 count is rendered from it. Exit code is 0 only if every mutant of every
@@ -558,6 +558,33 @@ ATTR_MUTANTS: list[Mutant] = [
     ),
 ]
 
+MEMGUARD_MUTANTS: list[Mutant] = [
+    ("save_note only", "if not isinstance(args, SaveNoteIn):", "if False:"),
+    ("same session only", "if r.session != ctx.session_index or", "if"),
+    ("ok calls only", 'or r.outcome != "ok":', ":"),
+    (
+        "case folding",
+        'return " ".join(text.casefold().split())',
+        'return " ".join(text.split())',
+    ),
+    (
+        "whitespace collapsing",
+        'return " ".join(text.casefold().split())',
+        "return text.casefold()",
+    ),
+    (
+        "deny on shared run",
+        "if _shares_run(note, _normalize(source), self.min_chars):",
+        "if False:",
+    ),
+    (
+        "every window checked",
+        "for i in range(len(note) - n + 1))",
+        "for i in range(1))",
+    ),
+    ("min_chars positive", "if min_chars < 1:", "if False:"),
+]
+
 TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
     "INV-1": (
         Path("src/mulebench/invariants/authorization.py"),
@@ -588,6 +615,11 @@ TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
         Path("src/mulebench/ledger/ledger.py"),
         "tests/ledger/test_authorizations.py",
         LEDGER_MUTANTS,
+    ),
+    "MEMGUARD": (
+        Path("src/mulebench/tools/guards.py"),
+        "tests/tools/test_memory_guard.py",
+        MEMGUARD_MUTANTS,
     ),
     "ATTR": (
         Path("src/mulebench/harness/attribution.py"),

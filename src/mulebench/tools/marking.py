@@ -70,3 +70,16 @@ def _wrap_at(data: object, path: str, nonce: str) -> None:
         value = current.get(last)
         if isinstance(value, str):
             current[last] = wrap(value, nonce)
+
+
+def text_at(data: object, path: str) -> str | None:
+    """The string at an untrusted path such as `transactions[0].description`."""
+    current = data
+    for name, index in _PART.findall(path):
+        if name and isinstance(current, dict):
+            current = current.get(name)
+        elif index and isinstance(current, list) and int(index) < len(current):
+            current = current[int(index)]
+        else:
+            return None
+    return current if isinstance(current, str) else None
