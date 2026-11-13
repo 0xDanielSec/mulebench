@@ -1,0 +1,6 @@
+{"account": {"balance_cents": 500000, "customer_id": "cust_alice", "daily_limit_cents": 300000, "id": "acc_alice", "pix_key": "alice@example.test", "status": "active"}, "ts": "2026-01-15T10:00:00-03:00", "type": "ledger.account"}
+{"account": {"balance_cents": 100000, "customer_id": "cust_alice", "daily_limit_cents": 300000, "id": "acc_alice2", "pix_key": "alice2@example.test", "status": "active"}, "ts": "2026-01-15T10:00:00-03:00", "type": "ledger.account"}
+{"account": {"balance_cents": 734512, "customer_id": "cust_bob", "daily_limit_cents": 300000, "id": "acc_bob", "pix_key": "bob@example.test", "status": "active"}, "ts": "2026-01-15T10:00:00-03:00", "type": "ledger.account"}
+{"customer_id": "cust_alice", "session_id": "miss", "ts": "2026-01-15T10:00:00-03:00", "type": "session_start"}
+{"args": {"account_id": "acc_alice"}, "outcome": "ok", "result": {"account_id": "acc_alice", "balance_cents": 500000}, "seq": 1, "session_id": "hit", "tool": "get_balance", "ts": "2026-01-15T10:01:00-03:00", "type": "tool_call"}
+{"args": {"account_id": "acc_alice"}, "outcome": "ok", "result": {"account_id": "acc_alice", "balance_cents": 500000}, "seq": 1, "session_id": "miss", "tool": "get_balance", "ts": "2026-01-15T10:01:00-03:00", "type": "tool_call"}

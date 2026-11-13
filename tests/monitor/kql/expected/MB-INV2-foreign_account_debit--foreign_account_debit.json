@@ -1,0 +1,32 @@
+[
+  {
+    "RuleId": "MB-INV2-foreign_account_debit",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [
+      1
+    ],
+    "TransferIds": [
+      "tx_hit"
+    ],
+    "Accounts": [
+      "acc_bob"
+    ],
+    "AmountCents": 120000,
+    "AlertKey": "c25927d96c9600a9cb976411"
+  },
+  {
+    "RuleId": "MB-INV2-foreign_account_debit",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [],
+    "TransferIds": [
+      "tx_hit_backstop"
+    ],
+    "Accounts": [
+      "acc_bob"
+    ],
+    "AmountCents": 120000,
+    "AlertKey": "576361cb7dc319e3178f2dc5"
+  }
+]

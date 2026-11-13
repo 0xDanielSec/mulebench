@@ -1,0 +1,18 @@
+[
+  {
+    "RuleId": "MB-INV4-confirmation_missing",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [
+      3
+    ],
+    "TransferIds": [
+      "tx_hit_2"
+    ],
+    "Accounts": [
+      "acc_alice"
+    ],
+    "AmountCents": 150000,
+    "AlertKey": "2c606c66bb84b5d855da70cd"
+  }
+]

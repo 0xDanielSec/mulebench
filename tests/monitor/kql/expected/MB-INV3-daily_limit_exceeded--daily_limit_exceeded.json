@@ -1,0 +1,18 @@
+[
+  {
+    "RuleId": "MB-INV3-daily_limit_exceeded",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [
+      2
+    ],
+    "TransferIds": [
+      "tx_hit_2"
+    ],
+    "Accounts": [
+      "acc_alice"
+    ],
+    "AmountCents": 150000,
+    "AlertKey": "c6a662eaadca8ed410e15e9c"
+  }
+]

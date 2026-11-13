@@ -673,3 +673,30 @@ def write_kql_rules(out: Path) -> int:
     for name, text in files.items():
         (out / name).write_text(text, encoding="utf-8", newline="\n")
     return len(files)
+
+
+# ------------------------------------------------------------ table mapping
+
+_FIELD_COLUMNS = {
+    "v": "SchemaVersion",
+    "ts": "TimeGenerated",
+    "type": "EventType",
+    "session_id": "SessionId",
+    "customer_id": "CustomerId",
+    "seq": "Seq",
+    "tool": "Tool",
+    "outcome": "Outcome",
+    "args": "Args",
+    "result": "Result",
+    "approved": "Approved",
+    "text": "Text",
+    "account": "Account",
+    "authorization": "Authorization",
+    "transfer": "Transfer",
+}
+
+
+def to_table_row(event: dict[str, Any]) -> dict[str, Any]:
+    """One trace JSONL event as a MulebenchTrace_CL row (what the DCR transform
+    does). Raises KeyError for a field with no column."""
+    return {_FIELD_COLUMNS[k]: v for k, v in event.items()}

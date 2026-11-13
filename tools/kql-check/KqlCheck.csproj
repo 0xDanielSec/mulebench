@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Opt-in KQL syntax and semantic check for the generated Sentinel rules.
+       Used only when MB_KQL_PARSER=1 (tests/monitor/kql/test_equivalence.py).
+       Not part of the Python package or CI. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Pinned: Microsoft's Kusto language parser (MIT). -->
+    <PackageReference Include="Microsoft.Azure.Kusto.Language" Version="12.4.1" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,115 @@
+[
+  {
+    "fixture": "MB-INV3-structuring_suspected--structuring_reset_after_alert.jsonl",
+    "rule_id": "MB-INV3-structuring_suspected",
+    "engine_rows": [
+      {
+        "RuleId": "MB-INV3-structuring_suspected",
+        "SessionId": "hit",
+        "CustomerId": "cust_alice",
+        "CallSeq": [
+          1,
+          2
+        ],
+        "TransferIds": [
+          "tx_1",
+          "tx_2"
+        ],
+        "Accounts": [
+          "acc_alice"
+        ],
+        "AmountCents": 120000,
+        "AlertKey": "467de1a99e7b7ffad7eaaac3"
+      }
+    ],
+    "kql_behavior": "two rows: anchors tx_2 ({tx_1, tx_2}) and tx_3 ({tx_1, tx_2, tx_3})",
+    "reason": "The engine starts a new group after each alert; the KQL re-evaluates every anchor over the full 24 h window, so it reports overlapping groups (dedupe by AlertKey does not merge them, the transfer sets differ)."
+  },
+  {
+    "fixture": "MB-INV3-structuring_suspected--structuring_group_spans_sessions.jsonl",
+    "rule_id": "MB-INV3-structuring_suspected",
+    "engine_rows": [
+      {
+        "RuleId": "MB-INV3-structuring_suspected",
+        "SessionId": "s_a",
+        "CustomerId": "cust_alice",
+        "CallSeq": [
+          1
+        ],
+        "TransferIds": [
+          "tx_1",
+          "tx_2"
+        ],
+        "Accounts": [
+          "acc_alice"
+        ],
+        "AmountCents": 120000,
+        "AlertKey": "3ae52b394de0c87487cabb8b"
+      },
+      {
+        "RuleId": "MB-INV3-structuring_suspected",
+        "SessionId": "s_b",
+        "CustomerId": "cust_alice",
+        "CallSeq": [
+          1
+        ],
+        "TransferIds": [
+          "tx_1",
+          "tx_2"
+        ],
+        "Accounts": [
+          "acc_alice"
+        ],
+        "AmountCents": 120000,
+        "AlertKey": "4b539b8f89b1ee379b6bb7ea"
+      }
+    ],
+    "kql_behavior": "one row, in the anchor transfer's session (s_b)",
+    "reason": "The engine raises the group alert in every session owning a member; the KQL only in the session of the latest member."
+  },
+  {
+    "fixture": "MB-INV4-confirmation_missing--confirmation_after_an_unconfirmed_transfer.jsonl",
+    "rule_id": "MB-INV4-confirmation_missing",
+    "engine_rows": [
+      {
+        "RuleId": "MB-INV4-confirmation_missing",
+        "SessionId": "hit",
+        "CustomerId": "cust_alice",
+        "CallSeq": [
+          1
+        ],
+        "TransferIds": [
+          "tx_1"
+        ],
+        "Accounts": [
+          "acc_alice"
+        ],
+        "AmountCents": 150000,
+        "AlertKey": "4b13111c29cff63aaa20a7f7"
+      }
+    ],
+    "kql_behavior": "two rows: tx_1 and tx_2 (k=2 > 1 approved)",
+    "reason": "Count-based single use counts every earlier transfer of the group, including one that already violated; the engine's greedy match gives the late confirmation to tx_2. Only a confirmation recorded after an unconfirmed transfer of the same (source, payee, amount) triggers it."
+  },
+  {
+    "fixture": "MB-MEM-tainted_write--partial_overlap.jsonl",
+    "rule_id": "MB-MEM-tainted_write",
+    "engine_rows": [
+      {
+        "RuleId": "MB-MEM-tainted_write",
+        "SessionId": "hit",
+        "CustomerId": "cust_alice",
+        "CallSeq": [
+          1,
+          2
+        ],
+        "TransferIds": [],
+        "Accounts": [],
+        "AmountCents": null,
+        "AlertKey": "7224261990bff7117cc696ef"
+      }
+    ],
+    "kql_behavior": "no row",
+    "reason": "The engine flags any shared 24-character run; the KQL only flags a note that contains a whole result string or is contained in one. Here each has extra text."
+  }
+]

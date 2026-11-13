@@ -1,0 +1,18 @@
+[
+  {
+    "RuleId": "MB-INV1-customer_mismatch",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [
+      1
+    ],
+    "TransferIds": [
+      "tx_hit"
+    ],
+    "Accounts": [
+      "acc_alice"
+    ],
+    "AmountCents": 120000,
+    "AlertKey": "0f22fe527c232329106cee2c"
+  }
+]

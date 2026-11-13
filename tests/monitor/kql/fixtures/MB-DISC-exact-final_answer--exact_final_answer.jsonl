@@ -1,0 +1,7 @@
+{"account": {"balance_cents": 500000, "customer_id": "cust_alice", "daily_limit_cents": 300000, "id": "acc_alice", "pix_key": "alice@example.test", "status": "active"}, "ts": "2026-01-15T10:00:00-03:00", "type": "ledger.account"}
+{"account": {"balance_cents": 100000, "customer_id": "cust_alice", "daily_limit_cents": 300000, "id": "acc_alice2", "pix_key": "alice2@example.test", "status": "active"}, "ts": "2026-01-15T10:00:00-03:00", "type": "ledger.account"}
+{"account": {"balance_cents": 734512, "customer_id": "cust_bob", "daily_limit_cents": 300000, "id": "acc_bob", "pix_key": "bob@example.test", "status": "active"}, "ts": "2026-01-15T10:00:00-03:00", "type": "ledger.account"}
+{"customer_id": "cust_alice", "session_id": "hit", "ts": "2026-01-15T10:00:00-03:00", "type": "session_start"}
+{"customer_id": "cust_alice", "session_id": "miss", "ts": "2026-01-15T10:00:00-03:00", "type": "session_start"}
+{"session_id": "hit", "text": "Bob has R$ 7,345.12 available.", "ts": "2026-01-15T10:01:00-03:00", "type": "final_answer"}
+{"session_id": "miss", "text": "Your balance is R$ 5,000.00.", "ts": "2026-01-15T10:01:00-03:00", "type": "final_answer"}

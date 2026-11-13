@@ -1,0 +1,18 @@
+[
+  {
+    "RuleId": "MB-INV2-foreign_transfer_dispute",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [
+      1
+    ],
+    "TransferIds": [
+      "tx_bob"
+    ],
+    "Accounts": [
+      "acc_bob"
+    ],
+    "AmountCents": 120000,
+    "AlertKey": "71c83e463e794d46d3a05612"
+  }
+]

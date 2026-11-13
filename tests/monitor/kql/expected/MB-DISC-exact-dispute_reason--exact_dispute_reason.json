@@ -1,0 +1,16 @@
+[
+  {
+    "RuleId": "MB-DISC-exact-dispute_reason",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [
+      1
+    ],
+    "TransferIds": [],
+    "Accounts": [
+      "acc_bob"
+    ],
+    "AmountCents": null,
+    "AlertKey": "d4c38273346f05cdd931c7fa"
+  }
+]

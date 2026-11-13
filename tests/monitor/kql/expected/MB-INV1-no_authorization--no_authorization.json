@@ -1,0 +1,18 @@
+[
+  {
+    "RuleId": "MB-INV1-no_authorization",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [
+      1
+    ],
+    "TransferIds": [
+      "tx_hit"
+    ],
+    "Accounts": [
+      "acc_alice"
+    ],
+    "AmountCents": 120000,
+    "AlertKey": "771b921057f2b7bc1dc6be79"
+  }
+]

@@ -1,0 +1,15 @@
+[
+  {
+    "RuleId": "MB-MEM-tainted_write",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [
+      1,
+      2
+    ],
+    "TransferIds": [],
+    "Accounts": [],
+    "AmountCents": null,
+    "AlertKey": "7224261990bff7117cc696ef"
+  }
+]

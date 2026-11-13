@@ -1,0 +1,18 @@
+[
+  {
+    "RuleId": "MB-INV1-amount_exceeds_max",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [
+      1
+    ],
+    "TransferIds": [
+      "tx_hit"
+    ],
+    "Accounts": [
+      "acc_alice"
+    ],
+    "AmountCents": 120001,
+    "AlertKey": "b35e8e7dc3446e915a78a69b"
+  }
+]

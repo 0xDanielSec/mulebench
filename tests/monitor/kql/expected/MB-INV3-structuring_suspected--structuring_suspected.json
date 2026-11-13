@@ -1,0 +1,20 @@
+[
+  {
+    "RuleId": "MB-INV3-structuring_suspected",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [
+      1,
+      2
+    ],
+    "TransferIds": [
+      "tx_hit_1",
+      "tx_hit_2"
+    ],
+    "Accounts": [
+      "acc_alice"
+    ],
+    "AmountCents": 120000,
+    "AlertKey": "26e024659f0f9dbd1ac4295f"
+  }
+]

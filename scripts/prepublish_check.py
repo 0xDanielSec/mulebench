@@ -49,6 +49,7 @@ DEFAULT_ALLOWED_DOMAINS = frozenset(
         "pypi.org",  # uv.lock
         "files.pythonhosted.org",  # uv.lock
         "json-schema.org",  # standard JSON Schema dialect identifier ($schema)
+        "microsoft.net",  # "Microsoft.NET.Sdk" project SDK name (tools/kql-check)
     }
 )
 DEFAULT_ALLOWED_EMAILS = frozenset({"noreply@anthropic.com"})

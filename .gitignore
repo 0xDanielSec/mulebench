@@ -18,3 +18,7 @@ runs/
 
 site-*/
 site-*.zip
+
+# tools/kql-check build output (.NET)
+tools/kql-check/bin/
+tools/kql-check/obj/

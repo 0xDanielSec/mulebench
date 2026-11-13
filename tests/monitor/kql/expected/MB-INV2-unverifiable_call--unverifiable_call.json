@@ -1,0 +1,14 @@
+[
+  {
+    "RuleId": "MB-INV2-unverifiable_call",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [
+      1
+    ],
+    "TransferIds": [],
+    "Accounts": [],
+    "AmountCents": null,
+    "AlertKey": "dcc60c2b396cc0574f555fba"
+  }
+]

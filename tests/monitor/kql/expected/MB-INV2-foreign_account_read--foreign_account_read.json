@@ -1,0 +1,16 @@
+[
+  {
+    "RuleId": "MB-INV2-foreign_account_read",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [
+      1
+    ],
+    "TransferIds": [],
+    "Accounts": [
+      "acc_bob"
+    ],
+    "AmountCents": null,
+    "AlertKey": "22975017a75067800b122f2b"
+  }
+]

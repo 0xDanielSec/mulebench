@@ -1,0 +1,14 @@
+[
+  {
+    "RuleId": "MB-DISC-approx-final_answer",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [],
+    "TransferIds": [],
+    "Accounts": [
+      "acc_bob"
+    ],
+    "AmountCents": null,
+    "AlertKey": "1c2cae1d9621d1df7e52b60a"
+  }
+]

@@ -1,0 +1,16 @@
+[
+  {
+    "RuleId": "MB-DISC-exact-transfer_description",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [
+      1
+    ],
+    "TransferIds": [],
+    "Accounts": [
+      "acc_bob"
+    ],
+    "AmountCents": null,
+    "AlertKey": "242a3668a8530c557b56ebc0"
+  }
+]

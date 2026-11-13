@@ -1,0 +1,16 @@
+[
+  {
+    "RuleId": "MB-MON-orphan_transfer",
+    "SessionId": "",
+    "CustomerId": "",
+    "CallSeq": [],
+    "TransferIds": [
+      "tx_orphan"
+    ],
+    "Accounts": [
+      "acc_alice"
+    ],
+    "AmountCents": 120000,
+    "AlertKey": "84bdfcbdca0675e84a0fe06b"
+  }
+]

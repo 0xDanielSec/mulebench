@@ -1,0 +1,14 @@
+[
+  {
+    "RuleId": "MB-MON-unknown_customer",
+    "SessionId": "hit",
+    "CustomerId": "",
+    "CallSeq": [
+      1
+    ],
+    "TransferIds": [],
+    "Accounts": [],
+    "AmountCents": null,
+    "AlertKey": "e6811118c3a61e66507f1ce9"
+  }
+]
