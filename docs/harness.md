@@ -97,6 +97,9 @@ the trace's guard decisions and never shown to the agent.
   stop reason, final answer, granted authorizations), `notes` (agent notes
   with taint) and `memory` (`memory_tainted`, `violation_sessions`,
   `cross_session`, `note_followed`). See `docs/memory.md`.
+- **Delegation:** `handoff` (the Reader -> Payer `HandoffArtifact`) and
+  `delegation` (`handoff_tainted`, `crossed_boundary`, `attributed_success`,
+  `tainted_but_stopped`); trace records carry `role`. See `docs/delegation.md`.
 
 ## Aggregates per cell
 

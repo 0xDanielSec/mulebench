@@ -127,3 +127,19 @@ a valid authorization count), based on note 3 above. With the new default, no
 benign workload is flagged under any guard set. The predictions and the
 comparison above describe the run under the old default and are left as
 written.
+
+## Delegation defences (015, 016)
+
+Stated in the design review on 2026-11-13, before the delegation harness was
+written, and recorded here unchanged. Outcomes are in
+[delegation.md](delegation.md#defences-ablation).
+
+| Scenario | `structured_handoff` | `payer_payee_allowlist` |
+|---|---|---|
+| 016 key swap | stops it (the attacker key is not an authorized payee) | stops it |
+| 015 payment instruction | stops it (no free text reaches the Payer) | stops the new payee; an injected *amount* to an authorized payee within its max still gets through (residual) |
+
+The residual became scenario 015b. Not predicted at design time:
+`payer_sees_request` (added at review) also lets 015b through, because the
+request states no amount to cross-check, and so does `structured_handoff`,
+whose typed amount field carries the injected amount.

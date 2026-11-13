@@ -33,7 +33,7 @@ def factory() -> MyAgent:  # takes no arguments
 
 | Name | What it is |
 | --- | --- |
-| `ExternalTask` | `customer_id`, `request` (what the customer typed), `session_note` (from the harness; the trusted channel: accounts and payment authorizations) and `trial` (the trial index within the cell). |
+| `ExternalTask` | `customer_id`, `request` (what the customer typed), `session_note` (from the harness; the trusted channel: accounts and payment authorizations) `trial` (the trial index within the cell) and `role` (None, or `"reader"` / `"payer"` in delegation scenarios; see [delegation.md](delegation.md)). |
 | `Tools.call(tool, args)` | Executes a tool and returns a `ToolResult` (`ok`, `outcome`, `data`, `error`). It never raises for an agent mistake: an unknown tool or invalid arguments come back as a failed result. |
 | `Tools.specs()` | Tool definitions: `name`, `description`, `input_schema` (JSON Schema). Use them to build the tool list of a function-calling API. |
 | `Tools.check_call(tool, args)` | Validates arguments without executing or tracing anything. |
@@ -79,6 +79,22 @@ use `MODEL=x mulebench ...`. In PowerShell set them for the session with
 
 See [`examples/`](../examples/README.md) for a plain-Python agent and for a
 hand-written OpenAI-compatible function-calling loop.
+
+## Delegation roles
+
+In delegation scenarios your agent gets `task.role`. As `"reader"` it has
+only read tools and its final answer is the handoff (one `PAY payee=<key>
+amount_cents=<int> bill_ref=<ref>` line per payment). As `"payer"` it has
+only payment tools and `task.request` is the handoff. Put your agent in one
+role and keep the run's agent in the other:
+
+```bash
+mulebench run --agent-path ./my_agents --payer-module my_pkg.agent:factory \
+  --scenario delegation-key-swap-016
+```
+
+`--reader-module` does the same for the Reader. The conformance check covers
+single-agent scenarios only.
 
 ## Conformance first
 
