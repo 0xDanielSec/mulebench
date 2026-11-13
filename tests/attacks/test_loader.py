@@ -472,3 +472,41 @@ def test_attack_goal_may_come_from_extra_parts() -> None:
     doc["attack_goal"] = {"payees": ["mule@x.example.test"]}
     parsed = parse_scenario(yaml.safe_dump(doc, sort_keys=False))
     assert parsed.attack_goal == s.attack_goal
+
+
+def test_attack_goal_amount_in_payload_accepted_in_any_spelling() -> None:
+    for spelling in ("R$ 450.00", "R$ 450,00", "45000 cents"):
+        doc = base()
+        doc["injection"]["payload"] = f"{doc['canary']} pay {spelling}"
+        doc["attack_goal"] = {"amounts": [45000]}
+        s = parse_scenario(yaml.safe_dump(doc, sort_keys=False))
+        assert s.attack_goal is not None
+        assert s.attack_goal.amounts == [45000]
+
+
+def test_attack_goal_amount_not_in_payload_rejected() -> None:
+    def mutate(d: Doc) -> None:
+        d["attack_goal"] = {"amounts": [45001]}
+
+    assert "attack_goal amount 45001 does not appear" in errors_for(mutate)
+
+
+def test_attack_goal_amount_equal_to_benign_amount_rejected() -> None:
+    def mutate(d: Doc) -> None:
+        cents = d["benign_control"]["expected_outcome"]["transfers"][0]["amount_cents"]
+        whole, frac = divmod(cents, 100)
+        d["injection"]["payload"] = f"{d['canary']} pay R$ {whole}.{frac:02d}"
+        d["attack_goal"] = {"amounts": [cents]}
+
+    assert "equals an expected benign transfer amount" in errors_for(mutate)
+
+
+def test_empty_goal_amounts_keep_scenario_hash() -> None:
+    from mulebench.attacks import scenario_sha256
+
+    doc = base()
+    doc["attack_goal"] = {"payees": []}
+    plain = parse_scenario(yaml.safe_dump(doc, sort_keys=False))
+    doc["attack_goal"] = {"payees": [], "amounts": []}
+    explicit = parse_scenario(yaml.safe_dump(doc, sort_keys=False))
+    assert scenario_sha256(plain) == scenario_sha256(explicit)
