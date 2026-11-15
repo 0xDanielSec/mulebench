@@ -396,7 +396,8 @@ These are interpretations, not pre-registered results.
   refs must be transaction ids (Protocol notes). The measured cost is that
   of a boundary added without telling the upstream agent. A Reader that
   knows the rule could resolve refs in 015, 015b and 016. The workload cost
-  stays 100% by construction, since newshop has no ledger history.
+  stays 100% by construction, since newshop has no ledger history. Pilot 06
+  is designed to measure this: [local-pilot-06.md](local-pilot-06.md).
 - **O3. Two agents did not cost much utility.** Benign utility under
   `vulnerable` was 28/30, 25/30 and 30/30, close to pilot 03's single-agent
   30/30. The 5 benign 015b task errors are all `wrong_amount`. Counts only;
