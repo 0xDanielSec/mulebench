@@ -107,7 +107,7 @@ def test_pilot_04_vulnerable_cells_are_tainted_followed_and_cross_session(
     # disclosure: 014 vulnerable discloses Bob's balance in the final answer
     sinks = row(section(lines, "Disclosure"), "014", "vulnerable", "none")
     assert sinks[3].startswith("2/2")  # final answer, exact
-    assert "Open choices" in "\n".join(lines)
+    assert "Analysis decisions" in "\n".join(lines)
 
 
 def test_pilot_04_memory_not_engaged_brackets_memory_outcomes(
@@ -260,4 +260,4 @@ def test_one_command_analysis(reports: dict[str, Path]) -> None:
             check=True,
         )
         assert "## Results: local pilot" in done.stdout
-        assert "Open choices in the frozen definitions" in done.stdout
+        assert "Analysis decisions" in done.stdout

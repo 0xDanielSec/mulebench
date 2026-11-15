@@ -36,6 +36,15 @@ PILOTS: dict[str, list[str]] = {
     ],
     "docs/experiments/local-pilot-02.md": ["pilot-02-qwen3-14b-8k.json"],
     "docs/experiments/local-pilot-03.md": ["pilot-03-qwen3-14b-8k.json"],
+    "docs/experiments/local-pilot-04.md": ["pilot-04-qwen3-14b-8k.json"],
+    "docs/experiments/local-pilot-05.md": [
+        "pilot-05-qwen3-14b-8k.json",
+        "pilot-05-qwen3-14b-8k-workload.json",
+    ],
+}
+PILOT_04_05_DOCS = {
+    "docs/experiments/local-pilot-04.md": "04",
+    "docs/experiments/local-pilot-05.md": "05",
 }
 PILOT_02_DOC = "docs/experiments/local-pilot-02.md"
 PILOT_03_DOC = "docs/experiments/local-pilot-03.md"
@@ -674,11 +683,12 @@ def render_pilot_03(report: dict[str, Any], file_name: str) -> list[str]:
 
 # --------------------------------------------------------------- pilots 04/05
 #
-# Computed from a run report given on the command line (the pilots have not
-# run yet, so nothing is committed under docs/experiments/data/). Each
-# quantity follows the frozen "Analysis rules" of local-pilot-04.md and
-# local-pilot-05.md; where a rule left a choice open, the choice is named in
-# AMBIGUITIES_04 / AMBIGUITIES_05 and printed with the results.
+# Computed from the committed reports under docs/experiments/data/ (or from
+# reports given on the command line). Each quantity follows the frozen
+# "Analysis rules" of local-pilot-04.md and local-pilot-05.md; where a rule
+# left a choice open, the choice is named in AMBIGUITIES_04 / AMBIGUITIES_05
+# and printed with the results. The author confirmed all of them before the
+# Results were committed, so they are printed as analysis decisions.
 
 MEMORY_TOOLS = ("save_note", "read_notes")
 GOAL_REASONS = ("goal_payee", "goal_amount")
@@ -854,7 +864,11 @@ def cap_line(raw: dict[tuple[str, str, str, str], dict[str, Any]]) -> str:
 
 def ambiguity_lines(items: tuple[str, ...]) -> list[str]:
     return (
-        ["**Open choices in the frozen definitions** (to be confirmed):", ""]
+        [
+            "**Analysis decisions.** Open choices in the frozen definitions, confirmed "
+            "by the author as implemented before the Results were committed:",
+            "",
+        ]
         + [f"{i}. {text}" for i, text in enumerate(items, start=1)]
         + [""]
     )
@@ -1118,9 +1132,17 @@ def render_pilot_05(
     return lines
 
 
+def source_name(path: Path) -> Path:
+    """The path as shown in Source lines: repo-relative when inside the repo."""
+    try:
+        return path.resolve().relative_to(ROOT)
+    except ValueError:
+        return path
+
+
 def analyse(pilot: str, paths: list[Path]) -> list[str]:
     """The results block of pilot 04 or 05 from run reports (any order)."""
-    reports = [(p, json.loads(p.read_text(encoding="utf-8"))) for p in paths]
+    reports = [(source_name(p), json.loads(p.read_text(encoding="utf-8"))) for p in paths]
     runs = [(p, r) for p, r in reports if r.get("kind") != "workload-run"]
     workloads = [(p, r) for p, r in reports if r.get("kind") == "workload-run"]
     if pilot == "04":
@@ -1142,6 +1164,13 @@ def analyse(pilot: str, paths: list[Path]) -> list[str]:
 
 
 def render(doc: str) -> str:
+    if doc in PILOT_04_05_DOCS:
+        paths = [DATA / name for name in PILOTS[doc]]
+        body = analyse(PILOT_04_05_DOCS[doc], paths)
+        # the document already has its "## Results" heading
+        if body and body[0].startswith("## Results"):
+            body = body[1:]
+        return "\n".join([START, *body, END])
     if doc == PILOT_03_DOC:
         lines3: list[str] = [
             START,

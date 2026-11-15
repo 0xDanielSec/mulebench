@@ -16,7 +16,8 @@ from mulebench.viewer.site import ViewerInputError, build_site, load_any, write_
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "docs" / "experiments" / "data"
-PILOTS = sorted(DATA.glob("pilot-*.json"))
+# run reports only: the viewer does not read workload reports (`mulebench workloads`)
+PILOTS = sorted(p for p in DATA.glob("pilot-*.json") if not p.stem.endswith("-workload"))
 HREF = re.compile(r'href="([^"]*)"')
 ID = re.compile(r'id="([^"]*)"')
 
