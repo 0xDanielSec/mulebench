@@ -1423,6 +1423,36 @@
           ],
           "default": null,
           "title": "Tool Schema Sha256"
+        },
+        "role_prompts": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role Prompts"
+        },
+        "role_prompt_sha256": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role Prompt Sha256"
         }
       },
       "required": [

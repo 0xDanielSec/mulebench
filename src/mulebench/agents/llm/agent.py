@@ -38,7 +38,7 @@ from mulebench.agents.llm.model import (
     Turn,
 )
 from mulebench.agents.llm.pricing import cost_usd
-from mulebench.agents.llm.prompts import PROMPTS, system_prompt
+from mulebench.agents.llm.prompts import DEFAULT_ROLE_PROMPT, PROMPTS, system_prompt
 from mulebench.agents.llm.seeds import SEED_DERIVATION, derive_seed
 from mulebench.agents.llm.text_calls import text_tool_calls
 from mulebench.tools.client import ToolClient, ToolResult
@@ -87,8 +87,12 @@ class LLMAgent:
         temperature: float | None = None,
         seed: int | None = None,
         arg_coercion: ArgCoercion = DEFAULT_ARG_COERCION,
+        role_prompts: dict[str, str] | None = None,
     ) -> None:
         self.chat = chat
+        # Delegation role -> role prompt variant (prompts.ROLE_PROMPT_VARIANTS);
+        # roles not named use "default".
+        self.role_prompts = dict(role_prompts or {})
         self.model = model
         self.effort = effort
         self.max_tokens = max_tokens
@@ -116,6 +120,8 @@ class LLMAgent:
         if self.seed is not None:
             params["seed"] = self.seed
             params["seed_derivation"] = SEED_DERIVATION
+        if self.role_prompts:
+            params["role_prompts"] = dict(sorted(self.role_prompts.items()))
         return params
 
     def memory_extractor(self) -> LLMExtractor:
@@ -166,7 +172,13 @@ class LLMAgent:
             self.meter.check()
             request = ChatRequest(
                 model=self.model,
-                system=system_prompt(task.prompt_variant, task.role),
+                system=system_prompt(
+                    task.prompt_variant,
+                    task.role,
+                    self.role_prompts.get(task.role, DEFAULT_ROLE_PROMPT)
+                    if task.role is not None
+                    else DEFAULT_ROLE_PROMPT,
+                ),
                 turns=tuple(turns),
                 tools=tool_defs,
                 max_tokens=self.max_tokens,

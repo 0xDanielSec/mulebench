@@ -266,6 +266,13 @@ def _add_llm_args(parser: argparse.ArgumentParser) -> None:
         default="baseline,data_not_instructions",
         help="comma-separated prompt variants",
     )
+    llm.add_argument(
+        "--role-prompt",
+        action="append",
+        dest="role_prompts",
+        metavar="ROLE=VARIANT",
+        help="delegation role prompt variant (repeatable), e.g. reader=cites_tx; default: default",
+    )
     llm.add_argument("--cassettes", type=Path, help="cassette directory (replay by default)")
     llm.add_argument("--record", action="store_true", help="make live calls and record them")
     llm.add_argument("--max-cost-usd", type=float, help="whole-run cost cap")
@@ -715,7 +722,12 @@ def _build_llm(
         from mulebench.agents.llm import CostMeter, LLMAgent
         from mulebench.agents.llm.anthropic_model import AnthropicChatModel
         from mulebench.agents.llm.pricing import PRICING_AS_OF, price_for
-        from mulebench.agents.llm.prompts import PROMPTS, prompt_sha256
+        from mulebench.agents.llm.prompts import (
+            PROMPTS,
+            parse_role_prompts,
+            prompt_sha256,
+            role_prompt_hashes,
+        )
         from mulebench.agents.llm.transport import (
             CassetteTransport,
             LiveCallsDisabled,
@@ -728,6 +740,10 @@ def _build_llm(
     unknown = [p for p in prompts if p not in PROMPTS]
     if unknown or not prompts:
         return _error(f"unknown prompt variants {unknown}; known: {sorted(PROMPTS)}")
+    try:
+        role_prompts = parse_role_prompts(args.role_prompts)
+    except ValueError as exc:
+        return _error(str(exc))
     if args.cassettes is None:
         return _error("--agent llm needs --cassettes DIR (replay, or --record into it)")
     price = price_for(args.model)
@@ -751,6 +767,7 @@ def _build_llm(
         max_steps=args.max_steps,
         meter=CostMeter(args.max_cost_usd),
         arg_coercion=args.arg_coercion,
+        role_prompts=role_prompts,
     )
     llm_config = LLMConfig(
         provider="anthropic",
@@ -761,6 +778,8 @@ def _build_llm(
         prompt_sha256={p: prompt_sha256(p) for p in prompts},
         arg_coercion=args.arg_coercion,
         tool_schema_sha256=tool_schema_sha256(),
+        role_prompts=role_prompts or None,
+        role_prompt_sha256=role_prompt_hashes(prompts, role_prompts),
     )
     pricing = PricingInfo(
         as_of=PRICING_AS_OF,
@@ -794,7 +813,12 @@ def _build_local(
             check_base_url,
         )
         from mulebench.agents.llm.openai_compat import PROVIDER, OpenAICompatChatModel
-        from mulebench.agents.llm.prompts import PROMPTS, prompt_sha256
+        from mulebench.agents.llm.prompts import (
+            PROMPTS,
+            parse_role_prompts,
+            prompt_sha256,
+            role_prompt_hashes,
+        )
         from mulebench.agents.llm.seeds import SEED_DERIVATION
         from mulebench.agents.llm.transport import CassetteTransport, LiveCallsDisabled, Transport
     except ImportError:
@@ -806,6 +830,10 @@ def _build_local(
     unknown = [p for p in prompts if p not in PROMPTS]
     if unknown or not prompts:
         return _error(f"unknown prompt variants {unknown}; known: {sorted(PROMPTS)}")
+    try:
+        role_prompts = parse_role_prompts(args.role_prompts)
+    except ValueError as exc:
+        return _error(str(exc))
     if args.cassettes is None:
         return _error("--agent llm needs --cassettes DIR (replay, or --record into it)")
     try:
@@ -847,6 +875,7 @@ def _build_local(
         temperature=temperature,
         seed=seed,
         arg_coercion=args.arg_coercion,
+        role_prompts=role_prompts,
     )
     llm_config = LLMConfig(
         provider=PROVIDER,
@@ -861,6 +890,8 @@ def _build_local(
         seed_derivation=SEED_DERIVATION,
         arg_coercion=args.arg_coercion,
         tool_schema_sha256=tool_schema_sha256(),
+        role_prompts=role_prompts or None,
+        role_prompt_sha256=role_prompt_hashes(prompts, role_prompts),
     )
     pricing = PricingInfo(as_of="n/a", note="local model: not priced", per_mtok={})
     return agent, llm_config, pricing, prompts

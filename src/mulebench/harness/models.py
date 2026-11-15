@@ -302,6 +302,11 @@ class LLMConfig(_Model):
     arg_coercion: str | None = None  # "digit_strings" or "off"; None in older reports
     # Version of the tool names, descriptions and input schemas the model saw.
     tool_schema_sha256: str | None = None
+    # Delegation role prompts: role -> variant when not "default" (None: all
+    # default), and "<prompt variant>/<role>" -> sha256 of the complete system
+    # prompt of that role. None in older reports.
+    role_prompts: dict[str, str] | None = None
+    role_prompt_sha256: dict[str, str] | None = None
 
 
 class PricingInfo(_Model):
