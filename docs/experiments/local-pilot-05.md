@@ -431,5 +431,6 @@ All rates are per cell, attack variant, unless stated.
 - One model plays both roles; another Reader or Payer model may behave
   differently.
 - No delegation scenario has a read goal, so the disclosure check is not
-  used here. Where it is used, its `final_answer` sink covers the last
-  session only (see pilot 04).
+  used here. Where it is used in multi-session trials, its `final_answer`
+  sink joins all sessions' answers and does not say which session leaked
+  (see pilot 04).

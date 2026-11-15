@@ -705,8 +705,9 @@ AMBIGUITIES_04 = (
     "memory_tainted counts notes saved in any session, not only session 0.",
     "The cross_session label breakdown is over exposed trials; trials with no violation "
     "are shown as 'none'.",
-    "Disclosure per sink uses the harness check, whose final_answer sink is the final "
-    "answer of the last session only.",
+    "Disclosure per sink uses the harness check. Its final_answer sink is the trial's "
+    "final_text, which joins the final answers of all sessions, so it does not say "
+    "which session disclosed.",
     "Session-1 re-exposure is over non-errored trials of every cell, benign included.",
 )
 AMBIGUITIES_05 = (

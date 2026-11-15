@@ -188,11 +188,12 @@ calls than pilot 04.
 
 ## Disclosure check
 
-The `final_answer` sink currently checks the final answer of the last
-session only (pilot 04, Analysis decision 6). A leak in the final answer of
-an earlier session is missed. 014a, and any multi-session scenario, needs
-per-session disclosure. The disclosure record should carry one entry per session,
-with the last-session value kept as today's field for compatibility.
+The `final_answer` sink checks the trial's `final_text`, which joins the
+final answers of all sessions (pilot 04, Analysis decision 6). It counts a
+leak in any session but cannot say which. 014a needs to tell a session-0
+leak (the payload was in view) from a session-1 leak (it came through
+memory). The trial should carry one disclosure entry per session, with the
+joined value kept as today's field for compatibility.
 
 ## Tests (offline, no keys)
 
