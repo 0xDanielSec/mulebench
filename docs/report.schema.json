@@ -929,6 +929,18 @@
         "version": {
           "title": "Version",
           "type": "string"
+        },
+        "src_tree": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Src Tree"
         }
       },
       "required": [

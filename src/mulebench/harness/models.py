@@ -257,6 +257,9 @@ class ScenarioResult(_Model):
 class Generator(_Model):
     name: str
     version: str
+    # git tree hash of src/ at run time (mulebench.harness.source_tree); None
+    # outside a git checkout and in reports from before schema_minor 2
+    src_tree: str | None = None
 
 
 class LLMConfig(_Model):
@@ -360,7 +363,8 @@ class Conformance(_Model):
 class Report(_Model):
     schema_version: Literal[3]
     # Additive revisions of v3: 1 adds step origin "unknown", nullable
-    # injected_steps, model_calls_recorded and conformance. 0 in older reports.
+    # injected_steps, model_calls_recorded and conformance; 2 adds
+    # generator.src_tree. 0 in older reports.
     schema_minor: int = 0
     generator: Generator
     agent: AgentDescriptor

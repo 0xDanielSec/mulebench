@@ -53,7 +53,7 @@ from mulebench.attacks.schema import Scenario
 from mulebench.harness import NO_PROMPT, UnsupportedInvariant, run_all
 from mulebench.harness.conformance import DEFAULT_MIN_BENIGN_PASS
 from mulebench.harness.conformance import DEFAULT_TRIALS as DEFAULT_CHECK_TRIALS
-from mulebench.harness.models import Conformance, LLMConfig, PricingInfo
+from mulebench.harness.models import Conformance, Generator, LLMConfig, PricingInfo
 from mulebench.harness.presets import DEFAULT_PRESETS, UnknownPreset, preset_guard_names
 from mulebench.reports import build_report, render_table, schema_to_json, write_report
 from mulebench.tools.client import tool_schema_sha256
@@ -128,6 +128,7 @@ def _parser() -> argparse.ArgumentParser:
         "<out>.checkpoint.jsonl)",
     )
     run.add_argument("--resume", action="store_true", help="skip trials already in the checkpoint")
+    _add_expect_harness(run)
     run.add_argument(
         "--preset",
         action="append",
@@ -220,6 +221,7 @@ def _parser() -> argparse.ArgumentParser:
         "--checkpoint", type=Path, help="per-trial checkpoint (default <out>.checkpoint.jsonl)"
     )
     wl.add_argument("--resume", action="store_true", help="skip trials in the checkpoint")
+    _add_expect_harness(wl)
     _add_llm_args(wl)
 
     doctor = sub.add_parser(
@@ -303,6 +305,31 @@ def _view(reports: Sequence[Path], out: Path, force: bool) -> int:
     return 0
 
 
+def _add_expect_harness(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--expect-harness",
+        metavar="SHA",
+        help="refuse to start unless src/ on disk equals src/ of this commit (git tree "
+        "hash); for frozen pilots, see CONTRIBUTING.md",
+    )
+
+
+def _harness_tree(expect: str | None) -> str | int | None:
+    """The src/ tree hash for the report; an exit code when --expect-harness fails."""
+    from mulebench.harness.source_tree import HarnessMismatch, check_harness, src_tree
+
+    if expect is None:
+        return src_tree()
+    try:
+        return check_harness(expect)
+    except HarnessMismatch as exc:
+        return _error(f"--expect-harness: {exc}")
+
+
+def _stamp(generator: Generator, tree: str | None) -> Generator:
+    return generator.model_copy(update={"src_tree": tree})
+
+
 def _add_server_args(group: argparse._ActionsContainer) -> None:
     group.add_argument("--base-url", help=f"openai-compatible base URL (default {LOCAL_URL})")
     group.add_argument(
@@ -367,6 +394,9 @@ def _workloads(args: argparse.Namespace) -> int:
         return _error(str(exc))
     if args.trials < 1:
         return _error("--trials must be >= 1")
+    tree = _harness_tree(args.expect_harness)
+    if isinstance(tree, int):
+        return tree
     llm_config: LLMConfig | None = None
     agent: Agent
     if args.agent == "scripted":
@@ -406,6 +436,7 @@ def _workloads(args: argparse.Namespace) -> int:
         )
     finally:
         checkpoint.close()
+    report = report.model_copy(update={"generator": _stamp(report.generator, tree)})
     args.out.write_bytes(report.model_dump_json(indent=2).encode("utf-8") + b"\n")
     print("\n".join(summary_lines(report)))
     if report.run_status != "complete":
@@ -535,6 +566,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             preset_guard_names(p)
     except UnknownPreset as exc:
         return _error(str(exc))
+    tree = _harness_tree(args.expect_harness)
+    if isinstance(tree, int):
+        return tree
 
     conformance: Conformance | None = None
     llm_config: LLMConfig | None = None
@@ -646,6 +680,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         presets=presets,
         conformance=conformance,
     )
+    report = report.model_copy(update={"generator": _stamp(report.generator, tree)})
     if args.out:
         write_report(report, args.out)
     print(render_table(report))

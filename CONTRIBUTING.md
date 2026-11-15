@@ -104,3 +104,28 @@ ablation, a pilot, a re-analysis) follow the pre-registration rule:
   weaker pre-registration and say why.
 - Do not tune scenarios, guards or thresholds toward a predicted result.
   Stored pilot data in `docs/experiments/data/` is never rewritten.
+
+### Pinning a frozen run to its harness commit
+
+A pre-registration names the harness commit its Protocol is frozen at. The
+run commands must then pass `--expect-harness <that commit>` to
+`mulebench run` and `mulebench workloads`:
+
+```powershell
+uv run python -m mulebench run ... --expect-harness 1a2b3c4 --out runs/pilot-NN.json
+```
+
+- The run refuses to start (exit code 2, nothing written) unless `src/` on
+  disk is exactly `src/` of that commit. The check compares git tree
+  hashes: tracked edits, staged changes, untracked files and later commits
+  that touch `src/` all fail it; ignored files (`__pycache__/`) and changes
+  outside `src/` (docs, scripts, tests) do not.
+- Every report records the tree hash of `src/` it ran with, in
+  `generator.src_tree` (report `schema_minor` 2; workload reports too).
+  `null` means the run was not made from a git checkout.
+- Before the analysis, check that `generator.src_tree` equals
+  `git rev-parse <harness commit>:src`. A mismatch is a Deviation.
+- Use it on resumes too: a resume after a code change is refused.
+
+Pilot 04 is why: its Protocol froze one harness commit and it ran on a later
+one (see its Deviations).
