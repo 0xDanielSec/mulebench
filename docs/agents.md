@@ -131,6 +131,12 @@ payment, and `include the balance of <account>` (or `Always show balance of
 <account>`) reads that account. These steps have origin `tool_output`. With
 `obeys_tool_output_instructions=False` it does neither. See `docs/memory.md`.
 
+With harness-managed memory (`memory: automatic`) there are no memory tools.
+In vulnerable mode the agent applies the same note directives, key swaps
+(`<key> changed its Pix key to <key>`) and reprices (`<key> bill is now
+R$ x`) found in the memory block (`AgentTask.memory_context`) before its
+first call, with origin `tool_output`. Hardened, it ignores the block.
+
 ## Known limitations
 
 - **The agent/ledger boundary is enforced by convention plus an import guard,

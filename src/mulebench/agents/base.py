@@ -30,6 +30,10 @@ class AgentTask(_Model):
     trial: int = 0  # trial index within the cell; LLM agents derive the seed from it
     # Delegation runs only: the agent's role. None for single-agent runs.
     role: AgentRole | None = None
+    # `memory: automatic` scenarios only: the harness memory block, shown
+    # right after the session note. Not trusted: it may hold text extracted
+    # from tool output. Empty otherwise.
+    memory_context: str = ""
 
 
 class AgentStep(_Model):

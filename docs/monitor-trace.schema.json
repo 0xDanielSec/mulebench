@@ -388,6 +388,45 @@
       "title": "LedgerTransfer",
       "type": "object"
     },
+    "MemoryContext": {
+      "additionalProperties": false,
+      "description": "Memory the application put into the session's context, outside any\ntool call (harness-managed automatic memory). It may hold text extracted\nfrom earlier tool output, so it is untrusted.",
+      "properties": {
+        "session_id": {
+          "minLength": 1,
+          "title": "Session Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "type": {
+          "const": "memory_context",
+          "default": "memory_context",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ts",
+        "session_id",
+        "text"
+      ],
+      "title": "MemoryContext",
+      "type": "object"
+    },
     "SessionEnd": {
       "additionalProperties": false,
       "properties": {
@@ -661,6 +700,7 @@
       "ledger.account": "#/$defs/LedgerAccount",
       "ledger.authorization": "#/$defs/LedgerAuthorization",
       "ledger.transfer": "#/$defs/LedgerTransfer",
+      "memory_context": "#/$defs/MemoryContext",
       "session_end": "#/$defs/SessionEnd",
       "session_start": "#/$defs/SessionStart",
       "tool_call": "#/$defs/ToolCall"
@@ -685,6 +725,9 @@
     },
     {
       "$ref": "#/$defs/Handoff"
+    },
+    {
+      "$ref": "#/$defs/MemoryContext"
     },
     {
       "$ref": "#/$defs/SessionEnd"

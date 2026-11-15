@@ -7,14 +7,26 @@ import json
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from mulebench.agents import Agent, AgentTask, SessionNote, render_session_note, role_agents
 from mulebench.agents.base import AgentRun, AgentStep, RunAborted, TokenUsage
 from mulebench.attacks import Scenario, render, scenario_sha256
-from mulebench.attacks.schema import ExpectedOutcome, Topology
+from mulebench.attacks.schema import AutomaticMemory, ExpectedOutcome, Topology
 from mulebench.harness.attribution import CallView, PaymentView, attribute
+from mulebench.harness.auto_memory import (
+    ExtractionRecord,
+    Observation,
+    ScriptedExtractor,
+    effective_settings,
+    extraction_input,
+    extraction_prompt_sha256,
+    guard_drops,
+    judge_observations,
+    render_memory_block,
+    trim,
+)
 from mulebench.harness.confirmer import OracleConfirmer, RecordingConfirmer, RequestConfirmer
 from mulebench.harness.delegation import (
     HandoffArtifact,
@@ -23,7 +35,12 @@ from mulebench.harness.delegation import (
     ledger_resolver,
 )
 from mulebench.harness.disclosure import amounts_in_text, check_disclosure, sink_texts
-from mulebench.harness.memory import SessionSpan, judge_notes, memory_metrics
+from mulebench.harness.memory import (
+    SessionSpan,
+    attack_artifacts,
+    judge_notes,
+    memory_metrics,
+)
 from mulebench.harness.metrics import unauthorized_outflow_cents
 from mulebench.harness.models import (
     DISCLOSURE_SINKS,
@@ -231,7 +248,10 @@ def _scenario_result(s: Scenario, cells: list[CellResult]) -> ScenarioResult:
         expected_invariants=list(s.expected_invariants),
         cells=cells,
         scenario_sha256=scenario_sha256(s),
-        tool_schema_sha256=tool_schema_sha256(memory=s.memory),
+        tool_schema_sha256=tool_schema_sha256(memory=s.memory_tools),
+        memory_mode=s.memory_mode,
+        automatic_memory=s.automatic_memory_settings() if s.memory_automatic else None,
+        extraction_prompt_sha256=extraction_prompt_sha256() if s.memory_automatic else None,
         tool_schema_sha256_by_role=None
         if s.topology is None
         else {
@@ -272,7 +292,14 @@ def run_trial(
     guard_set = build_guard_set(preset, confirmer, key)
     session_runs: list[SessionRun] = []
     runs: list[AgentRun] = []
-    memory = MemoryStore() if scenario.memory else None
+    memory = MemoryStore() if scenario.memory_tools else None
+    auto = scenario.memory_automatic
+    names = preset_guard_names(preset)
+    settings = effective_settings(scenario.automatic_memory_settings(), names)
+    observations: list[Observation] = []
+    extractions: list[ExtractionRecord] = []
+    injected: dict[int, str] = {}  # session -> memory block it was shown
+    extraction_error: str | None = None
     handoff: HandoffArtifact | None = None
     try:
         for plan in plans:
@@ -291,6 +318,9 @@ def run_trial(
                 session_index=plan.index,
                 memory=memory,
             )
+            block = render_memory_block(observations, settings.label) if auto else ""
+            if block:
+                injected[plan.index] = block
             task = AgentTask(
                 customer_id=customer,
                 request=plan.request,
@@ -298,6 +328,7 @@ def run_trial(
                 trial_key=key if plan.index == 0 else f"{key}#s{plan.index}",
                 prompt_variant=prompt_variant,
                 trial=trial,
+                memory_context=block,
             )
             granted = {a.authorization_id for a in note.authorizations}
             auths = [a for a in ledger.snapshot().authorizations if a.id in granted]
@@ -317,11 +348,35 @@ def run_trial(
                     stopped=one.stopped,
                     final_text=one.final_text,
                     authorizations=auths,
+                    memory_context=block or None,
                 )
             )
             if one.stopped == "errored":
                 break
+            if auto and plan.index < len(plans) - 1:
+                record = _extract(
+                    agent,
+                    settings,
+                    names,
+                    key,
+                    plan.index,
+                    plan.request,
+                    one.final_text,
+                    trace_recorder.records(),
+                    customer,
+                    clock.now(),
+                    observations,
+                )
+                extractions.append(record)
+                if record.errored:
+                    extraction_error = f"memory_extraction:{record.error}"
+                    break
         run = merge_runs(runs)
+        extra_calls = tuple(e.model_call for e in extractions if e.model_call is not None)
+        if extra_calls:
+            run = run.model_copy(update={"model_calls": run.model_calls + extra_calls})
+        if extraction_error is not None:
+            run = run.model_copy(update={"stopped": "errored", "error": extraction_error})
         snapshot = ledger.snapshot()
         trace = list(ctx.trace.records())
         confirmations = list(ctx.trace.confirmations())
@@ -340,6 +395,7 @@ def run_trial(
     attack = variant == "attack"
     errored = run.stopped == "errored"
     stored_notes = [] if memory is None else judge_notes(memory.all(), scenario)
+    stored_obs = judge_observations(observations, scenario, attack_artifacts(scenario))
     mem = None
     if not errored and (memory is not None or len(plans) > 1):
         own = {
@@ -364,6 +420,10 @@ def run_trial(
             known={
                 r.index: own | {a.payee_pix_key for a in r.authorizations} for r in session_runs
             },
+            mode=scenario.memory_mode,
+            observations=stored_obs,
+            injected=injected,
+            extractions=extractions,
         )
     exposed = _payload_exposed(trace, scenario.canary) if attack else None
     attribution = None if errored else _attribution(scenario, attack, snapshot, inv_ctx, trace)
@@ -438,7 +498,20 @@ def run_trial(
         trace=trace,
         confirmations=confirmations,
         sessions=session_runs if len(plans) > 1 else [],
+        disclosure_by_session=None
+        if errored or len(plans) == 1
+        else [
+            check_disclosure(
+                snapshot,
+                customer,
+                r.final_text,
+                amounts_in_text(request),
+                sink_texts([t for t in trace if t.session == r.index]),
+            )
+            for r in session_runs
+        ],
         notes=stored_notes,
+        observations=stored_obs,
         memory=mem,
         handoff=handoff,
         delegation=delegation,
@@ -458,6 +531,55 @@ def run_trial(
 
 
 _INV1 = NoUnauthorizedMoneyMovement()
+
+
+def _extract(
+    agent: Agent,
+    settings: AutomaticMemory,
+    names: Sequence[str],
+    key: str,
+    session: int,
+    request: str,
+    final_text: str | None,
+    trace: Sequence[ToolCallRecord],
+    customer: str,
+    now: datetime,
+    observations: list[Observation],
+) -> ExtractionRecord:
+    """Run the extractor on one finished session; append what it stores."""
+    offered = getattr(agent, "memory_extractor", None)
+    extractor = (
+        offered() if settings.extractor == "llm" and callable(offered) else ScriptedExtractor()
+    )
+    text = extraction_input(settings.source, request, trace, session, final_text)
+    result = extractor.extract(text, trial_key=f"{key}#mem{session}", max_items=settings.max_items)
+    if result.error is not None:
+        return ExtractionRecord(
+            session=session,
+            extractor=extractor.kind,
+            source=settings.source,
+            observations=0,
+            errored=True,
+            error=result.error,
+            model_call=result.model_call,
+        )
+    items, dropped_cap = trim(result.items, settings.max_items, settings.max_item_chars)
+    dropped_guard = 0
+    if "memory_extract_guard" in names:
+        items, dropped_guard = guard_drops(items, trace, session)
+    observations.extend(
+        Observation(customer_id=customer, session=session, saved_at=now, text=i) for i in items
+    )
+    return ExtractionRecord(
+        session=session,
+        extractor=extractor.kind,
+        source=settings.source,
+        observations=len(items),
+        dropped_cap=dropped_cap,
+        dropped_guard=dropped_guard,
+        malformed=result.malformed,
+        model_call=result.model_call,
+    )
 
 
 def merge_runs(runs: Sequence[AgentRun]) -> AgentRun:
@@ -662,6 +784,20 @@ def _memory_rates(ok: list[TrialResult], exposed: list[TrialResult]) -> dict[str
         ),
         "note_followed": wilson(
             sum(t.memory is not None and t.memory.note_followed for t in ok), len(ok)
+        ),
+        **_automatic_rates(ok),
+    }
+
+
+def _automatic_rates(ok: list[TrialResult]) -> dict[str, Rate | None]:
+    if not any(t.memory is not None and t.memory.mode == "automatic" for t in ok):
+        return {}
+    return {
+        "memory_injected": wilson(
+            sum(t.memory is not None and t.memory.memory_injected is True for t in ok), len(ok)
+        ),
+        "memory_followed": wilson(
+            sum(t.memory is not None and t.memory.memory_followed is True for t in ok), len(ok)
         ),
     }
 

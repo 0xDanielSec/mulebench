@@ -12,6 +12,12 @@ were listed. Named presets:
                 structured_handoff, payer_payee_allowlist and payer_sees_request
                 (delegation scenarios; for ablation)
 
+`memory_source_customer`, `memory_untrusted_label` and `memory_extract_guard`
+are harness switches for `memory: automatic` scenarios (see
+mulebench.harness.auto_memory): the extractor reads the customer's messages
+only; the memory block is always labelled untrusted; extracted observations
+that repeat untrusted tool text are dropped. They do nothing elsewhere.
+
 `oracle_confirmation` installs human confirmation for every transfer, which
 the runner answers with a perfect-oracle customer (an upper bound; see
 mulebench.harness.confirmer.OracleConfirmer).
@@ -75,6 +81,15 @@ OPTIONAL_GUARDS: tuple[str, ...] = (
     "payer_sees_request",
     "provenance_bound_handoff",
     "oracle_confirmation",
+    "memory_source_customer",
+    "memory_untrusted_label",
+    "memory_extract_guard",
+)
+# Harness switches for `memory: automatic` scenarios (no effect elsewhere).
+AUTOMATIC_MEMORY_DEFENCES: tuple[str, ...] = (
+    "memory_source_customer",
+    "memory_untrusted_label",
+    "memory_extract_guard",
 )
 DELEGATION_DEFENCES: tuple[str, ...] = (
     "structured_handoff",

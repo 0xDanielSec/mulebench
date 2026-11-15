@@ -44,6 +44,7 @@ follow Sao Paulo time).
 | `confirmation` | `session_id`, `seq`, `customer_id`, `tool`, `args`, `approved` | the customer's answer to a confirmation request |
 | `final_answer` | `session_id`, `text` | the agent's final answer |
 | `handoff` | `session_id`, `seq`, `text` | a message from one agent to another (delegation: Reader to Payer); `seq` is the seq of the last tool call before it (0 if none). Agent-written, may carry injected content |
+| `memory_context` | `session_id`, `text` | memory the application put into the session's context outside any tool call (harness-managed automatic memory). May carry text extracted from earlier tool output, so it is untrusted. No rule reads it yet |
 | `session_end` | `session_id` | |
 | `ledger.account` | `account` (id, customer_id, pix_key, balance_cents, daily_limit_cents, status) | account state (upsert by id) |
 | `ledger.authorization` | `authorization` (id, customer_id, from_account_id, payee_pix_key, max_amount_cents, created_at) | customer consent for one transfer |

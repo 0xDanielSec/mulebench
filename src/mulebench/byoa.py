@@ -76,6 +76,9 @@ class ExternalTask:
     # handoff, PAY lines per docs/delegation.md) or "payer" (payment tools
     # only; `request` is the handoff). None in single-agent scenarios.
     role: str | None = None
+    # memory: automatic scenarios: the harness memory block for this session
+    # ("" otherwise). Not trusted: it may hold text extracted from tool output.
+    memory_context: str = ""
 
 
 @dataclass(frozen=True)
@@ -189,6 +192,7 @@ class ExternalAgentAdapter:
             session_note=task.session_note,
             trial=task.trial,
             role=task.role,
+            memory_context=task.memory_context,
         )
         try:
             reply = self.inner.run(external, facade)

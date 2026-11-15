@@ -27,9 +27,11 @@ def test_obedient_agent_is_conformant_on_all_builtin_controls() -> None:
     assert c.benign_pass.k == c.benign_pass.n == len(single)
     assert c.benign_pass.low is not None
     assert c.benign_pass.high is not None
-    # 11/11 has a Wilson lower bound below 80%: too few trials for a reliable verdict.
-    assert c.reliable is False
-    assert any("too small" in w for w in c.warnings)
+    # 17/17 has a Wilson lower bound just above 80% (81.6%): reliable, no warning.
+    # (Below about 16 controls, all-pass is still too few for a reliable verdict.)
+    assert c.benign_pass.low > 0.8
+    assert c.reliable is True
+    assert not any("too small" in w for w in c.warnings)
 
 
 def test_lazy_agent_fails_and_counts_per_scenario() -> None:

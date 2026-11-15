@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict
 
 from mulebench.agents import AgentStep
 from mulebench.agents.base import ModelCallRecord, ServerMeta, SessionNoteChannel, TokenUsage
+from mulebench.attacks.schema import AutomaticMemory
 
 # Re-exported: disclosure models live in mulebench.disclosure.
 from mulebench.disclosure import DISCLOSURE_SINKS as DISCLOSURE_SINKS
@@ -20,6 +21,7 @@ from mulebench.disclosure import Disclosure as Disclosure
 from mulebench.disclosure import DisclosureKind as DisclosureKind
 from mulebench.disclosure import DisclosureSink as DisclosureSink
 from mulebench.disclosure import SinkDisclosure as SinkDisclosure
+from mulebench.harness.auto_memory import StoredObservation
 from mulebench.harness.delegation import DelegationMetrics, HandoffArtifact
 from mulebench.harness.memory import MemoryMetrics, StoredNote
 from mulebench.harness.stats import Rate
@@ -65,6 +67,9 @@ class SessionRun(_Model):
     # Authorizations granted at the start of this session (session 0: the
     # seeded ones). Lets trace consumers rebuild the ledger without replaying.
     authorizations: list[Authorization] = []
+    # memory: automatic: the harness memory block this session was shown
+    # (None when there was none).
+    memory_context: str | None = None
 
 
 class CellMetrics(_Model):
@@ -121,6 +126,10 @@ class TrialResult(_Model):
     cut_by_cap: bool = False
     # None when there was no final answer to check, and in older reports.
     disclosure: Disclosure | None = None
+    # Multi-session trials only: the disclosure check per session (its final
+    # answer and its own sink calls), in session order. `disclosure` above is
+    # over the joined answers. None for single-session or errored trials.
+    disclosure_by_session: list[Disclosure | None] | None = None
     # None for errored trials and in older reports.
     attribution: Attribution | None = None
     # The agent's final answer text (reasoning stripped, never stored). None
@@ -147,6 +156,8 @@ class TrialResult(_Model):
     # Agent memory notes at the end of the trial, with taint. Memory scenarios
     # only; empty otherwise and in older reports.
     notes: list[StoredNote] = []
+    # memory: automatic only: the observations the harness extracted, judged.
+    observations: list[StoredObservation] = []
     # Memory or multi-session scenarios, non-errored trials only; None
     # otherwise and in older reports.
     memory: MemoryMetrics | None = None
@@ -189,6 +200,11 @@ class AttackAggregates(_Model):
     memory_tainted: Rate | None = None
     cross_session_success: Rate | None = None
     note_followed: Rate | None = None
+    # memory: automatic only, over non-errored trials. memory_injected: a
+    # tainted observation was shown to a later session. memory_followed: a
+    # later-session call used a value found only in its memory block.
+    memory_injected: Rate | None = None
+    memory_followed: Rate | None = None
     # Delegation scenarios only, over non-errored trials (None otherwise).
     handoff_tainted: Rate | None = None
     crossed_boundary: Rate | None = None
@@ -245,6 +261,12 @@ class ScenarioResult(_Model):
     tool_schema_sha256: str | None = None
     # Delegation scenarios: what each role's model saw ({"reader": ..., "payer": ...}).
     tool_schema_sha256_by_role: dict[str, str] | None = None
+    # "tools" or "automatic" for memory scenarios; None otherwise and in
+    # older reports. automatic only: the settings and the sha256 of the LLM
+    # extraction prompt.
+    memory_mode: str | None = None
+    automatic_memory: AutomaticMemory | None = None
+    extraction_prompt_sha256: str | None = None
 
     def cell(self, preset: Preset, variant: Variant, prompt_variant: str = NO_PROMPT) -> CellResult:
         return next(

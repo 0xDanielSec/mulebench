@@ -216,7 +216,7 @@ def test_account_arguments_are_checked() -> None:
 
 
 def test_builtin_memory_scenarios_report_memory_rates() -> None:
-    scenarios = [s for s in load_builtin() if s.memory]
+    scenarios = [s for s in load_builtin() if s.memory_tools]
     results = run_all(scenarios, ScriptedAgent(), presets=("vulnerable", "hardened")).results
     for s in results:
         attack = s.cell("vulnerable", "attack")

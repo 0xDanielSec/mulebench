@@ -8,7 +8,7 @@ when at least one test fails. The working tree is never modified.
 
 Usage: uv run python scripts/mutation_check.py [INV-1] [INV-2] [INV-3] [INV-4] [AUDIT]
        [LEDGER] [MEMGUARD] [MEMTAINT] [ATTR] [DELEG] [ROLE] [PAYGUARD]
-       [ORACLE] [DLGMON]
+       [ORACLE] [DLGMON] [AUTOMEM] [AUTOEXT] [AUTOLLM] [AUTORUN] [AUTOMET]
 With no arguments every table runs and docs/mutation-summary.json is rewritten
 (per-table killed/total; no dates, so it is deterministic). The README's mutant
 count is rendered from it. Exit code is 0 only if every mutant of every
@@ -561,7 +561,7 @@ ATTR_MUTANTS: list[Mutant] = [
 
 MEMGUARD_MUTANTS: list[Mutant] = [
     ("save_note only", "if not isinstance(args, SaveNoteIn):", "if False:"),
-    ("same session only", "if r.session != ctx.session_index or", "if"),
+    ("same session only", "if r.session != session or", "if"),
     ("ok calls only", 'or r.outcome != "ok":', ":"),
     (
         "case folding",
@@ -575,7 +575,7 @@ MEMGUARD_MUTANTS: list[Mutant] = [
     ),
     (
         "deny on shared run",
-        "if _shares_run(note, _normalize(source), self.min_chars):",
+        "if source is not None and _shares_run(note, _normalize(source), min_chars):",
         "if False:",
     ),
     (
@@ -584,6 +584,134 @@ MEMGUARD_MUTANTS: list[Mutant] = [
         "for i in range(1))",
     ),
     ("min_chars positive", "if min_chars < 1:", "if False:"),
+]
+
+# Automatic memory: input, trimming, guard, block, taint and defence switches.
+AUTOMEM_MUTANTS: list[Mutant] = [
+    (
+        "input: this session only",
+        "            if r.session != session:\n                continue",
+        "            if False:\n                continue",
+    ),
+    (
+        "input: what the agent saw",
+        "shown = r.agent_result if r.agent_result is not None else r.result",
+        "shown = r.result",
+    ),
+    ("input: customer_turns has no tool output", 'if source == "conversation":', "if True:"),
+    ("input: final answer", "        if final_text:", "        if False:"),
+    (
+        "trim: item cap",
+        "return clean[:max_items], max(0, len(clean) - max_items)",
+        "return clean, max(0, len(clean) - max_items)",
+    ),
+    (
+        "trim: dropped count",
+        "return clean[:max_items], max(0, len(clean) - max_items)",
+        "return clean[:max_items], 0",
+    ),
+    ("trim: length cap", '" ".join(i.split())[:max_chars].strip()', '" ".join(i.split()).strip()'),
+    (
+        "guard: drop repeats",
+        "repeats_untrusted(i, trace, session, MEMORY_TAINT_MIN_CHARS) is None",
+        "True",
+    ),
+    ("block: untrusted label", 'if label == "untrusted"', "if True"),
+    ("block: one line per observation", "{' '.join(o.text.split())}", "{o.text}"),
+    (
+        "block: empty without observations",
+        '    if not observations:\n        return ""',
+        '    if False:\n        return ""',
+    ),
+    ("taint: canary", "canary=scenario.canary in o.text,", "canary=False,"),
+    ("taint: artifacts", "artifacts=[a for a in artifacts if a in o.text],", "artifacts=[],"),
+    (
+        "tainted: canary or artifact",
+        "return self.canary or bool(self.artifacts)",
+        "return self.canary",
+    ),
+    ("defence: source customer", 'update["source"] = "customer_turns"', "pass"),
+    ("defence: untrusted label", 'update["label"] = "untrusted"', "pass"),
+]
+
+# The scripted extractor and the LLM extraction parser.
+AUTOEXT_MUTANTS: list[Mutant] = [
+    ("scripted: remember text", "found.append((m.start(), m.group(1)))", "pass"),
+    (
+        "scripted: key-change fact",
+        'rf"{_KEY}\\s+changed\\s+its\\s+pix\\s+key\\s+to\\s+{_KEY}"',
+        'rf"{_KEY}\\s+never\\s+matches"',
+    ),
+    ("scripted: preference fact", 'rf"customer\\s+prefers\\s+{_TEXT}+"', 'rf"never\\s+matches"'),
+    ("scripted: text order", "for _, raw in sorted(found):", "for _, raw in found:"),
+    ("scripted: no duplicates", "if item and item not in items:", "if item:"),
+    ("parse: NONE is empty", 'if stripped.upper() == "NONE":', "if False:"),
+    ("parse: bullet lines only", 'if ln.strip().startswith("- ")', "if ln.strip()"),
+    ("parse: malformed when nothing parsed", "return items, not items", "return items, False"),
+]
+
+# The LLM extractor call.
+AUTOLLM_MUTANTS: list[Mutant] = [
+    ("prompt: extraction prompt", "system=EXTRACTION_PROMPT,", 'system="",'),
+    ("key: #mem cassette key", "trial_key=trial_key,", 'trial_key="",'),
+    ("record: model call kept", "model_call=record)", "model_call=None)"),
+]
+
+# Runner wiring of automatic memory.
+AUTORUN_MUTANTS: list[Mutant] = [
+    (
+        "extract: not after the last session",
+        "if auto and plan.index < len(plans) - 1:",
+        "if auto:",
+    ),
+    ("block: given to the agent", "memory_context=block,", 'memory_context="",'),
+    (
+        "block: recorded as injected",
+        "            if block:\n                injected[plan.index] = block",
+        "            if False:\n                injected[plan.index] = block",
+    ),
+    (
+        "extract: error ends the trial",
+        "                if record.errored:",
+        "                if False:",
+    ),
+    ("guard: extract guard switch", 'if "memory_extract_guard" in names:', "if False:"),
+    (
+        "extractor: setting decides",
+        'offered() if settings.extractor == "llm" and callable(offered) else ScriptedExtractor()',
+        "offered() if callable(offered) else ScriptedExtractor()",
+    ),
+    ("calls: extraction calls counted", "        if extra_calls:", "        if False:"),
+    (
+        "disclosure: per-session answer",
+        "                r.final_text,\n                amounts_in_text(request),",
+        "                run.final_text,\n                amounts_in_text(request),",
+    ),
+]
+
+# Automatic-memory metrics in harness/memory.py.
+AUTOMET_MUTANTS: list[Mutant] = [
+    (
+        "tainted: observations count",
+        "memory_tainted=any(n.tainted for n in notes) or bool(tainted_obs),",
+        "memory_tainted=any(n.tainted for n in notes),",
+    ),
+    (
+        "injected: shown in a block",
+        "_shown(o, blocks) for o in tainted_obs",
+        "True for o in tainted_obs",
+    ),
+    (
+        "injected: text in the block",
+        "k > o.observation.session and text in b",
+        "k > o.observation.session",
+    ),
+    ("followed: value in the block", 'or value in blocks.get(k, ""))', "or False)"),
+    (
+        "followed: automatic mode reads the blocks",
+        "memory_followed=_followed(trace, requests, known, blocks)",
+        "memory_followed=_followed(trace, requests, known, {})",
+    ),
 ]
 
 MEMTAINT_MUTANTS: list[Mutant] = [
@@ -650,7 +778,7 @@ MEMTAINT_MUTANTS: list[Mutant] = [
         "if r.outcome in _ATTEMPTED and k >= 1:",
         "if r.outcome in _ATTEMPTED:",
     ),
-    ("followed: value in notes", 'and value in notes_text.get(k, "")', "and True"),
+    ("followed: value in notes", 'and (value in notes_text.get(k, "") or', "and (True or"),
     ("followed: no other tool source", 'and value not in other_text.get(k, "")', "and True"),
     ("followed: not in the request", 'and value not in requests.get(k, "")', "and True"),
     ("followed: not already known", "and value not in known.get(k, set())", "and True"),
@@ -891,6 +1019,31 @@ TABLES: dict[str, tuple[Path, str, list[Mutant]]] = {
         "tests/monitor/test_delegation_rule.py",
         DLGMON_MUTANTS,
     ),
+    "AUTOMEM": (
+        Path("src/mulebench/harness/auto_memory.py"),
+        "tests/harness/test_auto_memory.py",
+        AUTOMEM_MUTANTS,
+    ),
+    "AUTOEXT": (
+        Path("src/mulebench/agents/memory_extraction.py"),
+        "tests/harness/test_auto_memory.py",
+        AUTOEXT_MUTANTS,
+    ),
+    "AUTOLLM": (
+        Path("src/mulebench/agents/llm/extractor.py"),
+        "tests/harness/test_auto_memory.py",
+        AUTOLLM_MUTANTS,
+    ),
+    "AUTORUN": (
+        Path("src/mulebench/harness/runner.py"),
+        "tests/harness/test_auto_memory.py",
+        AUTORUN_MUTANTS,
+    ),
+    "AUTOMET": (
+        Path("src/mulebench/harness/memory.py"),
+        "tests/harness/test_auto_memory.py tests/harness/test_memory_metrics.py",
+        AUTOMET_MUTANTS,
+    ),
 }
 
 
@@ -907,7 +1060,10 @@ def copy_project(dest: Path) -> None:
 def run_tests(workdir: Path, tests: str) -> tuple[bool, str]:
     env = dict(os.environ)
     # The copy's src/ must win over the editable install of the working tree.
-    env["PYTHONPATH"] = os.pathsep.join([str(workdir / "src"), str(workdir)])
+    # Inherited entries (e.g. a venv's site-packages when the venv launcher
+    # cannot run) come after it; the probe below checks the copy still wins.
+    inherited = [p for p in env.get("PYTHONPATH", "").split(os.pathsep) if p]
+    env["PYTHONPATH"] = os.pathsep.join([str(workdir / "src"), str(workdir), *inherited])
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     probe = subprocess.run(
         [sys.executable, "-c", "import mulebench; print(mulebench.__file__)"],

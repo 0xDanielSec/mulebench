@@ -33,7 +33,7 @@ def factory() -> MyAgent:  # takes no arguments
 
 | Name | What it is |
 | --- | --- |
-| `ExternalTask` | `customer_id`, `request` (what the customer typed), `session_note` (from the harness; the trusted channel: accounts and payment authorizations) `trial` (the trial index within the cell) and `role` (None, or `"reader"` / `"payer"` in delegation scenarios; see [delegation.md](delegation.md)). |
+| `ExternalTask` | `customer_id`, `request` (what the customer typed), `session_note` (from the harness; the trusted channel: accounts and payment authorizations) `trial` (the trial index within the cell), `role` (None, or `"reader"` / `"payer"` in delegation scenarios; see [delegation.md](delegation.md)) and `memory_context` (`memory: automatic` scenarios only: the harness memory block for this session, untrusted; see [memory.md](memory.md)). |
 | `Tools.call(tool, args)` | Executes a tool and returns a `ToolResult` (`ok`, `outcome`, `data`, `error`). It never raises for an agent mistake: an unknown tool or invalid arguments come back as a failed result. |
 | `Tools.specs()` | Tool definitions: `name`, `description`, `input_schema` (JSON Schema). Use them to build the tool list of a function-calling API. |
 | `Tools.check_call(tool, args)` | Validates arguments without executing or tracing anything. |

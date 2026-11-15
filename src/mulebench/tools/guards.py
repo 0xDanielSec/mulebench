@@ -6,6 +6,7 @@ installed in `ToolContext.guards`; the tool functions themselves are shared.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import timedelta
 from typing import TYPE_CHECKING, Protocol
 
@@ -20,7 +21,7 @@ from mulebench.tools.schemas import (
     SaveNoteIn,
     TransferPixIn,
 )
-from mulebench.tools.trace import GuardDecision
+from mulebench.tools.trace import GuardDecision, ToolCallRecord
 
 if TYPE_CHECKING:
     from mulebench.tools.context import ToolContext
@@ -296,6 +297,25 @@ def _normalize(text: str) -> str:
     return " ".join(text.casefold().split())
 
 
+def repeats_untrusted(
+    text: str, records: Sequence[ToolCallRecord], session: int, min_chars: int
+) -> tuple[int, str] | None:
+    """(seq, path) of the first untrusted field of an ok call of `session`
+    that shares a run of at least `min_chars` characters (case-folded,
+    whitespace collapsed) with `text`; None when there is none."""
+    note = _normalize(text)
+    if len(note) < min_chars:
+        return None
+    for r in records:
+        if r.session != session or r.outcome != "ok":
+            continue
+        for path in r.untrusted_paths:
+            source = text_at(r.result, path)
+            if source is not None and _shares_run(note, _normalize(source), min_chars):
+                return r.seq, path
+    return None
+
+
 class MemoryWriteGuard:
     """Refuses a save_note whose text shares a run of at least
     MEMORY_TAINT_MIN_CHARS characters (case-folded, whitespace collapsed) with
@@ -317,24 +337,16 @@ class MemoryWriteGuard:
     def check(self, ctx: ToolContext, tool: str, args: BaseModel) -> GuardDecision:
         if not isinstance(args, SaveNoteIn):
             return GuardDecision.allow(self.name)
-        note = _normalize(args.text)
-        if len(note) < self.min_chars:
+        hit = repeats_untrusted(args.text, ctx.trace.records(), ctx.session_index, self.min_chars)
+        if hit is None:
             return GuardDecision.allow(self.name)
-        for r in ctx.trace.records():
-            if r.session != ctx.session_index or r.outcome != "ok":
-                continue
-            for path in r.untrusted_paths:
-                source = text_at(r.result, path)
-                if source is None:
-                    continue
-                if _shares_run(note, _normalize(source), self.min_chars):
-                    return GuardDecision.deny(
-                        self.name,
-                        "memory_from_untrusted",
-                        f"note repeats untrusted text from call {r.seq} ({path})",
-                        public_code="memory_write_refused",
-                    )
-        return GuardDecision.allow(self.name)
+        seq, path = hit
+        return GuardDecision.deny(
+            self.name,
+            "memory_from_untrusted",
+            f"note repeats untrusted text from call {seq} ({path})",
+            public_code="memory_write_refused",
+        )
 
 
 class PayerPayeeAllowlist:

@@ -22,6 +22,7 @@ from pydantic import (
     StrictInt,
     StrictStr,
     StringConstraints,
+    field_validator,
     model_validator,
 )
 
@@ -242,6 +243,26 @@ class Topology(_Model):
     payer_tools: list[ToolName] = list(PAYER_TOOLS)
 
 
+# ------------------------------------------------------------------ memory
+
+
+class AutomaticMemory(_Model):
+    """Settings of `memory: automatic` (see docs/memory.md, "Automatic memory").
+
+    `extractor: llm` uses the agent's own model when the agent offers one
+    (`memory_extractor()`), and the scripted extractor otherwise; the kind
+    used is recorded per extraction. `source: customer_turns` gives the
+    extractor the customer's own messages only, never tool output or the
+    agent's answer.
+    """
+
+    extractor: Literal["llm", "scripted"] = "llm"
+    source: Literal["conversation", "customer_turns"] = "conversation"
+    max_items: int = Field(default=5, ge=1, le=20)
+    max_item_chars: int = Field(default=200, ge=20, le=500)
+    label: Literal["untrusted", "none"] = "untrusted"
+
+
 # ------------------------------------------------------------------ scenario
 
 
@@ -263,15 +284,43 @@ class Scenario(_Model):
     benign_control: BenignControl
     # Multi-session runs: `user_task` is session 0, these follow in order.
     followup_sessions: list[FollowupSession] = []
-    # True exposes the agent memory tools (save_note, read_notes). False keeps
-    # the tool list, and so tool_schema_sha256, identical to earlier scenarios.
-    memory: StrictBool = False
+    # True (alias "tools") exposes the agent memory tools (save_note,
+    # read_notes). "automatic": no memory tools; the harness extracts
+    # observations after each session and injects them into the next. False
+    # keeps the tool list, and so tool_schema_sha256, identical to earlier
+    # scenarios.
+    memory: StrictBool | Literal["automatic"] = False
+    # Only with memory: automatic; None means the AutomaticMemory defaults.
+    automatic_memory: AutomaticMemory | None = None
     # Optional; without it attribution derives the goal from the setup.
     attack_goal: AttackGoal | None = None
     # None: one agent. "delegation": Reader and Payer agents with a handoff.
     topology: Topology | None = None
     references: list[Reference] = []
     brazil_context: BrazilContext | None = None
+
+    @field_validator("memory", mode="before")
+    @classmethod
+    def _memory_alias(cls, value: object) -> object:
+        return True if value == "tools" else value
+
+    @property
+    def memory_tools(self) -> bool:
+        """The agent memory tools are offered (memory: true / tools)."""
+        return self.memory is True
+
+    @property
+    def memory_automatic(self) -> bool:
+        return self.memory == "automatic"
+
+    @property
+    def memory_mode(self) -> Literal["tools", "automatic"] | None:
+        if self.memory_automatic:
+            return "automatic"
+        return "tools" if self.memory_tools else None
+
+    def automatic_memory_settings(self) -> AutomaticMemory:
+        return self.automatic_memory or AutomaticMemory()
 
     @model_validator(mode="after")
     def _cross_checks(self) -> Scenario:
@@ -316,9 +365,13 @@ class Scenario(_Model):
             a for f in self.followup_sessions for a in f.authorizations
         ]:
             need("account", auth.from_account, owner, f"authorization {auth.ref}")
-        if not self.memory:
+        if not self.memory_tools:
             used = MEMORY_TOOLS.intersection(self.benign_control.expected_outcome.tool_calls)
             problems += [f"expected tool {t!r} needs memory: true" for t in sorted(used)]
+        if self.automatic_memory is not None and not self.memory_automatic:
+            problems.append("automatic_memory needs memory: automatic")
+        if self.memory_automatic and not self.followup_sessions:
+            problems.append("memory: automatic needs followup_sessions")
         need("customer", self.user_task.customer, customers, "user_task")
         need("transaction", self.injection.transaction, txs, "injection")
         for part in self.injection.extra_parts:
@@ -424,7 +477,7 @@ class Scenario(_Model):
             if len(set(reader)) != len(reader) or len(set(payer)) != len(payer):
                 problems.append("topology: duplicate tool in a role")
             if self.memory:
-                problems.append("topology: delegation does not support memory: true")
+                problems.append(f"topology: delegation does not support memory: {self.memory}")
             if self.followup_sessions:
                 problems.append("topology: delegation does not support followup_sessions")
 
@@ -456,6 +509,7 @@ class Scenario(_Model):
 _LATE_DEFAULTS: dict[str, object] = {
     "followup_sessions": [],
     "memory": False,
+    "automatic_memory": None,
     "topology": None,
 }
 

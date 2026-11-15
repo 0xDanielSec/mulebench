@@ -42,6 +42,7 @@ from mulebench.monitor.events import (
     LedgerAccount,
     LedgerAuthorization,
     LedgerTransfer,
+    MemoryContext,
     SessionEnd,
     SessionStart,
     ToolCall,
@@ -196,6 +197,10 @@ def adapt_trial(
                 )
         events.append(SessionStart(ts=started, session_id=sid(s["index"]), customer_id=customer))
         events.append(CustomerMessage(ts=started, session_id=sid(s["index"]), text=s["request"]))
+        if isinstance(s.get("memory_context"), str):
+            events.append(
+                MemoryContext(ts=started, session_id=sid(s["index"]), text=s["memory_context"])
+            )
 
     trace = list(trial.get("trace", []))
     descriptions: dict[str, str] = {}

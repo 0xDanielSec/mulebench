@@ -1,9 +1,9 @@
 # Design: harness-managed automatic memory
 
-Status: **proposed, not implemented.** Nothing on this page exists in the
-code yet. It is a design for review. The schema, defaults and names may
-change before implementation. Implementing it changes the architecture of
-the runner, so it needs approval first (see `CLAUDE.md`).
+Status: **implemented** (approved by the author). The reference for the
+implemented behaviour is [../memory.md](../memory.md), "Automatic memory".
+This page keeps the design and its reasons. Where the implementation differs
+from the text below, "As implemented" at the end says how.
 
 ## Why
 
@@ -229,3 +229,29 @@ joined value kept as today's field for compatibility.
 No vector store, no retrieval ranking and no summarization across many
 sessions. The block is the full list of stored observations, which stays
 small with `max_items` per session and two or three sessions per trial.
+
+## As implemented
+
+Differences from the design above:
+
+1. **Where the block goes.** The memory block is not added to the system
+   prompt. It travels in `AgentTask.memory_context` and the LLM agent
+   appends it to the session-note turn, after the note. The system prompt,
+   and so the prompt hashes, stay unchanged, and every agent (scripted,
+   LLM, your own) gets the block the same way.
+2. **`customer_turns`** is the customer's request only. The design also
+   gave the extractor the final answer; that would let the payload in
+   through an agent that echoes a transaction description, so the defence
+   would not hold by construction.
+3. **Monitor.** The new event is `memory_context` (the block a session was
+   shown), not an extraction event. No rule reads it yet.
+4. **Tests and mutation tables** cover the input builder, trimming, the
+   guard, the block, taint, defence switches, the scripted extractor and
+   LLM parser, the LLM extractor call, the runner wiring and the metrics
+   (tables AUTOMEM, AUTOEXT, AUTOLLM, AUTORUN, AUTOMET).
+5. **Not built:** the benign workload for the cost of
+   `memory_source_customer` (a customer-stated fact worth keeping).
+   Workloads are single-session; a multi-session workload needs runner
+   support first. The scenarios' benign controls still measure utility
+   under each defence.
+

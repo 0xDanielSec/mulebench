@@ -91,6 +91,15 @@ class Handoff(_SessionEvent):
     text: str
 
 
+class MemoryContext(_SessionEvent):
+    """Memory the application put into the session's context, outside any
+    tool call (harness-managed automatic memory). It may hold text extracted
+    from earlier tool output, so it is untrusted."""
+
+    type: Literal["memory_context"] = "memory_context"
+    text: str
+
+
 class SessionEnd(_SessionEvent):
     type: Literal["session_end"] = "session_end"
 
@@ -116,7 +125,14 @@ class LedgerTransfer(_Event):
 
 
 SessionEventT = (
-    SessionStart | ToolCall | Confirmation | CustomerMessage | FinalAnswer | Handoff | SessionEnd
+    SessionStart
+    | ToolCall
+    | Confirmation
+    | CustomerMessage
+    | FinalAnswer
+    | Handoff
+    | MemoryContext
+    | SessionEnd
 )
 LedgerEventT = LedgerAccount | LedgerAuthorization | LedgerTransfer
 Event = Annotated[SessionEventT | LedgerEventT, Field(discriminator="type")]

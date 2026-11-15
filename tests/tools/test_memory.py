@@ -91,7 +91,7 @@ def test_builtin_pilot_scenarios_record_the_frozen_hash() -> None:
     scenarios = [s for s in load_builtin() if s.id in pilot]
     assert len(scenarios) == 12
     assert all(not s.memory for s in scenarios)
-    assert {tool_schema_sha256(memory=s.memory) for s in scenarios} == {frozen_pilot_hash()}
+    assert {tool_schema_sha256(memory=s.memory_tools) for s in scenarios} == {frozen_pilot_hash()}
 
     result = run_scenario(scenarios[0], ScriptedAgent(), presets=("vulnerable",))
     assert result.tool_schema_sha256 == frozen_pilot_hash()

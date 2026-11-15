@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from typing import TYPE_CHECKING
 
 from mulebench.agents.base import (
     AgentRun,
@@ -42,9 +43,23 @@ from mulebench.agents.llm.seeds import SEED_DERIVATION, derive_seed
 from mulebench.agents.llm.text_calls import text_tool_calls
 from mulebench.tools.client import ToolClient, ToolResult
 
+if TYPE_CHECKING:
+    from mulebench.agents.llm.extractor import LLMExtractor
+
 DEFAULT_MAX_TOKENS = 16000
 DEFAULT_MAX_STEPS = 10
 DEFAULT_MAX_TURNS = 12
+
+
+def operator_text(task: AgentTask) -> str:
+    """The trusted session note, then the harness memory block if there is one.
+
+    Without a memory block the text is the session note alone, so requests
+    (and cassette hashes) of scenarios without automatic memory are unchanged.
+    """
+    if not task.memory_context:
+        return task.session_note
+    return f"{task.session_note}\n\n{task.memory_context}"
 
 
 def model_facing_result(result: ToolResult) -> str:
@@ -103,6 +118,12 @@ class LLMAgent:
             params["seed_derivation"] = SEED_DERIVATION
         return params
 
+    def memory_extractor(self) -> LLMExtractor:
+        """Extractor for `memory: automatic` scenarios: this agent's model."""
+        from mulebench.agents.llm.extractor import LLMExtractor
+
+        return LLMExtractor(self)
+
     def run(self, task: AgentTask, tools: ToolClient) -> AgentRun:
         if task.prompt_variant not in PROMPTS:
             raise ValueError(f"unknown prompt variant {task.prompt_variant!r}")
@@ -110,7 +131,7 @@ class LLMAgent:
         tool_defs = tuple(ToolDef(**t) for t in tools.model_tool_schemas())
         turns: list[Turn] = [
             Turn(kind="user", text=task.request),
-            Turn(kind="operator", text=task.session_note),
+            Turn(kind="operator", text=operator_text(task)),
         ]
         steps: list[AgentStep] = []
         calls: list[ModelCallRecord] = []

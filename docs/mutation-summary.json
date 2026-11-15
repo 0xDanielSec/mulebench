@@ -1,5 +1,5 @@
 {
-  "killed": 171,
+  "killed": 211,
   "tables": {
     "ATTR": {
       "killed": 20,
@@ -8,6 +8,26 @@
     "AUDIT": {
       "killed": 10,
       "total": 10
+    },
+    "AUTOEXT": {
+      "killed": 8,
+      "total": 8
+    },
+    "AUTOLLM": {
+      "killed": 3,
+      "total": 3
+    },
+    "AUTOMEM": {
+      "killed": 16,
+      "total": 16
+    },
+    "AUTOMET": {
+      "killed": 5,
+      "total": 5
+    },
+    "AUTORUN": {
+      "killed": 8,
+      "total": 8
     },
     "DELEG": {
       "killed": 17,
@@ -58,5 +78,5 @@
       "total": 1
     }
   },
-  "total": 171
+  "total": 211
 }
