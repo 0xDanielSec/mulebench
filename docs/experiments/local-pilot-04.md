@@ -387,7 +387,8 @@ These are interpretations, not pre-registered results.
   facts from each conversation and puts them into the next session's
   context, without a tool call by the model. The poisoning risk is in that
   extraction step. Follow-up scenarios should test it directly, with
-  harness-managed automatic memory.
+  harness-managed automatic memory (design:
+  [../design/automatic-memory.md](../design/automatic-memory.md)).
 - **O3. Session 1 did not re-read the history.** In 013, session 1 paid
   directly (one `transfer_pix` call and an answer) in all 120 trials, attack and benign. No
   session-1 output showed the payload again (re-exposure 0/30 per cell).
