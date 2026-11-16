@@ -1159,7 +1159,8 @@ AMBIGUITIES_06 = (
 DECISIONS_06_HEADER = (
     "**Analysis decisions.** Decisions 1-6 are those of pilot 05, confirmed there and "
     "reused unchanged. Decisions 7-9 are new for pilot 06 and implement its two new "
-    "quantities; they await the author's confirmation:"
+    "quantities; all were confirmed by the author as implemented before the Results "
+    "were committed:"
 )
 
 

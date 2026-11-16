@@ -303,7 +303,7 @@ def test_pilot_06_bill_ref_form_and_role_prompt(
     assert got[2:6] == ["8", "2/8 (25%, 7%-59%)", "2/8 (25%, 7%-59%)", "4/8 (50%, 22%-78%)"]
     assert row(form, "015 none attack", "vulnerable")[6] == "n/a (no resolution)"
     assert "7. bill_ref form" in text
-    assert "await the author's confirmation" in text
+    assert "confirmed by the author" in text
     # the comparison puts pilot 06 next to pilot 05 for every scenario cell
     compare = section(lines, "Comparison with pilot 05")
     assert len(row(compare, "016", PROVENANCE)) == 10
