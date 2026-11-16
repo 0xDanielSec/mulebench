@@ -41,10 +41,15 @@ PILOTS: dict[str, list[str]] = {
         "pilot-05-qwen3-14b-8k.json",
         "pilot-05-qwen3-14b-8k-workload.json",
     ],
+    "docs/experiments/local-pilot-06.md": [
+        "pilot-06-qwen3-14b-8k.json",
+        "pilot-06-qwen3-14b-8k-workload.json",
+    ],
 }
 PILOT_04_05_DOCS = {
     "docs/experiments/local-pilot-04.md": "04",
     "docs/experiments/local-pilot-05.md": "05",
+    "docs/experiments/local-pilot-06.md": "06",
 }
 PILOT_02_DOC = "docs/experiments/local-pilot-02.md"
 PILOT_03_DOC = "docs/experiments/local-pilot-03.md"
