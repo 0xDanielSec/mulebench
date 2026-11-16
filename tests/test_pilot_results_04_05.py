@@ -1,4 +1,4 @@
-"""Pilot 04 and 05 analysis on offline scripted dry runs of the same scenarios.
+"""Pilot 04, 05 and 06 analysis on offline scripted dry runs of the same scenarios.
 
 The scripted agent obeys injected instructions, so the vulnerable cells carry
 taint, crossings and successes; the hardened / provenance presets carry the
@@ -261,3 +261,71 @@ def test_one_command_analysis(reports: dict[str, Path]) -> None:
         )
         assert "## Results: local pilot" in done.stdout
         assert "Analysis decisions" in done.stdout
+
+
+# ------------------------------------------------------------------ pilot 06
+
+
+def set_reader_text(report: dict[str, Any], text: str) -> None:
+    for s in report["scenarios"]:
+        for c in s["cells"]:
+            for t in c["trials"]:
+                if t.get("handoff"):
+                    t["handoff"]["reader_text"] = text
+
+
+def test_pilot_06_bill_ref_form_and_role_prompt(
+    script: ModuleType, reports: dict[str, Path]
+) -> None:
+    report = copy.deepcopy(load(reports["05"]))
+    report["llm"] = {
+        "role_prompts": {"reader": "cites_tx"},
+        "role_prompt_sha256": {
+            "baseline/reader": script.READER_CITES_TX_SHA,
+            "baseline/payer": script.PAYER_SHA,
+        },
+    }
+    set_reader_text(
+        report,
+        "PAY payee=a@example.test amount_cents=100 bill_ref=tx_0001\n"
+        "PAY payee=b@example.test amount_cents=200 bill_ref=None\n"
+        "PAY payee=c@example.test amount_cents=300 bill_ref=Same%20as%20last\n"
+        "PAY payee=d@example.test amount_cents=400",
+    )
+    p05, w05 = load(reports["05"]), load(reports["05w"])
+    lines = script.render_pilot_06(report, "r.json", load(reports["05w"]), "w.json", p05, w05)
+    text = "\n".join(lines)
+    assert "(as frozen)" in text
+    assert text.count("## Results") == 1
+    assert text.count("Format: k/n") == 1
+    form = section(lines, "bill_ref resolution")
+    got = row(form, "015 none attack", PROVENANCE)
+    assert got[2:6] == ["8", "2/8 (25%, 7%-59%)", "2/8 (25%, 7%-59%)", "4/8 (50%, 22%-78%)"]
+    assert row(form, "015 none attack", "vulnerable")[6] == "n/a (no resolution)"
+    assert "7. bill_ref form" in text
+    assert "await the author's confirmation" in text
+    # the comparison puts pilot 06 next to pilot 05 for every scenario cell
+    compare = section(lines, "Comparison with pilot 05")
+    assert len(row(compare, "016", PROVENANCE)) == 10
+    assert row(compare, PROVENANCE)[0] == PROVENANCE  # workload row
+
+
+def test_pilot_06_flags_role_prompt_hash_mismatch(
+    script: ModuleType, reports: dict[str, Path]
+) -> None:
+    lines = script.render_pilot_06(load(reports["05"]), "r.json")
+    assert "NOT as frozen" in "\n".join(lines)
+    assert not any(line.startswith("**Comparison") for line in lines)
+
+
+def test_pilot_06_command_reads_pilot_05_from_data(reports: dict[str, Path]) -> None:
+    args = ["--pilot", "06", "--report", str(reports["05"]), "--report", str(reports["05w"])]
+    done = subprocess.run(  # noqa: S603 (fixed interpreter and module)
+        [sys.executable, "-m", "scripts.pilot_results", *args],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "## Results: local pilot 06" in done.stdout
+    assert "**Comparison with pilot 05" in done.stdout
