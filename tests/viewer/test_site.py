@@ -6,6 +6,7 @@ import html
 import posixpath
 import re
 from functools import cache
+from html.parser import HTMLParser
 from pathlib import Path
 
 import pytest
@@ -20,10 +21,42 @@ DATA = ROOT / "docs" / "experiments" / "data"
 PILOTS = sorted(p for p in DATA.glob("pilot-*.json") if not p.stem.endswith("-workload"))
 HREF = re.compile(r'href="([^"]*)"')
 ID = re.compile(r'id="([^"]*)"')
-# A URL the browser would fetch or follow: in an attribute value or a CSS url().
-# Escaped model text may mention a URL (a model wrote a markdown link to a
-# synthetic example.test page in pilot 08); that is text, not a reference.
-NETWORK_REF = re.compile(r"""(?:=\s*["']?|url\(\s*["']?)(?:https?:)?//""", re.IGNORECASE)
+# A URL the browser could fetch or follow: absolute or protocol-relative, at the
+# start of a value or after a separator (srcset candidates, "0; url=..." in a
+# meta refresh, CSS url(...) or @import "..."). Checked in every attribute value
+# and in <style> / <script> text. Escaped page text may mention a URL (a model
+# wrote a markdown link to a synthetic example.test page in pilot 08): that is
+# text, not a reference, and is not checked.
+URL_IN_VALUE = re.compile(r"""(?:^|[\s,;=("'])(?:[a-z][a-z0-9+.-]*:)?//""", re.IGNORECASE)
+RAW_URL = re.compile(r"""(?:[a-z][a-z0-9+.-]*:|[\s,;=("'])//[a-z0-9\[]""", re.IGNORECASE)
+
+
+class _Refs(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.found: list[str] = []
+        self._raw: str | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        for name, value in attrs:
+            if value and URL_IN_VALUE.search(value.strip()):
+                self.found.append(f"<{tag} {name}={value!r}>")
+        self._raw = tag if tag in ("style", "script") else None
+
+    def handle_endtag(self, tag: str) -> None:
+        self._raw = None
+
+    def handle_data(self, data: str) -> None:
+        # a JS comment ("// note") is not a URL: require a host-like character
+        if self._raw and RAW_URL.search(data):
+            self.found.append(f"<{self._raw}> text")
+
+
+def network_refs(page: str) -> list[str]:
+    parser = _Refs()
+    parser.feed(page)
+    parser.close()
+    return parser.found
 
 
 @cache
@@ -67,15 +100,42 @@ def test_every_page_has_the_csp_and_no_network_reference() -> None:
     for path, text in pilot_site().items():
         assert text.startswith("<!DOCTYPE html>"), path
         assert f'content="{html.escape(CSP, quote=True)}"' in text, path
-        assert not NETWORK_REF.search(text), path
+        assert not network_refs(text), (path, network_refs(text))
         assert text.count("<script") == 1, path
 
 
-def test_network_reference_pattern() -> None:
-    assert NETWORK_REF.search('<a href="https://x.example.test/">')
-    assert NETWORK_REF.search("<img src=//x.example.test/a.png>")
-    assert NETWORK_REF.search("background: url('http://x.example.test/a')")
-    assert not NETWORK_REF.search("<p>see [link](https://x.example.test/t)</p>")
+@pytest.mark.parametrize(
+    "page",
+    [
+        '<a href="https://x.example.test/">a</a>',
+        "<img src=//x.example.test/a.png>",
+        '<img srcset="a.png 1x, https://x.example.test/b.png 2x">',
+        '<form action="https://x.example.test/f"></form>',
+        '<button formaction="//x.example.test/f">b</button>',
+        "<div style=\"background: url('http://x.example.test/a')\"></div>",
+        '<meta http-equiv="refresh" content="0; url=https://x.example.test/">',
+        '<object data="ftp://x.example.test/o"></object>',
+        '<style>@import "https://x.example.test/a.css";</style>',
+        "<style>p { background: url(//x.example.test/a) }</style>",
+        "<script>fetch('https://x.example.test/')</script>",
+    ],
+)
+def test_network_refs_finds_external_urls_in_any_attribute(page: str) -> None:
+    assert network_refs(page), page
+
+
+def test_network_refs_ignores_urls_in_escaped_text() -> None:
+    page = "<p>see [link](https://x.example.test/t) &lt;a href=&quot;https://x&quot;&gt;</p>"
+    assert network_refs(page) == []
+    assert network_refs('<a href="r1/index.html#top">x</a><script>// note</script>') == []
+
+
+def test_csp_allows_no_external_origin() -> None:
+    directives = dict(d.strip().split(" ", 1) for d in CSP.split(";"))
+    assert directives["default-src"] == "'none'"
+    for name, sources in directives.items():
+        for source in sources.split():
+            assert source in ("'none'", "data:") or source.startswith("'sha256-"), (name, source)
 
 
 def test_output_is_deterministic() -> None:
