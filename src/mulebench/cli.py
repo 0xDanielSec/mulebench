@@ -14,6 +14,9 @@
     mulebench check-agent [<dir>] --agent-module MOD:FACTORY [--agent-path DIR]
                   [--scenario ID ...] [--trials N] [--min-benign-pass R]
     mulebench doctor --model TAG [--base-url URL] [--allow-remote]
+    mulebench estimate --model ID [...] --scenario ID [...] [--trials N]
+                  [--host MODEL=HOST ...] [--pricing FILE] [--tokens-from REPORT ...]
+                  [--safety F]
     mulebench schema [--out report.schema.json]
     mulebench view REPORT.json [REPORT.json ...] --out DIR [--force]
     mulebench monitor run|adapt|schema ...   (see mulebench.monitor.cli)
@@ -235,6 +238,39 @@ def _parser() -> argparse.ArgumentParser:
     doctor.add_argument("--model", required=True, help="model tag, e.g. qwen3:8b")
     _add_server_args(doctor)
 
+    est = sub.add_parser(
+        "estimate", help="dry-run cost estimate for routed models (no network call)"
+    )
+    est.add_argument("--model", action="append", dest="models", required=True, metavar="ID")
+    est.add_argument(
+        "--scenario", action="append", dest="scenario_ids", required=True, metavar="ID"
+    )
+    est.add_argument("--trials", type=int, default=30, help="trials per cell (default 30)")
+    est.add_argument(
+        "--host",
+        action="append",
+        dest="hosts",
+        default=[],
+        metavar="MODEL=HOST",
+        help="price a model at its pinned host (default: highest listed price)",
+    )
+    est.add_argument(
+        "--pricing",
+        type=Path,
+        metavar="FILE",
+        help="local price table (default pricing/openrouter.toml)",
+    )
+    est.add_argument(
+        "--tokens-from",
+        action="append",
+        type=Path,
+        dest="token_reports",
+        metavar="REPORT",
+        help="run report(s) with token usage, in lookup order (default: the committed "
+        "pilot 03, 06 and 07 reports)",
+    )
+    est.add_argument("--safety", type=float, default=2.0, help="safety factor (default 2)")
+
     schema = sub.add_parser("schema", help="print the report JSON Schema")
     schema.add_argument("--out", type=Path, help="write the schema here instead")
 
@@ -377,6 +413,38 @@ def _doctor(args: argparse.Namespace) -> int:
     except (RemoteHostRefused, ValueError) as exc:
         return _error(str(exc))
     return print_checks(checks)
+
+
+def _estimate(args: argparse.Namespace) -> int:
+    from mulebench.agents.llm.pricing_file import (
+        DEFAULT_PRICING_FILE,
+        PriceFileError,
+        load_price_table,
+    )
+    from mulebench.estimate import (
+        DEFAULT_TOKEN_REPORTS,
+        EstimateError,
+        estimate,
+        render,
+        token_basis,
+    )
+
+    if args.trials < 1 or args.safety < 1:
+        return _error("--trials must be >= 1 and --safety >= 1")
+    hosts: dict[str, str] = {}
+    for item in args.hosts:
+        model, sep, host = item.partition("=")
+        if not sep or not model or not host:
+            return _error(f"--host expects MODEL=HOST, got {item!r}")
+        hosts[model] = host
+    try:
+        table = load_price_table(args.pricing or DEFAULT_PRICING_FILE)
+        basis = token_basis(args.scenario_ids, list(args.token_reports or DEFAULT_TOKEN_REPORTS))
+        rows = estimate(args.models, basis, table, trials=args.trials, hosts=hosts)
+    except (PriceFileError, EstimateError) as exc:
+        return _error(str(exc))
+    print("\n".join(render(basis, rows, table, trials=args.trials, safety=args.safety)))
+    return 0
 
 
 def _error(message: str) -> int:
@@ -564,6 +632,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "doctor":
         return _doctor(args)
+
+    if args.command == "estimate":
+        return _estimate(args)
 
     if args.command == "workloads":
         return _workloads(args)
