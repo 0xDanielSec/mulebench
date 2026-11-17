@@ -29,7 +29,7 @@ from mulebench.agents.llm.http_transport import (
 )
 from mulebench.agents.llm.model import ChatResponse, ModelCallError, ModelRequestInvalid
 from mulebench.agents.llm.openai_compat import ResponseShapeError, parse_completion
-from mulebench.agents.llm.transport import LIVE_ENV
+from mulebench.agents.llm.transport import LIVE_ENV, Transport
 
 MIN_NUM_CTX = 8192
 # Reasoning models (e.g. qwen3) think before they call a tool; a small budget
@@ -181,9 +181,7 @@ def _call_check(name: str, response: ChatResponse) -> Check:
     return Check("ok", name, "the model returned a valid tool call")
 
 
-def _second_turn(
-    transport: OpenAICompatTransport, params: dict[str, object], first: ChatResponse
-) -> Check:
+def _second_turn(transport: Transport, params: dict[str, object], first: ChatResponse) -> Check:
     """Send the tool result back and require a second tool call. Catches chat
     templates that drop the tools or the system prompt after a tool result
     (the model then cannot call tools again; see docs/local-models.md)."""

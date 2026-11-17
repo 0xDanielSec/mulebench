@@ -14,6 +14,8 @@
     mulebench check-agent [<dir>] --agent-module MOD:FACTORY [--agent-path DIR]
                   [--scenario ID ...] [--trials N] [--min-benign-pass R]
     mulebench doctor --model TAG [--base-url URL] [--allow-remote]
+    mulebench doctor --provider openrouter --model ID --allow-remote
+                  [--openrouter-host NAME] [--pricing FILE]
     mulebench estimate --model ID [...] --scenario ID [...] [--trials N]
                   [--host MODEL=HOST ...] [--pricing FILE] [--tokens-from REPORT ...]
                   [--safety F]
@@ -236,7 +238,14 @@ def _parser() -> argparse.ArgumentParser:
         "doctor", help="check a local OpenAI-compatible server (Ollama) before a run"
     )
     doctor.add_argument("--model", required=True, help="model tag, e.g. qwen3:8b")
+    doctor.add_argument(
+        "--provider",
+        choices=("openai-compatible", "openrouter"),
+        default="openai-compatible",
+        help="openai-compatible (local server, default) or openrouter (hosted)",
+    )
     _add_server_args(doctor)
+    _add_openrouter_args(doctor)
 
     est = sub.add_parser(
         "estimate", help="dry-run cost estimate for routed models (no network call)"
@@ -403,6 +412,10 @@ def _add_openrouter_args(group: argparse._ActionsContainer) -> None:
 
 
 def _doctor(args: argparse.Namespace) -> int:
+    if args.provider == "openrouter":
+        return _doctor_openrouter(args)
+    if args.openrouter_host or args.pricing:
+        return _error("--openrouter-host and --pricing only apply to --provider openrouter")
     try:
         from mulebench.agents.llm.http_transport import RemoteHostRefused
         from mulebench.doctor import print_checks, run_doctor
@@ -412,6 +425,24 @@ def _doctor(args: argparse.Namespace) -> int:
         checks = run_doctor(args.model, args.base_url or LOCAL_URL, allow_remote=args.allow_remote)
     except (RemoteHostRefused, ValueError) as exc:
         return _error(str(exc))
+    return print_checks(checks)
+
+
+def _doctor_openrouter(args: argparse.Namespace) -> int:
+    try:
+        from mulebench.agents.llm.pricing_file import DEFAULT_PRICING_FILE
+        from mulebench.doctor import print_checks
+        from mulebench.doctor_openrouter import run_openrouter_doctor
+    except ImportError:
+        return _error("doctor needs the local extra: pip install mulebench[local]")
+    if args.base_url is not None:
+        return _error("--provider openrouter has a fixed base URL; drop --base-url")
+    checks = run_openrouter_doctor(
+        args.model,
+        host=args.openrouter_host,
+        pricing=args.pricing or DEFAULT_PRICING_FILE,
+        allow_remote=args.allow_remote,
+    )
     return print_checks(checks)
 
 
