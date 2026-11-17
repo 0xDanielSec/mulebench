@@ -2,35 +2,40 @@
 # Edit by hand. Prices are USD per million tokens, per (model, host provider).
 # host = "TBD" means the host is not pinned yet: such an entry never matches,
 # so a run cannot start until the host is chosen (with `mulebench doctor
-# --provider openrouter`) and its own endpoint price is filled in here.
+# --provider openrouter`) and priced here.
 #
-# The prices below are the model-level prices listed by OpenRouter's public
-# model list on the as_of date, as placeholders. Replace them with the price
-# of the pinned host's endpoint when the host is pinned.
+# One host can list several endpoints of a model with different prices. Each
+# entry holds the HIGHEST price among the host's endpoints of that model, so
+# the cost cap never underestimates; `doctor` fails if an entry is below the
+# pinned endpoint's price.
 
 as_of = "2026-11-16"
-source = "OpenRouter public model list (GET /api/v1/models), model-level prices; hosts not pinned"
+source = "OpenRouter endpoint listings (GET /api/v1/models/{id}/endpoints); highest DeepInfra endpoint price per model"
 
+# pilot 08 pin: quantization bf16
 [[price]]
 model = "openai/gpt-oss-20b"
-host = "TBD"
+host = "DeepInfra"
 input_per_mtok = 0.030
-output_per_mtok = 0.130
+output_per_mtok = 0.140
 
+# pilot 08 pin: quantization fp8
 [[price]]
 model = "google/gemma-4-26b-a4b-it"
-host = "TBD"
-input_per_mtok = 0.076
-output_per_mtok = 0.255
+host = "DeepInfra"
+input_per_mtok = 0.070
+output_per_mtok = 0.340
 
+# pilot 08 pin: quantization fp8
 [[price]]
 model = "mistralai/mistral-small-3.2-24b-instruct"
-host = "TBD"
-input_per_mtok = 0.100
+host = "DeepInfra"
+input_per_mtok = 0.112
 output_per_mtok = 0.300
 
+# pilot 08 pin: quantization fp8 (the only tool-capable DeepInfra endpoint)
 [[price]]
 model = "qwen/qwen3-14b"
-host = "TBD"
+host = "DeepInfra"
 input_per_mtok = 0.120
 output_per_mtok = 0.240

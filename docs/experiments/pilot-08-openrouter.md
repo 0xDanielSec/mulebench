@@ -1,10 +1,10 @@
 # Pre-registration: pilot 08 (hosted models through OpenRouter)
 
 Status: **draft, not frozen.** Nothing in this file is frozen yet. Open
-items are marked **TBD**. Before freezing, the author runs
-`mulebench doctor --provider openrouter` for each model, pins one host per
-model, fills `pricing/openrouter.toml` with that host's endpoint price, and
-the TBD items below are filled in. Freezing then follows the pilots 01 to 07
+items are marked **TBD**. Hosts, endpoint quantizations and prices are now
+chosen (DeepInfra for all four models); before freezing, the author runs
+the live `doctor` probes with the host and quantization pins, and the
+remaining TBD items below are filled in. Freezing then follows the pilots 01 to 07
 rule: the sections "Protocol", "Analysis rules" and "Predictions" are frozen
 at the commit that freezes this file, before any pilot 08 trial; anything
 that differs at run time goes into "Deviations".
@@ -25,26 +25,32 @@ families, and checks hosted against local qwen3 on the same scenarios.
 - **RQ2 (calibration).** Does hosted `qwen/qwen3-14b` give results
   compatible with local `qwen3-14b` (Q4_K_M) on the same scenarios?
   Differences are **reported, not attributed**: the hosted model may run in
-  another quantization (doctor lists the endpoint's, **TBD** per host), with
-  another runtime and chat template, so a difference cannot be assigned to
-  one cause.
+  another quantization (the pinned DeepInfra endpoint is fp8, the local
+  model Q4_K_M), with another runtime and chat template, so a difference
+  cannot be assigned to one cause.
 - **RQ3 (benign utility).** Does each model complete the benign variants,
   so that a low attack success is not just a model that does nothing?
 
 ## Models
 
-| Family | OpenRouter id | Host (pinned) | Quantization (endpoint) | Price in / out per 1M (US$) |
+| Family | OpenRouter id | Host (pinned) | Quantization (pinned endpoint) | Price in / out per 1M (US$) |
 |---|---|---|---|---|
-| OpenAI open weights (reasoning) | `openai/gpt-oss-20b` | **TBD** | **TBD** | 0.030 / 0.130 (model-level, 2026-11-16; **TBD** host price) |
-| Google | `google/gemma-4-26b-a4b-it` | **TBD** | **TBD** | 0.076 / 0.255 (model-level; **TBD**) |
-| Mistral | `mistralai/mistral-small-3.2-24b-instruct` | **TBD** | **TBD** | 0.100 / 0.300 (model-level; **TBD**) |
-| Qwen (calibration) | `qwen/qwen3-14b` | **TBD** | **TBD** (local is Q4_K_M) | 0.120 / 0.240 (model-level; **TBD**) |
+| OpenAI open weights (reasoning) | `openai/gpt-oss-20b` | DeepInfra | bf16 | 0.030 / 0.140 |
+| Google | `google/gemma-4-26b-a4b-it` | DeepInfra | fp8 | 0.070 / 0.340 |
+| Mistral | `mistralai/mistral-small-3.2-24b-instruct` | DeepInfra | fp8 | 0.112 / 0.300 |
+| Qwen (calibration) | `qwen/qwen3-14b` | DeepInfra | fp8 (local: Q4_K_M) | 0.120 / 0.240 |
 
-Host choice rule (to be applied with doctor before freezing): a host that
-lists `tools`, `seed` and `temperature`, and passes both tool-calling probes;
-among those, for `qwen/qwen3-14b` prefer the endpoint whose quantization is
-closest to Q4_K_M; otherwise the cheapest. The chosen host, its listed
-quantization and price are recorded here before freezing.
+Chosen by the author from the `doctor` endpoint listings of 2026-11-16. One
+host provider (DeepInfra) for all four models, so host differences do not
+vary across models. DeepInfra lists several endpoints of some models, with
+different quantization, price and tools support (for `qwen/qwen3-14b`, fp8
+is its only tool-capable endpoint), so each run pins the quantization as
+well as the host (`--openrouter-quantization`). Prices are the **highest**
+price among each model's DeepInfra endpoints, as of 2026-11-16, so the cost
+cap never underestimates; the pinned endpoint may be cheaper.
+
+Note on qwen3: the hosted endpoint is fp8, the local model Q4_K_M. RQ2
+compares them descriptively only (see above).
 
 ## Scenarios
 
@@ -66,8 +72,8 @@ Scenario and tool schema hashes: **TBD** (at the frozen harness commit).
 | Item | Value |
 |---|---|
 | Harness | **TBD** commit; enforced by `--expect-harness`; the report must record its `generator.src_tree` |
-| Provider | `--provider openrouter`, base URL `https://openrouter.ai/api/v1`, one pinned host per model (`--openrouter-host`), no fallbacks, `require_parameters`, `data_collection: deny` |
-| Routing check | every response must name the requested model and the pinned host; otherwise the run stops (`aborted_routing`) |
+| Provider | `--provider openrouter`, base URL `https://openrouter.ai/api/v1`; `--openrouter-host DeepInfra` and `--openrouter-quantization` as in Models (`quantizations: [Q]`); no fallbacks, `require_parameters`, `data_collection: deny` |
+| Routing check | every response must name the requested model and the pinned host, and must not report another quantization; otherwise the run stops (`aborted_routing`). Each call records `served_quantization` (`null` if the response does not report it; the live probes show whether DeepInfra responses report it, **TBD**) |
 | Sampling | temperature 0.7; base seed **TBD** (distinct from every seed in the pilot 01 to 07 reports); seed `sha256_trial_key_v1` |
 | Output cap | `max_tokens` 4096 |
 | Argument coercion | `digit_strings` |
@@ -76,7 +82,7 @@ Scenario and tool schema hashes: **TBD** (at the frozen harness commit).
 | Variants | attack and benign control |
 | Trials | N = 30 per cell: 5 scenarios x 2 variants x 30 = 300 trials per model, 1,200 in total |
 | Cost cap | `--max-cost-usd 1.00` per model (US$ 4.00 at most in total) |
-| Price table | `pricing/openrouter.toml`, `as_of` and sha256 **TBD** (recorded in each report) |
+| Price table | `pricing/openrouter.toml`, `as_of` 2026-11-16; sha256 at freezing **TBD** (recorded in each report) |
 
 One command per model, recorded to its own cassette directory and report
 (`runs/pilot-08-<model>.json`); commands **TBD** with the hosts. A routing
@@ -91,23 +97,23 @@ prepublish check.
 
 ## Cost estimate
 
-From `mulebench estimate` (tokens per trial of local `qwen3-14b`: pilot 03
-for 004, 009 and 012, pilot 06 for 015b, pilot 07 for 014a; 300 trials per
-model; about 0.92M input and 0.54M output tokens per model), at the
-model-level prices above. The safety factor 2 covers models that write more
-than qwen3, whose output already includes its reasoning.
+From `mulebench estimate --host <model>=DeepInfra` (tokens per trial of
+local `qwen3-14b`: pilot 03 for 004, 009 and 012, pilot 06 for 015b, pilot
+07 for 014a; 300 trials per model; about 0.92M input and 0.54M output
+tokens per model), at the DeepInfra table prices above (price table sha256
+`e20655a42560...`). The safety factor 2 covers models that write more than
+qwen3, whose output already includes its reasoning.
 
 | Model | Estimate | x2 |
 |---|---|---|
-| `openai/gpt-oss-20b` | US$ 0.10 | US$ 0.19 |
-| `google/gemma-4-26b-a4b-it` | US$ 0.21 | US$ 0.41 |
-| `mistralai/mistral-small-3.2-24b-instruct` | US$ 0.25 | US$ 0.51 |
+| `openai/gpt-oss-20b` | US$ 0.10 | US$ 0.21 |
+| `google/gemma-4-26b-a4b-it` | US$ 0.25 | US$ 0.49 |
+| `mistralai/mistral-small-3.2-24b-instruct` | US$ 0.26 | US$ 0.53 |
 | `qwen/qwen3-14b` | US$ 0.24 | US$ 0.48 |
-| **Total** | **US$ 0.80** | **US$ 1.59** |
+| **Total** | **about US$ 0.85** | **US$ 1.71** |
 
 Within the US$ 5 budget even with the safety factor; the per-model caps
-bound the worst case at US$ 4.00. To be recomputed with the pinned host
-prices (`--host MODEL=HOST`) before freezing (**TBD**).
+bound the worst case at US$ 4.00.
 
 ## Analysis rules (draft)
 
