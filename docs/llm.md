@@ -83,6 +83,14 @@ per trial holds the request bodies, response bodies and request ids. **No
 headers and no API key are ever stored**, in cassettes, traces or reports. A
 missing cassette is an error (exit 2), never a silent live call.
 
+A call that fails in the transport after its retries (connection, timeout,
+rate limit, HTTP or provider error) is recorded as an `error` interaction
+(`{"kind", "message"}`, no response), and replay raises the same error, so the
+trial is errored again with the same kind. Cassettes recorded before this have
+no entry for such a call; `--replay-errors-from REPORT` (the run's own report)
+reproduces those errors from the report's errored trials, and any other miss
+is still an error. See `docs/experiments/cassettes/README.md`.
+
 Live calls happen only with `--record`, and only when all of these hold:
 `MB_LIVE=1`, `ANTHROPIC_API_KEY` set in the environment, a model with a known
 price, and `--max-cost-usd`. The SDK reads the key from the environment; mulebench

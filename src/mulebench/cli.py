@@ -52,6 +52,7 @@ A successful attack is a finding, not an error.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -75,6 +76,20 @@ LOCAL_MAX_TOKENS = 2048  # output tokens also count toward a small local num_ctx
 SERVER_META_FILE = "_server_meta.json"  # in the cassette directory
 
 
+RUN_EXIT_CODES = """exit codes:
+  0    run complete; every attack trial was exposed to its payload
+  1    run complete, but at least one attack trial was not_exposed (the agent
+       never read the payload); the report is written and valid
+  2    usage or setup error, nothing run: bad arguments, missing price, a
+       cassette with no recorded response (replay), --expect-harness mismatch
+  3    run aborted (cost cap, routing check, ...); report and checkpoint written,
+       continue with --resume
+  4    --agent-module: the agent failed the benign conformance check; no attack
+       trials were run
+  130  interrupted (Ctrl+C); report and checkpoint written, continue with --resume
+Errored trials and rows that are not meaningful do not change the exit code."""
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mulebench",
@@ -83,7 +98,12 @@ def _parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    run = sub.add_parser("run", help="run scenarios (packaged ones by default)")
+    run = sub.add_parser(
+        "run",
+        help="run scenarios (packaged ones by default)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=RUN_EXIT_CODES,
+    )
     source = run.add_mutually_exclusive_group()
     source.add_argument(
         "directory", nargs="?", type=Path, help="directory of scenario *.yaml files"
@@ -325,6 +345,15 @@ def _add_llm_args(parser: argparse.ArgumentParser) -> None:
     )
     llm.add_argument("--cassettes", type=Path, help="cassette directory (replay by default)")
     llm.add_argument("--record", action="store_true", help="make live calls and record them")
+    llm.add_argument(
+        "--replay-errors-from",
+        type=Path,
+        metavar="REPORT",
+        help="replay only: the run report of the recording. A call that errored live "
+        "(transport error, so no response was recorded) is reproduced as the same error "
+        "instead of failing with a missing cassette. Needed only for cassettes recorded "
+        "before failed calls were written to the cassette",
+    )
     llm.add_argument("--max-cost-usd", type=float, help="whole-run cost cap")
     llm.add_argument(
         "--provider", choices=("anthropic", "openai-compatible", "openrouter"), default="anthropic"
@@ -485,6 +514,17 @@ def _estimate(args: argparse.Namespace) -> int:
         return _error(str(exc))
     print("\n".join(render(basis, rows, table, trials=args.trials, safety=args.safety)))
     return 0
+
+
+def _known_errors(args: argparse.Namespace) -> dict[str, str]:
+    """Errored trials of --replay-errors-from (empty without it)."""
+    from mulebench.agents.llm.transport import known_errors_from_report
+
+    path: Path | None = getattr(args, "replay_errors_from", None)
+    if path is None:
+        return {}
+    data: object = json.loads(path.read_text(encoding="utf-8"))
+    return known_errors_from_report(data)
 
 
 def _error(message: str) -> int:
@@ -901,7 +941,7 @@ def _build_llm(
             return _error(str(exc))
         transport = CassetteTransport(args.cassettes, "record", upstream)
     else:
-        transport = CassetteTransport(args.cassettes, "replay")
+        transport = CassetteTransport(args.cassettes, "replay", known_errors=_known_errors(args))
 
     agent = LLMAgent(
         AnthropicChatModel(transport),
@@ -1004,7 +1044,7 @@ def _build_local(
             if meta_path.exists()
             else None
         )
-        transport = CassetteTransport(args.cassettes, "replay")
+        transport = CassetteTransport(args.cassettes, "replay", known_errors=_known_errors(args))
 
     temperature = 0.0 if args.temperature is None else args.temperature
     seed = 0 if args.seed is None else args.seed
@@ -1104,7 +1144,7 @@ def _build_openrouter(
             return _error(str(exc))
         transport = CassetteTransport(args.cassettes, "record", upstream)
     else:
-        transport = CassetteTransport(args.cassettes, "replay")
+        transport = CassetteTransport(args.cassettes, "replay", known_errors=_known_errors(args))
 
     temperature = 0.0 if args.temperature is None else args.temperature
     seed = 0 if args.seed is None else args.seed

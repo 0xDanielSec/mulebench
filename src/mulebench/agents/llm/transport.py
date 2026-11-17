@@ -12,7 +12,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from collections.abc import Callable
+import re
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, Literal, Protocol
 
@@ -83,11 +84,35 @@ def cassette_path(directory: Path, trial_key: str) -> Path:
     return directory / f"{digest}.json"
 
 
+# Error kinds a transport raises after its own retries (ModelCallError.kind).
+# Only these may be reproduced from a report: a call that failed this way has no
+# response body to record. Output errors (empty_output, malformed_tool_call:...)
+# always have a recorded response and are never taken from a report.
+TRANSPORT_ERROR = re.compile(
+    r"^(?:connection|timeout|rate_limit|bad_body|http_\d{3}|provider_[a-z0-9_]+)$"
+)
+MEMORY_EXTRACTION = "memory_extraction:"
+
+
 class CassetteTransport:
     """One JSON file per trial: {"trial_key", "interactions": [...]}.
 
     Each interaction stores the request body, its sha256, the response body and
     the request id. Replay matches on the request sha256 within the trial.
+
+    A call that failed upstream with a ModelCallError (after the transport's own
+    retries) is recorded as an interaction with an `error` object ({"kind",
+    "message"}) instead of a `response`; replay raises the same error, so the
+    trial is errored again with the same kind.
+
+    Cassettes recorded before error interactions existed have no entry for such
+    a call. `known_errors` (trial key -> the trial's `error` in the run report,
+    see `known_errors_from_report`) lets replay reproduce them: on a cassette
+    miss, if the report says the trial errored with a transport error kind on
+    this kind of call (a `#mem` extraction call for `memory_extraction:<kind>`,
+    any other call for a bare `<kind>`), the same ModelCallError is raised. Any
+    other miss is still CassetteMissing, so a real cassette gap never turns into
+    an error.
     """
 
     def __init__(
@@ -95,12 +120,25 @@ class CassetteTransport:
         directory: Path,
         mode: Literal["replay", "record"] = "replay",
         upstream: Transport | None = None,
+        known_errors: Mapping[str, str] | None = None,
     ) -> None:
         if mode == "record" and upstream is None:
             raise ValueError("record mode needs an upstream transport")
         self.directory = directory
         self.mode = mode
         self.upstream = upstream
+        self.known_errors = dict(known_errors or {})
+
+    def _reported_error(self, trial_key: str) -> str | None:
+        base, sep, suffix = trial_key.partition("#")
+        error = self.known_errors.get(base)
+        if error is None:
+            return None
+        extraction = bool(sep) and suffix.startswith("mem")
+        if extraction != error.startswith(MEMORY_EXTRACTION):
+            return None
+        kind = error.removeprefix(MEMORY_EXTRACTION)
+        return kind if TRANSPORT_ERROR.match(kind) else None
 
     def send(self, params: dict[str, Any], trial_key: str) -> TransportResponse:
         path = cassette_path(self.directory, trial_key)
@@ -108,14 +146,33 @@ class CassetteTransport:
         cassette = _read(path, trial_key)
         for entry in cassette["interactions"]:
             if entry["request_sha256"] == sha:
+                if "error" in entry:
+                    err = entry["error"]
+                    raise ModelCallError(err["kind"], err["message"], entry.get("request_id"))
                 return TransportResponse(
                     body=entry["response"],
                     request_id=entry["request_id"],
                     retries=int(entry.get("retries", 0)),
                 )
         if self.mode == "replay" or self.upstream is None:
+            kind = self._reported_error(trial_key)
+            if kind is not None:
+                raise ModelCallError(kind, "errored live; reproduced from the run report")
             raise CassetteMissing(trial_key, path)
-        response = self.upstream.send(params, trial_key)
+        try:
+            response = self.upstream.send(params, trial_key)
+        except ModelCallError as exc:
+            message = str(exc).removeprefix(f"{exc.kind}: ")
+            cassette["interactions"].append(
+                {
+                    "request_sha256": sha,
+                    "request": params,
+                    "error": {"kind": exc.kind, "message": message},
+                    "request_id": exc.request_id,
+                }
+            )
+            self._write(path, cassette)
+            raise
         record: dict[str, Any] = {
             "request_sha256": sha,
             "request": params,
@@ -125,9 +182,29 @@ class CassetteTransport:
         if response.retries:  # only then, so cassettes without retries are unchanged
             record["retries"] = response.retries
         cassette["interactions"].append(record)
+        self._write(path, cassette)
+        return response
+
+    def _write(self, path: Path, cassette: dict[str, Any]) -> None:
         self.directory.mkdir(parents=True, exist_ok=True)
         path.write_bytes((json.dumps(cassette, indent=2, ensure_ascii=False) + "\n").encode())
-        return response
+
+
+def known_errors_from_report(report: object) -> dict[str, str]:
+    """trial key -> error, for every errored trial of a run report (parsed JSON)."""
+    out: dict[str, str] = {}
+    stack: list[object] = [report]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            if isinstance(node.get("trial_key"), str) and "errored" in node:
+                if node["errored"] and isinstance(node.get("error"), str):
+                    out[node["trial_key"]] = node["error"]
+            else:
+                stack.extend(node.values())
+        elif isinstance(node, list):
+            stack.extend(node)
+    return out
 
 
 def _read(path: Path, trial_key: str) -> dict[str, Any]:
