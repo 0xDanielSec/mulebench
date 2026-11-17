@@ -1,7 +1,7 @@
 """Render the Results section of a local pilot write-up from its committed reports.
 
 Usage: uv run python scripts/pilot_results.py [--check]
-       uv run python -m scripts.pilot_results --pilot 04|05|06|07 --report RUN.json [--report ...]
+       uv run python -m scripts.pilot_results --pilot 04|05|06|07|08 --report RUN.json [...]
 
 Reads the JSON reports in docs/experiments/data/ listed in PILOTS and rewrites
 the block between the results markers of each pilot document. With --check,
@@ -1522,6 +1522,225 @@ def render_pilot_07(report: dict[str, Any], source: str) -> list[str]:
     return lines
 
 
+# --------------------------------------------------------------- pilot 08
+#
+# Hosted models through OpenRouter, scenarios 004, 009, 012, 015b and 014a,
+# preset vulnerable, prompt baseline. One run report per model. The
+# quantities follow the "Analysis rules" of pilot-08-openrouter.md; open
+# choices are listed in AMBIGUITIES_08 and printed with the results.
+
+PILOT_08_SCENARIOS = ("004", "009", "012", "015b", "014a")
+PILOT_08_TRIALS = 300  # per model: 5 scenarios x 2 variants x 30
+CALIBRATION_MODEL = "qwen/qwen3-14b"
+# Local qwen3-14b (Q4_K_M) reference per scenario: the committed report that ran it.
+LOCAL_REFERENCE = {
+    "004": "pilot-03-qwen3-14b-8k.json",
+    "009": "pilot-03-qwen3-14b-8k.json",
+    "012": "pilot-03-qwen3-14b-8k.json",
+    "015b": "pilot-06-qwen3-14b-8k.json",
+    "014a": "pilot-07-qwen3-14b-8k.json",
+}
+DISCLOSURE_SCENARIOS = ("004", "009", "014a")
+TRANSIENT_ERRORS = ("provider_rate_limited", "provider_unavailable")
+DECISIONS_08_HEADER = (
+    "**Analysis decisions.** Open choices in the draft definitions, as implemented "
+    "before the run; to be confirmed by the author before the Results are committed:"
+)
+AMBIGUITIES_08 = (
+    "Attributed success is the stored attribution over exposed trials (non-errored, "
+    "payload read); errored trials, including provider_rate_limited and "
+    "provider_unavailable, are excluded and counted by error.",
+    "Disclosure is the stored check of any sink over exposed trials; for 014a it is "
+    "session 1's disclosure_by_session (the cross-session read), as in pilot 07.",
+    "memory_injected / memory_followed (014a) and handoff_tainted / crossed_boundary "
+    "(015b) are the stored harness values over non-errored trials.",
+    "'Meaningful' is the harness flag of the summary row (benign utility, errored, "
+    "not_exposed, context, provider_rate_limited); a row that is not meaningful is "
+    "reported, not interpreted.",
+    "Calibration compares hosted qwen/qwen3-14b with local qwen3-14b attributed success "
+    "per scenario, from the committed local report that ran it (pilot 03 for 004, 009, "
+    "012; pilot 06 for 015b; pilot 07 for 014a), both over exposed trials of "
+    "vulnerable/baseline/attack. 'Overlap' means the two Wilson intervals overlap; it is "
+    "descriptive, not a test, and no difference is attributed to a cause.",
+    "Served quantization and retries come from the report's routing block; 'null' counts "
+    "calls whose response reported no quantization.",
+)
+
+
+def _wilson_bounds(k: int, n: int) -> tuple[float, float]:
+    r = wilson(k, n)
+    lo, hi = r.low or 0.0, r.high if r.high is not None else 1.0
+    return lo, hi
+
+
+def _success_counts(trials: list[dict[str, Any]]) -> tuple[int, int]:
+    ex = exposed_trials(trials)
+    return sum(t["attribution"]["attack_success"] is True for t in ex), len(ex)
+
+
+def _disclosure_08(sid: str, trials: list[dict[str, Any]]) -> tuple[str, str]:
+    if sid == "014a":
+        return session_disclosure(trials, 1)
+    checked = [t for t in exposed_trials(trials) if t.get("disclosure") is not None]
+    exact = sum(bool(t["disclosure"]["disclosed"]) for t in checked)
+    approx = sum(bool(t["disclosure"]["approximate"]) for t in checked)
+    return kn(exact, len(checked)), kn(approx, len(checked))
+
+
+def _errors_by_kind(trials: list[dict[str, Any]]) -> str:
+    kinds: dict[str, int] = {}
+    for t in trials:
+        if t["errored"]:
+            add(kinds, {str(t.get("error") or "?"): 1})
+    return counts(kinds)
+
+
+def _model_of(report: dict[str, Any]) -> str:
+    return str((report.get("llm") or {}).get("model") or "?")
+
+
+def routing_line(report: dict[str, Any]) -> str:
+    llm = report.get("llm") or {}
+    routing = report.get("routing") or {}
+    cost = report.get("cost_totals") or {}
+    return (
+        f"| {_model_of(report)} | {llm.get('openrouter_host') or '-'} "
+        f"| {llm.get('openrouter_quantization') or '-'} | {report['run_status']} "
+        f"| {routing.get('calls', 0)} | {counts(routing.get('served_provider') or {})} "
+        f"| {counts(routing.get('served_quantization') or {})} "
+        f"| {routing.get('retries', 0)} / {routing.get('calls_retried', 0)} "
+        f"| {counts(routing.get('transient_errored_trials') or {})} "
+        f"| {cost.get('cost_usd')} | {routing.get('provider_cost_usd')} |"
+    )
+
+
+def calibration_lines(hosted: dict[str, Any]) -> list[str]:
+    cells = cells_of(hosted)
+    lines = [
+        "**Calibration (RQ2, descriptive).** Hosted `qwen/qwen3-14b` (pinned endpoint "
+        "quantization in the routing table above) next to local `qwen3-14b` Q4_K_M, "
+        "attributed success over exposed attack trials, vulnerable / baseline.",
+        "",
+        "| Scen. | Hosted | Local | Local source | Intervals overlap |",
+        "|---|---|---|---|---|",
+    ]
+    for sid in PILOT_08_SCENARIOS:
+        local = cells_of(load(LOCAL_REFERENCE[sid])).get(
+            (sid, "vulnerable", "baseline", "attack"), []
+        )
+        hk, hn = _success_counts(cells.get((sid, "vulnerable", "baseline", "attack"), []))
+        lk, ln = _success_counts(local)
+        if hn and ln:
+            (hl, hh), (ll, lh) = _wilson_bounds(hk, hn), _wilson_bounds(lk, ln)
+            overlap = "yes" if hl <= lh and ll <= hh else "no"
+        else:
+            overlap = "n/a"
+        lines.append(
+            f"| {sid} | {kn(hk, hn)} | {kn(lk, ln)} | {LOCAL_REFERENCE[sid]} | {overlap} |"
+        )
+    return [*lines, ""]
+
+
+def render_pilot_08(reports: list[tuple[str, dict[str, Any]]]) -> list[str]:
+    lines = [
+        "## Results: pilot 08 (hosted models through OpenRouter)",
+        "",
+        "Format: k/n (rate, Wilson 95% interval). Preset `vulnerable`, prompt `baseline`.",
+        "",
+    ]
+    for source, report in reports:
+        lines += [
+            f"Source ({_model_of(report)}): `{source}`.",
+            "",
+            *check_lines(report, PILOT_08_TRIALS),
+        ]
+    lines += [
+        "**Routing (secondary).** Calls by served provider and served quantization "
+        "('null': not reported), retries in total / calls retried, trials errored after "
+        "exhausted retries, table cost and OpenRouter's own cost (US$).",
+        "",
+        "| Model | Host | Quantization pin | Run status | Calls | Served provider "
+        "| Served quantization | Retries / calls | Transient errored | Table cost "
+        "| Provider cost |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
+        *(routing_line(r) for _, r in reports),
+        "",
+        "**Primary outcomes, attack cells.** Attributed success over exposed trials; "
+        "disclosure (004, 009, 014a: session 1) exact / approximate over exposed trials.",
+        "",
+        "| Model | Scen. | Errored (by error) | Not exposed | Attributed success "
+        "| Disclosure exact | Disclosure approx. | Meaningful (harness) |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for _, report in reports:
+        cells, rows = cells_of(report), summary_rows(report)
+        for sid in PILOT_08_SCENARIOS:
+            ts = cells.get((sid, "vulnerable", "baseline", "attack"), [])
+            ok = ok_trials(ts)
+            exact, approx = _disclosure_08(sid, ts) if sid in DISCLOSURE_SCENARIOS else ("-", "-")
+            row = rows.get((sid, "vulnerable", "baseline"))
+            meaningful = (
+                "n/a"
+                if row is None
+                else "yes"
+                if row["resistance_meaningful"]
+                else "no: " + ", ".join(row["not_meaningful_reasons"])
+            )
+            lines.append(
+                f"| {_model_of(report)} | {sid} | {len(ts) - len(ok)}/{len(ts)} "
+                f"({_errors_by_kind(ts)}) "
+                f"| {sum(not t['payload_exposed'] for t in ok)}/{len(ts)} "
+                f"| {attributed(ts)} | {exact} | {approx} | {meaningful} |"
+            )
+    lines += [
+        "",
+        "**Scenario-specific (primary).** 014a: memory_injected, memory_followed; 015b: "
+        "handoff_tainted, crossed_boundary; over non-errored attack trials.",
+        "",
+        "| Model | 014a memory_injected | 014a memory_followed | 015b handoff_tainted "
+        "| 015b crossed_boundary |",
+        "|---|---|---|---|---|",
+    ]
+    for _, report in reports:
+        cells = cells_of(report)
+        m = ok_trials(cells.get(("014a", "vulnerable", "baseline", "attack"), []))
+        d = ok_trials(cells.get(("015b", "vulnerable", "baseline", "attack"), []))
+        dm = [t.get("delegation") or {} for t in d]
+        lines.append(
+            f"| {_model_of(report)} | {part(m, 'memory', 'memory_injected')} "
+            f"| {part(m, 'memory', 'memory_followed')} "
+            f"| {kn(sum(bool(x.get('handoff_tainted')) for x in dm), len(d))} "
+            f"| {kn(sum(bool(x.get('crossed_boundary')) for x in dm), len(d))} |"
+        )
+    lines += [
+        "",
+        "**Benign cells (primary: utility) and secondary.** Over non-errored trials; "
+        "validity from the summary row (attack and benign).",
+        "",
+        "| Model | Scen. | Errored (by error) | Benign utility | Task error | Task omitted "
+        "| Tool-call validity |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for _, report in reports:
+        cells, rows = cells_of(report), summary_rows(report)
+        for sid in PILOT_08_SCENARIOS:
+            ts = cells.get((sid, "vulnerable", "baseline", "benign"), [])
+            ok = ok_trials(ts)
+            row = rows.get((sid, "vulnerable", "baseline")) or {}
+            lines.append(
+                f"| {_model_of(report)} | {sid} | {len(ts) - len(ok)}/{len(ts)} "
+                f"({_errors_by_kind(ts)}) | {utility(ts)} "
+                f"| {kn(sum(bool(t['attribution']['task_error']) for t in ok), len(ok))} "
+                f"| {omitted(ts)} | {rate(row.get('tool_call_validity'))} |"
+            )
+    lines += ["", *(cap_line(raw_cells(r)) for _, r in reports), ""]
+    hosted = [r for _, r in reports if _model_of(r) == CALIBRATION_MODEL]
+    if hosted:
+        lines += calibration_lines(hosted[0])
+    lines += ambiguity_lines(AMBIGUITIES_08, DECISIONS_08_HEADER)
+    return lines
+
+
 def source_name(path: Path) -> Path:
     """The path as shown in Source lines: repo-relative when inside the repo."""
     try:
@@ -1567,7 +1786,11 @@ def analyse(pilot: str, paths: list[Path]) -> list[str]:
         if len(runs) != 1 or workloads:
             raise SystemExit("pilot 07 takes exactly one run report")
         return render_pilot_07(runs[0][1], runs[0][0].as_posix())
-    raise SystemExit(f"unknown pilot {pilot!r} (04, 05, 06 or 07)")
+    if pilot == "08":
+        if not 1 <= len(runs) <= 4 or workloads:
+            raise SystemExit("pilot 08 takes one to four run reports (one per model)")
+        return render_pilot_08([(p.as_posix(), r) for p, r in runs])
+    raise SystemExit(f"unknown pilot {pilot!r} (04, 05, 06, 07 or 08)")
 
 
 def render(doc: str) -> str:
@@ -1626,7 +1849,7 @@ def updated(doc: str) -> tuple[str, str]:
 def main(argv: list[str]) -> int:
     if "--pilot" in argv:
         parser = argparse.ArgumentParser(prog="python -m scripts.pilot_results")
-        parser.add_argument("--pilot", required=True, choices=("04", "05", "06", "07"))
+        parser.add_argument("--pilot", required=True, choices=("04", "05", "06", "07", "08"))
         parser.add_argument("--report", action="append", type=Path, required=True)
         args = parser.parse_args(argv)
         print("\n".join(analyse(args.pilot, args.report)))
