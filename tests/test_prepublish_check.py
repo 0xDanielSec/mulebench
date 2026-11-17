@@ -88,6 +88,7 @@ def test_forbidden_terms_case_insensitive(pc: ModuleType) -> None:
 FAKE_SECRETS = {
     "anthropic": "sk-" + "ant-" + "api03-" + "A" * 40,
     "generic-sk": "sk-" + "B" * 40,
+    "openrouter": "sk-" + "or-v1-" + "f" * 64,
     "aws-access-key": "AKIA" + "C" * 16,
     "github-token": "ghp" + "_" + "D" * 36,
     "google-api-key": "AIza" + "E" * 35,

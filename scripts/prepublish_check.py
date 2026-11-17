@@ -12,7 +12,7 @@ for:
    - env var MB_FORBIDDEN_TERMS="term one,term two", and/or
    - an untracked file `.prepublish-terms` (one term per line, `#` comments).
      This file is in .gitignore so the terms never get committed;
-4. API-key-shaped strings (Anthropic, generic sk-, AWS, GitHub, Google, Slack,
+4. API-key-shaped strings (Anthropic, OpenRouter sk-or-, generic sk-, AWS, GitHub, Google, Slack,
    private key blocks). Secrets are printed masked.
 
 Extra allowed domains: env var MB_ALLOWED_DOMAINS="<domain>,<domain>".
@@ -57,6 +57,7 @@ DEFAULT_ALLOWED_DOMAINS = frozenset(
         "files.pythonhosted.org",  # uv.lock
         "json-schema.org",  # standard JSON Schema dialect identifier ($schema)
         "microsoft.net",  # "Microsoft.NET.Sdk" project SDK name (tools/kql-check)
+        "openrouter.ai",  # --provider openrouter base URL
     }
 )
 DEFAULT_ALLOWED_EMAILS = frozenset({"noreply@anthropic.com"})
@@ -71,6 +72,7 @@ BARE_DOMAIN = re.compile(rf"\b((?:[a-z0-9-]+\.)+(?:{_TLDS}))\b", re.IGNORECASE)
 TOML_TABLE = re.compile(r"^\s*\[\[?[A-Za-z0-9_.-]+\]\]?\s*$")
 SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("anthropic", re.compile(r"sk-ant-[a-z]+\d*-[A-Za-z0-9_-]{20,}")),
+    ("openrouter", re.compile(r"\bsk-or-v1-[A-Za-z0-9]{32,}")),
     ("generic-sk", re.compile(r"\bsk-[A-Za-z0-9_-]{32,}")),
     ("aws-access-key", re.compile(r"\bAKIA[0-9A-Z]{16}\b")),
     ("github-token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}")),
