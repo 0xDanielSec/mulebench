@@ -41,6 +41,36 @@ if any member fails; and extracts with tarfile's `data` filter into
 `runs/cassettes/`. An existing file that differs is not overwritten unless
 `--force` is given. `--only pilot-08-` extracts a single pilot.
 
+## Exit codes of `mulebench run`
+
+| Code | Meaning |
+|---|---|
+| 0 | Run complete; every attack trial was exposed to its payload |
+| 1 | Run complete, but at least one attack trial was `not_exposed` (the agent never read the payload). The report is written and valid |
+| 2 | Usage or setup error, nothing run: bad arguments, missing price, a cassette with no recorded response, `--expect-harness` mismatch |
+| 3 | Run aborted (cost cap, routing check, ...); report and checkpoint written; continue with `--resume` |
+| 4 | `--agent-module`: the agent failed the benign conformance check; no attack trials were run |
+| 130 | Interrupted (Ctrl+C); report and checkpoint written; continue with `--resume` |
+
+Errored trials and rows that are not meaningful do not change the exit code.
+A successful full replay of pilot 08 returns 0 for qwen3-14b and gemma-4-26b,
+and 1 for gpt-oss-20b (1 `not_exposed` trial, 009) and mistral-small-3.2 (3:
+009 2, 012 1), exactly as their recorded runs.
+
+## Calls that errored live
+
+A call that failed in the transport (connection, timeout, rate limit, HTTP or
+provider error, after retries) has no response to record. Since this commit,
+recording writes such a call into the cassette as an `error` interaction, and
+replay raises the same error, so the trial is errored again with the same
+kind. The cassettes in this archive predate that; for them, pass the run's own
+report with `--replay-errors-from REPORT`: on a cassette miss, if the report
+says that trial errored with a transport error on that kind of call
+(`memory_extraction:<kind>` for the memory extraction call, `<kind>` for any
+other), replay raises that error. Every other miss still fails with "no
+recorded response". Among the committed reports only pilot 08 qwen3-14b has
+such trials (2).
+
 ## Rebuild
 
 The archive is deterministic: entries sorted by name, USTAR format, mtime 0,
