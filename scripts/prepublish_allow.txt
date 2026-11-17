@@ -5,3 +5,4 @@ energy@example.tes -- synthetic payee key energy@example.test cut by the 200-cha
 113044945+0xDanielSec@users.noreply.github.com -- GitHub noreply address of the repository owner, set by GitHub on PR merge commits
 noreply@github.com -- GitHub's own committer address on web merges and Dependabot commits
 support@github.com -- Dependabot's author address on its dependency update commits
+loja@exemplo.test -- synthetic address written by the pilot 08 Mistral model from the counterparty name "Loja Exemplo" (ledger key loja@example.test); reserved .test domain

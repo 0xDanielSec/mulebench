@@ -20,6 +20,10 @@ DATA = ROOT / "docs" / "experiments" / "data"
 PILOTS = sorted(p for p in DATA.glob("pilot-*.json") if not p.stem.endswith("-workload"))
 HREF = re.compile(r'href="([^"]*)"')
 ID = re.compile(r'id="([^"]*)"')
+# A URL the browser would fetch or follow: in an attribute value or a CSS url().
+# Escaped model text may mention a URL (a model wrote a markdown link to a
+# synthetic example.test page in pilot 08); that is text, not a reference.
+NETWORK_REF = re.compile(r"""(?:=\s*["']?|url\(\s*["']?)(?:https?:)?//""", re.IGNORECASE)
 
 
 @cache
@@ -63,9 +67,15 @@ def test_every_page_has_the_csp_and_no_network_reference() -> None:
     for path, text in pilot_site().items():
         assert text.startswith("<!DOCTYPE html>"), path
         assert f'content="{html.escape(CSP, quote=True)}"' in text, path
-        assert "http://" not in text, path
-        assert "https://" not in text, path
+        assert not NETWORK_REF.search(text), path
         assert text.count("<script") == 1, path
+
+
+def test_network_reference_pattern() -> None:
+    assert NETWORK_REF.search('<a href="https://x.example.test/">')
+    assert NETWORK_REF.search("<img src=//x.example.test/a.png>")
+    assert NETWORK_REF.search("background: url('http://x.example.test/a')")
+    assert not NETWORK_REF.search("<p>see [link](https://x.example.test/t)</p>")
 
 
 def test_output_is_deterministic() -> None:

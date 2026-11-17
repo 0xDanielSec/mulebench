@@ -134,3 +134,16 @@ def test_pilot_08_takes_one_to_four_reports(script: ModuleType, tmp_path: Path) 
         script.analyse("08", [path] * 5)
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["routing"]["retries"] == data["routing"]["calls"]
+
+
+def test_pilot_08_cross_model_table_matches_committed_data(script: ModuleType) -> None:
+    doc = "docs/experiments/pilot-08-openrouter.md"
+    paths = [script.DATA / name for name in script.PILOTS[doc]]
+    table = script.cross_model_lines([(p.name, json.loads(p.read_text("utf-8"))) for p in paths])
+    text = (ROOT / doc).read_text(encoding="utf-8")
+    assert "\n".join(table) in text
+    rows = {ln.split(" | ")[0]: ln for ln in table if ln.startswith("| 0")}
+    assert "28/30 (93%, 79%-98%)" in rows["| 014a attack"]
+    assert "**not meaningful: low_benign_utility**" in rows["| 009 attack"]
+    assert "1/29 (3%, 1%-17%)" in rows["| 012 attack"]
+    assert any(ln.startswith("| Errored") and "empty_output 8" in ln for ln in table)

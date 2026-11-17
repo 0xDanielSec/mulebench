@@ -46,12 +46,19 @@ PILOTS: dict[str, list[str]] = {
         "pilot-06-qwen3-14b-8k-workload.json",
     ],
     "docs/experiments/local-pilot-07.md": ["pilot-07-qwen3-14b-8k.json"],
+    "docs/experiments/pilot-08-openrouter.md": [
+        "pilot-08-qwen3-14b.json",
+        "pilot-08-gpt-oss-20b.json",
+        "pilot-08-gemma-4-26b.json",
+        "pilot-08-mistral-small-3.2.json",
+    ],
 }
 PILOT_04_05_DOCS = {
     "docs/experiments/local-pilot-04.md": "04",
     "docs/experiments/local-pilot-05.md": "05",
     "docs/experiments/local-pilot-06.md": "06",
     "docs/experiments/local-pilot-07.md": "07",
+    "docs/experiments/pilot-08-openrouter.md": "08",
 }
 PILOT_02_DOC = "docs/experiments/local-pilot-02.md"
 PILOT_03_DOC = "docs/experiments/local-pilot-03.md"
@@ -1640,12 +1647,71 @@ def calibration_lines(hosted: dict[str, Any]) -> list[str]:
     return [*lines, ""]
 
 
+def _meaningful_mark(row: dict[str, Any] | None) -> str:
+    if row is None or row["resistance_meaningful"]:
+        return ""
+    return " **not meaningful: " + ", ".join(row["not_meaningful_reasons"]) + "**"
+
+
+def cross_model_lines(reports: list[tuple[str, dict[str, Any]]]) -> list[str]:
+    """Scenario x model overview: the same quantities as the detailed tables below."""
+    models = [_model_of(r) for _, r in reports]
+    cells = [cells_of(r) for _, r in reports]
+    rows = [summary_rows(r) for _, r in reports]
+    head = "| | " + " | ".join(f"`{m}`" for m in models) + " |"
+    rule = "|---|" + "---|" * len(models)
+    lines = [
+        "**Cross-model overview.** Attack rows: attributed success over exposed attack "
+        "trials, with the harness 'meaningful' flag of the summary row. Benign rows: benign "
+        "exact utility over non-errored benign trials. Errored: trials errored over all 300 "
+        "of the model, by error. Cost: table cost / OpenRouter provider cost (US$).",
+        "",
+        head,
+        rule,
+    ]
+    for sid in PILOT_08_SCENARIOS:
+        key = (sid, "vulnerable", "baseline")
+        lines.append(
+            f"| {sid} attack | "
+            + " | ".join(
+                attributed(c.get((*key, "attack"), [])) + _meaningful_mark(r.get(key))
+                for c, r in zip(cells, rows, strict=True)
+            )
+            + " |"
+        )
+    for sid in PILOT_08_SCENARIOS:
+        key = (sid, "vulnerable", "baseline")
+        lines.append(
+            f"| {sid} benign utility | "
+            + " | ".join(utility(c.get((*key, "benign"), [])) for c in cells)
+            + " |"
+        )
+    errored = []
+    for c in cells:
+        ts = [t for k, v in c.items() if k[1:3] == ("vulnerable", "baseline") for t in v]
+        n = sum(bool(t["errored"]) for t in ts)
+        errored.append(f"{n}/{len(ts)} ({_errors_by_kind(ts)})")
+    lines.append("| Errored | " + " | ".join(errored) + " |")
+    costs = [r.get("cost_totals") or {} for _, r in reports]
+    routing = [r.get("routing") or {} for _, r in reports]
+    lines.append(
+        "| Cost | "
+        + " | ".join(
+            f"{c.get('cost_usd')} / {g.get('provider_cost_usd')}"
+            for c, g in zip(costs, routing, strict=True)
+        )
+        + " |"
+    )
+    return [*lines, ""]
+
+
 def render_pilot_08(reports: list[tuple[str, dict[str, Any]]]) -> list[str]:
     lines = [
         "## Results: pilot 08 (hosted models through OpenRouter)",
         "",
         "Format: k/n (rate, Wilson 95% interval). Preset `vulnerable`, prompt `baseline`.",
         "",
+        *cross_model_lines(reports),
     ]
     for source, report in reports:
         lines += [
