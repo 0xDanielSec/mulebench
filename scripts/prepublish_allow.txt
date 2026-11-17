@@ -1,0 +1,4 @@
+# Known false positives of scripts/prepublish_check.py.
+# One entry per line: <exact finding value> -- <one-line justification>.
+# Allowlisted hits are still printed, as "allowed (<justification>)".
+energy@example.tes -- synthetic payee key energy@example.test cut by the 200-char auto-memory item cap in the frozen pilot 07 report

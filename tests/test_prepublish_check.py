@@ -29,6 +29,8 @@ def pc() -> ModuleType:
 
 AUTHOR = "author" + "@" + "mail" + ".test"
 CORP = "corp" + ".com"
+HIT = "x" + "@" + "example.tes"  # built so this file is not itself a finding
+OTHER = "y" + "@" + "example.tes"
 
 
 def policy(pc: ModuleType, terms: tuple[str, ...] = ()) -> object:
@@ -104,3 +106,36 @@ def test_api_key_shaped_strings_flagged_and_masked(pc: ModuleType, name: str, se
 def test_ordinary_identifiers_are_not_secrets(pc: ModuleType) -> None:
     text = "sk-short task-ant-x AKIA123 sig_0123456789abcdef msg_0123456789abcdef"
     assert [f for f in pc.scan_text(text, "x", policy(pc)) if f.kind.startswith("secret")] == []
+
+
+def test_allowlist_parses_entries_and_rejects_missing_reason(
+    pc: ModuleType, tmp_path: Path
+) -> None:
+    f = tmp_path / "allow.txt"
+    f.write_text("# comment\n\n" + HIT + " -- truncated synthetic key\n", encoding="utf-8")
+    assert pc.load_allowlist(f) == {HIT: "truncated synthetic key"}
+    f.write_text(HIT + "\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match="justification"):
+        pc.load_allowlist(f)
+    assert pc.load_allowlist(tmp_path / "missing.txt") == {}
+
+
+def test_allowlisted_finding_is_reported_not_counted(
+    pc: ModuleType, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    hit = pc.Finding("email", HIT, "f:1")
+    other = pc.Finding("email", OTHER, "f:2")
+    blocking, allowed = pc.split_allowed([hit, other], {HIT: "why"})
+    assert (blocking, allowed) == ([other], [hit])
+    monkeypatch.setattr(pc, "load_allowlist", lambda: {HIT: "why"})
+    monkeypatch.setattr(pc, "scan_tree", lambda policy: [hit])
+    assert pc.main(["--no-history"]) == 0
+    out = capsys.readouterr().out
+    assert HIT + "  (f:1)  allowed (why)" in out
+    assert "0 finding(s), 1 allowed" in out
+    assert out.rstrip().endswith("clean")
+
+
+def test_committed_allowlist_is_valid(pc: ModuleType) -> None:
+    allow = pc.load_allowlist()
+    assert all(reason for reason in allow.values())

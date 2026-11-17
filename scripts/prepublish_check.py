@@ -17,6 +17,11 @@ for:
 
 Extra allowed domains: env var MB_ALLOWED_DOMAINS="<domain>,<domain>".
 
+Known false positives: the committed file `scripts/prepublish_allow.txt`, one
+entry per line, `<exact finding value> -- <one-line justification>` (`#`
+comments). A finding whose value equals an entry is reported as
+"allowed (<reason>)", never hidden, and does not count as a finding.
+
 Usage:
     uv run python scripts/prepublish_check.py            # tree + history
     uv run python scripts/prepublish_check.py --no-history
@@ -36,6 +41,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TERMS_FILE = ROOT / ".prepublish-terms"
+ALLOW_FILE = ROOT / "scripts" / "prepublish_allow.txt"
+ALLOW_SEP = " -- "
 
 # Infrastructure domains that legitimately appear in this repo.
 DEFAULT_ALLOWED_DOMAINS = frozenset(
@@ -162,6 +169,31 @@ def load_policy() -> Policy:
     )
 
 
+def load_allowlist(path: Path = ALLOW_FILE) -> dict[str, str]:
+    """Exact finding value -> justification. Malformed entries are errors."""
+    allow: dict[str, str] = {}
+    if not path.exists():
+        return allow
+    for n, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        value, sep, reason = line.partition(ALLOW_SEP)
+        if not sep or not value.strip() or not reason.strip():
+            raise SystemExit(f"{path.name}:{n}: expected '<value>{ALLOW_SEP}<justification>'")
+        allow[value.strip()] = reason.strip()
+    return allow
+
+
+def split_allowed(
+    findings: list[Finding], allow: dict[str, str]
+) -> tuple[list[Finding], list[Finding]]:
+    """(blocking findings, allowlisted findings)."""
+    blocking = [f for f in findings if f.value not in allow]
+    allowed = [f for f in findings if f.value in allow]
+    return blocking, allowed
+
+
 def scan_tree(policy: Policy) -> list[Finding]:
     files = _git("ls-files", "--cached", "--others", "--exclude-standard").splitlines()
     findings: list[Finding] = []
@@ -211,18 +243,21 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     policy = load_policy()
-    print(f"forbidden terms loaded: {len(policy.terms)}")
+    allow = load_allowlist()
+    print(f"forbidden terms loaded: {len(policy.terms)}; allowlist entries: {len(allow)}")
     sections = [("working tree", scan_tree(policy))]
     if not args.no_history:
         sections.append(("git history", scan_history(policy)))
 
     total = 0
     for title, findings in sections:
-        unique = sorted(set(findings))
+        unique, allowed = split_allowed(sorted(set(findings)), allow)
         total += len(unique)
-        print(f"\n== {title}: {len(unique)} finding(s)")
+        print(f"\n== {title}: {len(unique)} finding(s), {len(allowed)} allowed")
         for f in unique:
             print(f"  [{f.kind}] {f.value}  ({f.where})")
+        for f in allowed:
+            print(f"  [{f.kind}] {f.value}  ({f.where})  allowed ({allow[f.value]})")
     print(f"\n{'FINDINGS: review before publishing' if total else 'clean'}")
     return 1 if total else 0
 
