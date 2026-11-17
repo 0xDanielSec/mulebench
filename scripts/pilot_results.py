@@ -1541,7 +1541,6 @@ LOCAL_REFERENCE = {
     "014a": "pilot-07-qwen3-14b-8k.json",
 }
 DISCLOSURE_SCENARIOS = ("004", "009", "014a")
-TRANSIENT_ERRORS = ("provider_rate_limited", "provider_unavailable")
 DECISIONS_08_HEADER = (
     "**Analysis decisions.** Open choices in the draft definitions, as implemented "
     "before the run; to be confirmed by the author before the Results are committed:"
