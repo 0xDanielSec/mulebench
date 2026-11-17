@@ -194,6 +194,8 @@ Live recording is opt-in and cost-capped. Local models run through an
 OpenAI-compatible server such as Ollama (`--provider openai-compatible`,
 `mulebench doctor`), with no paid API. See [`docs/agents.md`](docs/agents.md),
 [`docs/llm.md`](docs/llm.md) and [`docs/local-models.md`](docs/local-models.md).
+Hosted models run through OpenRouter with a pinned host, a local price table
+and a required cost cap; see [`docs/openrouter.md`](docs/openrouter.md).
 
 ## Roadmap
 

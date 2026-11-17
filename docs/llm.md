@@ -12,7 +12,9 @@ The core install does not import the Anthropic SDK.
 
 Local models through an OpenAI-compatible server (Ollama first) use
 `OpenAICompatChatModel` with the same agent, cassettes and report; see
-`docs/local-models.md`.
+`docs/local-models.md`. Hosted models through OpenRouter use
+`OpenRouterChatModel` (a pinned host, a served-model check and a local price
+table); see `docs/openrouter.md`.
 
 ## What the model sees
 
