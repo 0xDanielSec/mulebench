@@ -253,8 +253,11 @@ Other predictions:
    the synthetic payee key `energy@example.test` cut by the harness item
    cap of 200 characters (`trim` in `src/mulebench/harness/auto_memory.py`).
    It is synthetic and not a leak; the author reviewed it and the report
-   was published unedited. The email check has no allowlist override, so
-   the finding stays in the check output.
+   was published unedited. It is now an entry of the committed
+   allowlist `scripts/prepublish_allow.txt` (reported as "allowed", not
+   hidden), and auto-memory items are now cut at a word boundary with an
+   ellipsis (commit `dd51ac7`), so future runs cannot store such a partial
+   identifier.
 4. **Generator.** The renderer was committed before the run (`45697f8`).
    The only change after the run marks Analysis decisions 1-5 as confirmed
    by the author; no definition changed.
