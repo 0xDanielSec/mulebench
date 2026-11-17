@@ -304,6 +304,67 @@ Other predictions:
   is at most US$ 1.71; OpenRouter's `provider_cost_usd` is at most the table
   cost.
 
+## Pre-run amendment (2026-11-17)
+
+Added after freezing and before any pilot 08 trial was run. The frozen
+sections above are unchanged; where this section and the Protocol differ,
+this section applies.
+
+**Rebase.** Two Dependabot pull requests were merged on GitHub (#1, GitHub
+Actions; #3, Python group) and the local commits were rebased onto them
+(`git pull --rebase origin main`). The rebase gave the local commits new
+SHAs:
+
+| Role | Frozen SHA | SHA after rebase |
+| --- | --- | --- |
+| Harness | `894945efadb37c876d28f70629dba38a6e5ae7e4` | `a51566062549803e0d30f8ac51120c259cb0a47c` (`a515660`) |
+| Freezing commit | `c2a2994` | `1c8bcb74dd9468b6aa8904e00679ed44b47b0309` (`1c8bcb7`) |
+| Renderer (`--pilot 08`) | `5c7a56a` | `6153c45` |
+
+`src/` is unchanged: the tree is `80cd5d001c8b897ae1c8f472bbad34c7ce139337`
+at `894945e`, at `a515660` and on disk. The rebase changed only `uv.lock`
+and `.github/workflows/`. Each report must still record this tree in
+`generator.src_tree`. The old SHAs exist only in the local reflog, so the
+run uses `--expect-harness a515660`.
+
+**Dependency changes** (`uv.lock`, PR #3):
+
+| Package | Before | After | Used at run time |
+| --- | --- | --- | --- |
+| anthropic | 2.3.0 | 2.8.0 | no (optional `llm` extra; pilot 08 uses the OpenRouter client) |
+| pydantic | 2.14.2 | 2.14.3 | yes (report and scenario models) |
+| pydantic-core | 2.50.2 | 2.50.4 | yes (pulled in by pydantic) |
+| hypothesis | 6.170.14 | 6.170.15 | no (tests) |
+| ruff | 0.17.3 | 0.17.4 | no (lint) |
+| types-pyyaml | 6.0.12.20261030 | 6.0.12.20261103 | no (type stubs) |
+
+Dependabot counts five updates; pydantic-core moves with pydantic. PR #1
+moves CI only: `actions/checkout` v4.2.2 to v7.0.1 and `astral-sh/setup-uv`
+v6.4.3 to v10.3.3. The run uses `uv.lock` with sha256
+`17b6347546b8c6c08150d8e186a9e3aa77aff1d706f8c050b68ae0fc82625836`.
+Reports do not record a lockfile hash yet; adding one changes `src/`, so it
+waits until after pilot 08. For this pilot, this sha256 is the record.
+
+**Checks after `uv sync --all-extras`** (2026-11-17, uv 0.13.1, all passed):
+full pytest suite (1,504 passed, 2 skipped: the cassette smoke test with no
+recording, and the KQL parser test, which was then run with
+`MB_KQL_PARSER=1` and the .NET 8 SDK: 35 passed); the offline OpenRouter
+tests (`-k openrouter`: 67 passed, including
+`tests/llm/test_openrouter_extraction.py`); `ruff check`, `ruff format
+--check`, `mypy` (strict); `scripts/prepublish_check.py` (no findings in the
+working tree; the GitHub-generated e-mail addresses in the merge and
+Dependabot commit metadata were allowlisted).
+
+**Commands.** As in the Protocol, with the last element of `$common`
+changed:
+
+```powershell
+  "--expect-harness", "a515660")
+```
+
+Everything else in the commands, the order and the resume rule is
+unchanged.
+
 ## Deviations
 
 Not run.
