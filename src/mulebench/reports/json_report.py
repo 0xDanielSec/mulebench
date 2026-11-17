@@ -40,6 +40,7 @@ from mulebench.harness.validity import (
     not_meaningful_reasons,
     tool_call_validity,
     tool_calls_per_trial,
+    transient_error,
 )
 
 SCHEMA_MINOR = 3  # see Report.schema_minor
@@ -161,9 +162,7 @@ def build_report(
 def routing_totals(trials: Sequence[TrialResult]) -> RoutingTotals | None:
     """Served provider and quantization counts; None if no call was routed."""
     calls = [c for t in trials for c in t.model_calls if c.served_provider is not None]
-    transient = Counter(
-        t.error for t in trials if t.error in ("provider_rate_limited", "provider_unavailable")
-    )
+    transient = Counter(k for t in trials if (k := transient_error(t.error)) is not None)
     if not calls and not transient:
         return None
     providers = Counter(c.served_provider or "" for c in calls)

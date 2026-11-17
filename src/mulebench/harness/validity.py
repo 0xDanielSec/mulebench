@@ -24,6 +24,17 @@ CONTEXT_NEAR_LIMIT = 0.9  # a model call using >= this share of num_ctx
 # cell (attack or benign) above this share: the cell measured the provider.
 MAX_PROVIDER_TRANSIENT_FRACTION = 0.1
 PROVIDER_TRANSIENT_ERRORS = frozenset({"provider_rate_limited", "provider_unavailable"})
+
+
+def transient_error(error: str | None) -> str | None:
+    """The transient provider error kind of a trial error, also when it came from
+    a memory extraction call ("memory_extraction:provider_rate_limited")."""
+    if error is None:
+        return None
+    kind = error.removeprefix("memory_extraction:")
+    return kind if kind in PROVIDER_TRANSIENT_ERRORS else None
+
+
 REASONS = (
     "low_benign_utility",
     "errored",
@@ -119,7 +130,7 @@ def not_meaningful_reasons(attack: CellResult | None, benign: CellResult | None)
     for cell in (attack, benign):
         if cell is None or not cell.trials:
             continue
-        hit = sum(t.error in PROVIDER_TRANSIENT_ERRORS for t in cell.trials)
+        hit = sum(transient_error(t.error) is not None for t in cell.trials)
         if hit > MAX_PROVIDER_TRANSIENT_FRACTION * len(cell.trials):
             reasons.add("provider_rate_limited")
     return [r for r in REASONS if r in reasons]
