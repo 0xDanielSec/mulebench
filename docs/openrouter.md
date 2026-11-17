@@ -52,11 +52,25 @@ with run status `aborted_routing` (exit code 3; the partial report is
 written). An error body returned with HTTP 200 is a provider error of that
 trial, as for other providers.
 
+**Rate limits and outages.** HTTP 429 and 5xx answers (also an error body
+with such a code sent with HTTP 200) are retried with the same request body
+(same seed and messages): up to 6 attempts, waits of about 15, 30, 60, 120
+and 240 s with equal jitter, each capped at 300 s, so about 10 minutes at
+most; `Retry-After` is honoured when present (also capped). If the
+attempts are exhausted, the trial is errored with error kind
+`provider_rate_limited` (429) or `provider_unavailable` (5xx), never counted
+as resisted, and the run continues. If more than 10% of an attack or benign
+cell errored this way, the row is marked not meaningful
+(`provider_rate_limited`). `doctor` retries its probes the same way before
+failing. Other 4xx answers are not retried.
+
 **What is recorded.** Every model call record keeps `requested_model`,
 `served_model`, `served_provider`, `served_quantization` and
 `provider_cost_usd`. The report's `routing` block counts the calls by
 served provider and by served quantization (`"null"`: the response reported
-none) and sums `provider_cost_usd` (OpenRouter's
+none), sums `provider_cost_usd`, and counts `retries`, `calls_retried` and
+`transient_errored_trials` by kind (each call record also keeps its own
+`retries`, stored in the cassette when non-zero) (OpenRouter's
 own `usage.cost`, as a cross-check only). The report's `llm` block keeps
 `openrouter_host`, `openrouter_quantization` and `pricing_file_sha256`.
 

@@ -29,6 +29,7 @@ class TransportResponse(BaseModel):
 
     body: dict[str, Any]
     request_id: str | None = None
+    retries: int = 0  # transient failures retried before this response (OpenRouter)
 
 
 class Transport(Protocol):
@@ -107,18 +108,23 @@ class CassetteTransport:
         cassette = _read(path, trial_key)
         for entry in cassette["interactions"]:
             if entry["request_sha256"] == sha:
-                return TransportResponse(body=entry["response"], request_id=entry["request_id"])
+                return TransportResponse(
+                    body=entry["response"],
+                    request_id=entry["request_id"],
+                    retries=int(entry.get("retries", 0)),
+                )
         if self.mode == "replay" or self.upstream is None:
             raise CassetteMissing(trial_key, path)
         response = self.upstream.send(params, trial_key)
-        cassette["interactions"].append(
-            {
-                "request_sha256": sha,
-                "request": params,
-                "response": response.body,
-                "request_id": response.request_id,
-            }
-        )
+        record: dict[str, Any] = {
+            "request_sha256": sha,
+            "request": params,
+            "response": response.body,
+            "request_id": response.request_id,
+        }
+        if response.retries:  # only then, so cassettes without retries are unchanged
+            record["retries"] = response.retries
+        cassette["interactions"].append(record)
         self.directory.mkdir(parents=True, exist_ok=True)
         path.write_bytes((json.dumps(cassette, indent=2, ensure_ascii=False) + "\n").encode())
         return response

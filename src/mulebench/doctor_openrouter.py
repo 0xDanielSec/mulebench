@@ -24,6 +24,8 @@ All network calls need --allow-remote. No model text or header is printed.
 from __future__ import annotations
 
 import os
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -128,6 +130,7 @@ def run_openrouter_doctor(
     allow_remote: bool,
     quantization: str | None = None,
     client: httpx.Client | None = None,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> list[Check]:
     if not allow_remote:
         return [Check("fail", "remote", "openrouter is a remote host: pass --allow-remote")]
@@ -211,7 +214,7 @@ def run_openrouter_doctor(
         )
     )
     checks.append(_price_check(model, host, eligible, pricing))
-    return checks + _probes(model, host, quantization, client)
+    return checks + _probes(model, host, quantization, client, sleep)
 
 
 def _tag(endpoint: dict[str, Any]) -> str:
@@ -255,12 +258,22 @@ def _price_check(model: str, host: str, eligible: list[dict[str, Any]], pricing:
     )
 
 
-def _probes(model: str, host: str, quantization: str | None, client: httpx.Client) -> list[Check]:
+def _probes(
+    model: str,
+    host: str,
+    quantization: str | None,
+    client: httpx.Client,
+    sleep: Callable[[float], None],
+) -> list[Check]:
+    """Probe calls retry 429 and 5xx like run calls (retry.py) before failing."""
     if os.environ.get(LIVE_ENV) != "1":
         return [Check("skip", "tool calling", f"probe needs {LIVE_ENV}=1 (two chat calls)")]
     try:
         transport = _CheckedTransport(
-            OpenRouterTransport(allow_remote=True, client=client), model, host, quantization
+            OpenRouterTransport(allow_remote=True, client=client, sleep=sleep),
+            model,
+            host,
+            quantization,
         )
     except LiveCallsDisabled as exc:  # missing key
         return [Check("fail", "tool calling", str(exc))]

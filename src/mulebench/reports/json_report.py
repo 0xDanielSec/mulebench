@@ -161,7 +161,10 @@ def build_report(
 def routing_totals(trials: Sequence[TrialResult]) -> RoutingTotals | None:
     """Served provider and quantization counts; None if no call was routed."""
     calls = [c for t in trials for c in t.model_calls if c.served_provider is not None]
-    if not calls:
+    transient = Counter(
+        t.error for t in trials if t.error in ("provider_rate_limited", "provider_unavailable")
+    )
+    if not calls and not transient:
         return None
     providers = Counter(c.served_provider or "" for c in calls)
     quants = Counter(c.served_quantization or "null" for c in calls)
@@ -173,6 +176,9 @@ def routing_totals(trials: Sequence[TrialResult]) -> RoutingTotals | None:
         provider_cost_usd=None
         if any(c is None for c in costs)
         else round(sum(c or 0.0 for c in costs), 6),
+        retries=sum(c.retries for c in calls),
+        calls_retried=sum(c.retries > 0 for c in calls),
+        transient_errored_trials=dict(sorted((k or "", v) for k, v in transient.items())),
     )
 
 

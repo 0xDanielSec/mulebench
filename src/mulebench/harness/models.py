@@ -348,6 +348,11 @@ class RoutingTotals(_Model):
     served_provider: dict[str, int]
     served_quantization: dict[str, int]
     provider_cost_usd: float | None  # sum of OpenRouter's usage.cost; None if any missing
+    # Transient HTTP failures (429, 5xx) retried: in total, and calls that needed any.
+    retries: int = 0
+    calls_retried: int = 0
+    # Trials errored after exhausted retries, by error kind.
+    transient_errored_trials: dict[str, int] = {}
 
 
 class SummaryRow(_Model):

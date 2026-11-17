@@ -21,16 +21,30 @@
 from __future__ import annotations
 
 import os
+import random
 import re
+import time
+from collections.abc import Callable
 from typing import Any
 
 import httpx
 
 from mulebench.agents.base import RunAborted
 from mulebench.agents.llm.http_transport import OpenAICompatTransport
-from mulebench.agents.llm.model import ChatRequest, ChatResponse, ModelCallError
+from mulebench.agents.llm.model import (
+    ChatRequest,
+    ChatResponse,
+    ModelCallError,
+    ModelRequestInvalid,
+)
 from mulebench.agents.llm.openai_compat import OpenAICompatChatModel, parse_completion
-from mulebench.agents.llm.transport import LIVE_ENV, LiveCallsDisabled, Transport
+from mulebench.agents.llm.retry import RetryPolicy, exhausted_kind, is_transient
+from mulebench.agents.llm.transport import (
+    LIVE_ENV,
+    LiveCallsDisabled,
+    Transport,
+    TransportResponse,
+)
 
 PROVIDER = "openrouter"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
@@ -135,12 +149,31 @@ class OpenRouterChatModel(OpenAICompatChatModel):
                 "served_quantization": quant,
                 "requested_model": request.model,
                 "provider_cost_usd": float(cost) if isinstance(cost, int | float) else None,
+                "retries": response.retries,
             }
         )
 
 
+def _effective_status(response: httpx.Response) -> int:
+    """The HTTP status, or the code of an error body sent with HTTP 200
+    (OpenRouter reports some upstream failures that way)."""
+    if response.status_code != 200:
+        return response.status_code
+    try:
+        body = response.json()
+    except ValueError:
+        return 200
+    error = body.get("error") if isinstance(body, dict) else None
+    code = error.get("code") if isinstance(error, dict) else None
+    return code if isinstance(code, int) and is_transient(code) else 200
+
+
 class OpenRouterTransport(OpenAICompatTransport):
-    """POST https://openrouter.ai/api/v1/chat/completions with the key header."""
+    """POST https://openrouter.ai/api/v1/chat/completions with the key header.
+
+    HTTP 429 and 5xx are retried with the same body (retry.py); the number of
+    retries is returned with the response and stored in the cassette.
+    """
 
     def __init__(
         self,
@@ -148,6 +181,9 @@ class OpenRouterTransport(OpenAICompatTransport):
         allow_remote: bool = False,
         client: httpx.Client | None = None,
         timeout_s: float = DEFAULT_TIMEOUT_S,
+        policy: RetryPolicy | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+        rng: random.Random | None = None,
     ) -> None:
         if os.environ.get(LIVE_ENV) != "1":
             raise LiveCallsDisabled(f"live calls need {LIVE_ENV}=1")
@@ -156,6 +192,41 @@ class OpenRouterTransport(OpenAICompatTransport):
         if not os.environ.get(KEY_ENV):
             raise LiveCallsDisabled(f"openrouter needs {KEY_ENV} set")
         super().__init__(OPENROUTER_BASE_URL, allow_remote=True, client=client, timeout_s=timeout_s)
+        self.policy = policy or RetryPolicy()
+        self._sleep = sleep
+        # jitter only; never touches the request
+        self._rng = rng or random.Random()  # noqa: S311 - not security sensitive
 
     def headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {os.environ.get(KEY_ENV, '')}"}
+
+    def send(self, params: dict[str, Any], trial_key: str) -> TransportResponse:
+        url = f"{self.base_url}/chat/completions"
+        for attempt in range(1, self.policy.max_attempts + 1):
+            try:
+                response = self._client.post(url, json=params, headers=self.headers())
+            except httpx.TimeoutException:
+                raise ModelCallError("timeout", "request timed out") from None
+            except httpx.TransportError as exc:
+                raise ModelCallError("connection", type(exc).__name__) from None
+            status = _effective_status(response)
+            if is_transient(status):
+                if attempt == self.policy.max_attempts:
+                    raise ModelCallError(
+                        exhausted_kind(status),
+                        f"HTTP {status} after {attempt} attempts",
+                    )
+                self._sleep(
+                    self.policy.delay(attempt, response.headers.get("retry-after"), self._rng)
+                )
+                continue
+            if status >= 400:
+                raise ModelRequestInvalid(f"HTTP {status}: {response.text[:200]}")
+            try:
+                body = response.json()
+            except ValueError:
+                raise ModelCallError("bad_body", "response is not JSON") from None
+            if not isinstance(body, dict):
+                raise ModelCallError("bad_body", "response is not a JSON object")
+            return TransportResponse(body=body, request_id=body.get("id"), retries=attempt - 1)
+        raise AssertionError("unreachable")  # pragma: no cover

@@ -92,6 +92,7 @@ class ChatResponse(_Model):
     requested_model: str | None = None
     served_provider: str | None = None
     served_quantization: str | None = None
+    retries: int = 0  # transient HTTP failures retried (OpenRouter)
     provider_cost_usd: float | None = None
 
 

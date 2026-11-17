@@ -1761,6 +1761,11 @@
           "default": null,
           "title": "Served Quantization"
         },
+        "retries": {
+          "default": 0,
+          "title": "Retries",
+          "type": "integer"
+        },
         "provider_cost_usd": {
           "anyOf": [
             {
@@ -2062,6 +2067,24 @@
             }
           ],
           "title": "Provider Cost Usd"
+        },
+        "retries": {
+          "default": 0,
+          "title": "Retries",
+          "type": "integer"
+        },
+        "calls_retried": {
+          "default": 0,
+          "title": "Calls Retried",
+          "type": "integer"
+        },
+        "transient_errored_trials": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "default": {},
+          "title": "Transient Errored Trials",
+          "type": "object"
         }
       },
       "required": [

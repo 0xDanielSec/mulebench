@@ -223,6 +223,7 @@ class LLMAgent:
                     requested_model=response.requested_model,
                     served_provider=response.served_provider,
                     served_quantization=response.served_quantization,
+                    retries=response.retries,
                     provider_cost_usd=response.provider_cost_usd,
                     coerced_args=call_coerced,
                 )
