@@ -30,7 +30,7 @@ output_per_mtok = 0.340
 [[price]]
 model = "mistralai/mistral-small-3.2-24b-instruct"
 host = "DeepInfra"
-input_per_mtok = 0.112
+input_per_mtok = 0.1125
 output_per_mtok = 0.300
 
 # pilot 08 pin: quantization fp8 (the only tool-capable DeepInfra endpoint)

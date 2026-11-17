@@ -32,9 +32,15 @@ sent (tools, seed, temperature). The host is `--openrouter-host NAME`, the
 `provider_name` that `doctor` lists.
 
 One host can list several endpoints of the same model, with different
-quantization, price and capabilities. `--openrouter-quantization Q` (for
-example `fp8`) adds `"quantizations": ["Q"]` to the block and pins one of
-them; `doctor` refuses a host with several endpoints unless it is given.
+quantization, price, service tier and capabilities.
+`--openrouter-quantization Q` (for example `fp8`) adds
+`"quantizations": ["Q"]` to the block. Of the host's endpoints in that
+quantization, only those that support tools, seed and temperature are
+**eligible** (what `require_parameters` enforces), and any eligible
+endpoint may serve a call. `doctor` lists how many are eligible, and fails
+if any of them has a context below 8,192 tokens or a price above the
+table's; it requires `--openrouter-quantization` only when the eligible
+endpoints differ in quantization.
 
 **No silent fallback.** Each response, live or replayed from a cassette,
 must name the requested model (exactly, or its dated slug
@@ -48,7 +54,9 @@ trial, as for other providers.
 
 **What is recorded.** Every model call record keeps `requested_model`,
 `served_model`, `served_provider`, `served_quantization` and
-`provider_cost_usd` (OpenRouter's
+`provider_cost_usd`. The report's `routing` block counts the calls by
+served provider and by served quantization (`"null"`: the response reported
+none) and sums `provider_cost_usd` (OpenRouter's
 own `usage.cost`, as a cross-check only). The report's `llm` block keeps
 `openrouter_host`, `openrouter_quantization` and `pricing_file_sha256`.
 
@@ -58,8 +66,8 @@ million input and output tokens per (model, host). A host of `TBD` never
 matches, so a run cannot start before its host is pinned and priced.
 `--max-cost-usd` is required for every openrouter run; the cap is checked
 before each model call with the table price. To make sure the cap never
-underestimates, enter the highest price among the host's endpoints of the
-model; `doctor` fails if the table price is below the pinned endpoint's. The report stores the
+underestimates, enter the highest price among the eligible endpoints;
+`doctor` fails if the table price is below any of them. The report stores the
 table's `as_of`, its sha256 and the price used.
 
 ## Before a run
@@ -121,6 +129,12 @@ Remove it when done: `Remove-Item Env:MB_OPENROUTER_API_KEY`.
 
 - Hosted weights and quantization are the host's and may change without
   notice; `doctor` prints the quantization the endpoint lists at that time.
+- Some hosts do not report the served quantization in their responses. Such
+  calls are recorded with `served_quantization: null` and counted under
+  `"null"` in the report's `routing` block; for them the quantization pin of
+  the request is the only guarantee, not checked per call.
+- Several eligible endpoints of one host (for example service tiers) may
+  serve the calls of one run; responses do not say which.
 - Seeds are passed, but hosts do not promise deterministic sampling.
 - Prices in the table are what you entered; `provider_cost_usd` lets you
   compare them with what OpenRouter charged.

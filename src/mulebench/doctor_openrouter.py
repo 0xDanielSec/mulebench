@@ -5,11 +5,14 @@ Checks, in order:
 2. endpoints: the model's host providers, from OpenRouter's public
    `GET /models/{id}/endpoints` (no key sent), with price per million tokens,
    quantization, context length and support for tools, seed and temperature;
-3. host: the host given with --openrouter-host is listed and supports them; a
-   host that lists several endpoints of the model needs --openrouter-quantization
-   to pick one;
-4. price: the local price table has (model, host) at no less than the pinned
-   endpoint's price (the cap must never underestimate);
+3. host: the eligible endpoints of --openrouter-host (with the quantization of
+   --openrouter-quantization, if given): those with tools, seed and
+   temperature, the only ones require_parameters lets serve. A host may list
+   several; any of them may serve, so each must have a context of at least
+   MIN_CONTEXT tokens, and eligible endpoints in more than one quantization
+   need --openrouter-quantization;
+4. price: the local price table has (model, host) at no less than the highest
+   price of the eligible endpoints (the cap must never underestimate);
 5. tool calling and tool calling after a tool result: two probe chat calls,
    pinned to the host (and quantization), only with MB_LIVE=1. Each response must
    come from the requested model and the pinned host, and must not report another
@@ -40,6 +43,7 @@ from mulebench.agents.llm.openrouter import (
 from mulebench.agents.llm.pricing_file import PriceFileError, load_price_table
 from mulebench.agents.llm.transport import LIVE_ENV, LiveCallsDisabled, TransportResponse
 from mulebench.doctor import (
+    MIN_NUM_CTX,
     PROBE_MAX_TOKENS,
     PROBE_TOOL,
     Check,
@@ -48,6 +52,8 @@ from mulebench.doctor import (
 )
 
 REQUIRED_PARAMETERS = ("tools", "seed", "temperature")
+# Prompt of the largest pilot call (about 1.2k tokens) plus max_tokens 4096 fits.
+MIN_CONTEXT = MIN_NUM_CTX
 
 
 def endpoints(model: str, client: httpx.Client) -> list[dict[str, Any]] | None:
@@ -84,7 +90,7 @@ def describe(endpoint: dict[str, Any]) -> str:
     price = "?" if pin is None or pout is None else f"${pin:.3f}/${pout:.3f} per 1M in/out"
     missing = missing_parameters(endpoint)
     return (
-        f"{endpoint.get('provider_name')}: {price}, quantization="
+        f"{_tag(endpoint)} ({endpoint.get('provider_name')}): {price}, quantization="
         f"{endpoint.get('quantization') or '?'}, context={endpoint.get('context_length') or '?'}, "
         + ("tools/seed/temperature ok" if not missing else f"missing {', '.join(missing)}")
     )
@@ -154,87 +160,98 @@ def run_openrouter_doctor(
     at_host = [e for e in listed if str(e.get("provider_name", "")).casefold() == host.casefold()]
     if not at_host:
         return [*checks, Check("fail", "host", f"{host!r} does not serve {model}")]
-    if quantization:
-        matching = [e for e in at_host if same_quantization(e, quantization)]
-        if not matching:
-            return [
-                *checks,
-                Check("fail", "host", f"{host!r} lists no {quantization} endpoint of {model}"),
-            ]
-    elif len(at_host) > 1:
-        quants = ", ".join(str(e.get("quantization") or "?") for e in at_host)
+    candidates = (
+        [e for e in at_host if same_quantization(e, quantization)] if quantization else at_host
+    )
+    if not candidates:
+        return [
+            *checks,
+            Check("fail", "host", f"{host!r} lists no {quantization} endpoint of {model}"),
+        ]
+    # What require_parameters enforces: only these endpoints can serve a request.
+    eligible = [e for e in candidates if not missing_parameters(e)]
+    if not eligible:
+        return [
+            *checks,
+            Check("fail", "host", f"{host!r}: no endpoint with tools, seed and temperature"),
+        ]
+    quants = sorted({str(e.get("quantization") or "?") for e in eligible})
+    if not quantization and len(quants) > 1:
         return [
             *checks,
             Check(
                 "fail",
                 "host",
-                f"{host!r} lists {len(at_host)} endpoints of {model} ({quants}); "
+                f"{host!r} serves {model} in {', '.join(quants)}; "
                 "pin one with --openrouter-quantization",
             ),
         ]
-    else:
-        matching = at_host
-    if len(matching) > 1:
+    short = [
+        e
+        for e in eligible
+        if isinstance(e.get("context_length"), int) and e["context_length"] < MIN_CONTEXT
+    ]
+    if short:
         return [
             *checks,
             Check(
                 "fail",
                 "host",
-                f"{host!r} lists {len(matching)} {quantization} endpoints of {model}; "
-                "the pin is ambiguous",
+                f"{len(short)} eligible endpoint(s) have context below {MIN_CONTEXT} tokens "
+                f"(prompt plus max_tokens of a trial): {', '.join(_tag(e) for e in short)}",
             ),
         ]
-    (chosen,) = matching
-    if missing_parameters(chosen):
-        return [*checks, Check("fail", "host", f"{host!r}: {describe(chosen)}")]
-    pinned = f" ({quantization})" if quantization else ""
+    pinned = f" {quantization}" if quantization else ""
     checks.append(
-        Check("ok", "host", f"{host}{pinned} serves {model} with tools, seed, temperature")
+        Check(
+            "ok",
+            "host",
+            f"{len(eligible)} eligible {host}{pinned} endpoint(s) with tools, seed and "
+            f"temperature ({', '.join(_tag(e) for e in eligible)}); any of them may serve",
+        )
     )
-    checks.append(_price_check(model, host, at_host, chosen, pricing))
+    checks.append(_price_check(model, host, eligible, pricing))
     return checks + _probes(model, host, quantization, client)
 
 
-def _price_check(
-    model: str,
-    host: str,
-    at_host: list[dict[str, Any]],
-    chosen: dict[str, Any],
-    pricing: Path,
-) -> Check:
-    """The table price must not be below the pinned endpoint's (the cap would
-    then underestimate). It may be higher: the highest of the host's endpoints."""
+def _tag(endpoint: dict[str, Any]) -> str:
+    return str(endpoint.get("tag") or endpoint.get("name") or endpoint.get("provider_name"))
+
+
+def _price_check(model: str, host: str, eligible: list[dict[str, Any]], pricing: Path) -> Check:
+    """The table price must be at least the highest price of every endpoint that
+    may serve the run, so the cost cap never underestimates."""
     try:
         price = load_price_table(pricing).price(model, host)
     except PriceFileError as exc:
         return Check("fail", "price", str(exc))
     if price is None:
         return Check("fail", "price", f"no entry for ({model}, {host}) in {pricing}; add it")
-    listed = chosen.get("pricing") or {}
-    pin, pout = per_mtok(listed.get("prompt")), per_mtok(listed.get("completion"))
+    listed = [
+        (
+            per_mtok((e.get("pricing") or {}).get("prompt")),
+            per_mtok((e.get("pricing") or {}).get("completion")),
+        )
+        for e in eligible
+    ]
+    if any(pin is None or pout is None for pin, pout in listed):
+        return Check("fail", "price", "an eligible endpoint lists no price")
+    top_in = max(p[0] for p in listed if p[0] is not None)
+    top_out = max(p[1] for p in listed if p[1] is not None)
     tin, tout = price.input_per_mtok, price.output_per_mtok
-    if pin is None or pout is None:
-        return Check("warn", "price", "the endpoint lists no price; table price used")
-    if tin + 1e-9 < pin or tout + 1e-9 < pout:
+    if tin + 1e-9 < top_in or tout + 1e-9 < top_out:
         return Check(
             "fail",
             "price",
-            f"table ${tin:g}/${tout:g} is below the endpoint's ${pin:g}/${pout:g} per 1M "
-            f"in/out: the cost cap would underestimate; update {pricing}",
+            f"table ${tin:g}/${tout:g} is below the highest eligible endpoint price "
+            f"${top_in:.6g}/${top_out:.6g} per 1M in/out: the cost cap would underestimate; "
+            f"update {pricing}",
         )
-    highest = [
-        (
-            per_mtok((e.get("pricing") or {}).get("prompt")) or 0.0,
-            per_mtok((e.get("pricing") or {}).get("completion")) or 0.0,
-        )
-        for e in at_host
-    ]
-    top = (max(h[0] for h in highest), max(h[1] for h in highest))
-    note = "the highest of the host's endpoints" if (tin, tout) >= top else "above the endpoint's"
     return Check(
         "ok",
         "price",
-        f"table ${tin:g}/${tout:g} >= endpoint ${pin:g}/${pout:g} per 1M in/out ({note})",
+        f"table ${tin:g}/${tout:g} >= highest eligible endpoint price "
+        f"${top_in:.6g}/${top_out:.6g} per 1M in/out",
     )
 
 

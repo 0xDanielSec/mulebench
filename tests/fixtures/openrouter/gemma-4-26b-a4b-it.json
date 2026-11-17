@@ -1,0 +1,39 @@
+{
+  "_source": "OpenRouter GET /api/v1/models/google/gemma-4-26b-a4b-it/endpoints, 2026-11-16; DeepInfra endpoints only, trimmed to the fields doctor reads",
+  "data": {
+    "id": "google/gemma-4-26b-a4b-it",
+    "endpoints": [
+      {
+        "name": "DeepInfra | google/gemma-4-26b-a4b-it-20260403",
+        "provider_name": "DeepInfra",
+        "tag": "deepinfra/fp8",
+        "quantization": "fp8",
+        "context_length": 262144,
+        "service_tier": null,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "stop",
+          "frequency_penalty",
+          "presence_penalty",
+          "repetition_penalty",
+          "top_k",
+          "seed",
+          "min_p",
+          "tool_choice",
+          "tools",
+          "structured_outputs",
+          "response_format",
+          "logit_bias"
+        ],
+        "pricing": {
+          "prompt": "0.00000007",
+          "completion": "0.00000034"
+        }
+      }
+    ]
+  }
+}

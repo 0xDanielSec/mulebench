@@ -1,0 +1,97 @@
+{
+  "_source": "OpenRouter GET /api/v1/models/qwen/qwen3-14b/endpoints, 2026-11-16; DeepInfra endpoints only, trimmed to the fields doctor reads",
+  "data": {
+    "id": "qwen/qwen3-14b",
+    "endpoints": [
+      {
+        "name": "DeepInfra | qwen/qwen3-14b-04-28",
+        "provider_name": "DeepInfra",
+        "tag": "deepinfra/fp8/flex",
+        "quantization": "fp8",
+        "context_length": 40960,
+        "service_tier": "flex",
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "stop",
+          "frequency_penalty",
+          "presence_penalty",
+          "repetition_penalty",
+          "top_k",
+          "seed",
+          "min_p",
+          "logit_bias",
+          "response_format",
+          "structured_outputs"
+        ],
+        "pricing": {
+          "prompt": "0.000000096",
+          "completion": "0.000000192"
+        }
+      },
+      {
+        "name": "DeepInfra | qwen/qwen3-14b-04-28",
+        "provider_name": "DeepInfra",
+        "tag": "deepinfra/fp8",
+        "quantization": "fp8",
+        "context_length": 40960,
+        "service_tier": null,
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "response_format",
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "stop",
+          "frequency_penalty",
+          "presence_penalty",
+          "repetition_penalty",
+          "top_k",
+          "seed",
+          "min_p",
+          "tools",
+          "tool_choice",
+          "structured_outputs",
+          "logit_bias"
+        ],
+        "pricing": {
+          "prompt": "0.00000012",
+          "completion": "0.00000024"
+        }
+      },
+      {
+        "name": "DeepInfra | qwen/qwen3-14b-04-28",
+        "provider_name": "DeepInfra",
+        "tag": "deepinfra/fp8/priority",
+        "quantization": "fp8",
+        "context_length": 40960,
+        "service_tier": "priority",
+        "supported_parameters": [
+          "reasoning",
+          "include_reasoning",
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "stop",
+          "frequency_penalty",
+          "presence_penalty",
+          "repetition_penalty",
+          "top_k",
+          "seed",
+          "min_p",
+          "logit_bias",
+          "response_format",
+          "structured_outputs"
+        ],
+        "pricing": {
+          "prompt": "0.00000018",
+          "completion": "0.00000036"
+        }
+      }
+    ]
+  }
+}

@@ -2030,6 +2030,49 @@
       "title": "Rate",
       "type": "object"
     },
+    "RoutingTotals": {
+      "additionalProperties": false,
+      "description": "Routed providers (OpenRouter) only: who served the run's model calls.\n\n`served_quantization` counts calls by the quantization their response\nreported; key \"null\" counts calls whose response reported none (those are\ncovered only by the request pin, not checked per call).",
+      "properties": {
+        "calls": {
+          "title": "Calls",
+          "type": "integer"
+        },
+        "served_provider": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Served Provider",
+          "type": "object"
+        },
+        "served_quantization": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Served Quantization",
+          "type": "object"
+        },
+        "provider_cost_usd": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Provider Cost Usd"
+        }
+      },
+      "required": [
+        "calls",
+        "served_provider",
+        "served_quantization",
+        "provider_cost_usd"
+      ],
+      "title": "RoutingTotals",
+      "type": "object"
+    },
     "ScenarioResult": {
       "additionalProperties": false,
       "properties": {
@@ -3337,6 +3380,17 @@
     },
     "cost_totals": {
       "$ref": "#/$defs/CostTotals"
+    },
+    "routing": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RoutingTotals"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "limitations": {
       "items": {

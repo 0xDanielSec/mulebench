@@ -37,20 +37,33 @@ families, and checks hosted against local qwen3 on the same scenarios.
 |---|---|---|---|---|
 | OpenAI open weights (reasoning) | `openai/gpt-oss-20b` | DeepInfra | bf16 | 0.030 / 0.140 |
 | Google | `google/gemma-4-26b-a4b-it` | DeepInfra | fp8 | 0.070 / 0.340 |
-| Mistral | `mistralai/mistral-small-3.2-24b-instruct` | DeepInfra | fp8 | 0.112 / 0.300 |
+| Mistral | `mistralai/mistral-small-3.2-24b-instruct` | DeepInfra | fp8 | 0.1125 / 0.300 |
 | Qwen (calibration) | `qwen/qwen3-14b` | DeepInfra | fp8 (local: Q4_K_M) | 0.120 / 0.240 |
 
 Chosen by the author from the `doctor` endpoint listings of 2026-11-16. One
 host provider (DeepInfra) for all four models, so host differences do not
 vary across models. DeepInfra lists several endpoints of some models, with
-different quantization, price and tools support (for `qwen/qwen3-14b`, fp8
-is its only tool-capable endpoint), so each run pins the quantization as
-well as the host (`--openrouter-quantization`). Prices are the **highest**
-price among each model's DeepInfra endpoints, as of 2026-11-16, so the cost
-cap never underestimates; the pinned endpoint may be cheaper.
+different quantization, price, service tier and tools support, so each
+run pins the quantization as well as the host (`--openrouter-quantization`).
+Of the DeepInfra endpoints in the pinned quantization, those with tools,
+seed and temperature are eligible (what `require_parameters` enforces), and
+any of them may serve a call: on 2026-11-16, 2 for gpt-oss-20b (bf16), 1 for
+gemma-4-26b, 3 for mistral-small-3.2 (fp8; flex, standard and priority
+tiers) and 1 for qwen3-14b (fp8; its flex and priority endpoints have no
+tools). Prices are the **highest** price among each model's eligible
+DeepInfra endpoints, so the cost cap never underestimates. For
+mistral-small-3.2 this is the priority tier's 0.1125 (not 0.112 as first
+entered, which `doctor` would fail).
 
 Note on qwen3: the hosted endpoint is fp8, the local model Q4_K_M. RQ2
 compares them descriptively only (see above).
+
+Limitation (accepted by the author): the gemma-4-26b doctor probes showed
+that DeepInfra responses do not report the served quantization. Such calls
+are recorded with `served_quantization: null` and counted in the report's
+`routing` block; for them only the request pin applies, not a per-call
+check. Responses also do not say which eligible endpoint (tier) served
+them. Both are reported in the Results.
 
 ## Scenarios
 
@@ -101,7 +114,7 @@ From `mulebench estimate --host <model>=DeepInfra` (tokens per trial of
 local `qwen3-14b`: pilot 03 for 004, 009 and 012, pilot 06 for 015b, pilot
 07 for 014a; 300 trials per model; about 0.92M input and 0.54M output
 tokens per model), at the DeepInfra table prices above (price table sha256
-`e20655a42560...`). The safety factor 2 covers models that write more than
+`df4280e304b1...`). The safety factor 2 covers models that write more than
 qwen3, whose output already includes its reasoning.
 
 | Model | Estimate | x2 |
@@ -131,8 +144,9 @@ exposed trials; for 004, 009 and 014a also exact and approximate disclosure
 
 **Secondary:** task error and task omitted; tool-call validity; errored
 trials by error; `length_calls` / `cut_by_cap`; served model and served
-provider per call (all must match; the run stops otherwise); table cost
-against OpenRouter's `provider_cost_usd`.
+provider per call (all must match; the run stops otherwise); calls by
+served quantization from the report's `routing` block, `null` counted
+apart; table cost against OpenRouter's `provider_cost_usd`.
 
 **Calibration (RQ2):** hosted against local `qwen3-14b` per scenario, side
 by side with both intervals. Descriptive only; no difference is attributed

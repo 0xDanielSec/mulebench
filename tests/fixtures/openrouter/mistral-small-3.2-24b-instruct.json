@@ -1,0 +1,93 @@
+{
+  "_source": "OpenRouter GET /api/v1/models/mistralai/mistral-small-3.2-24b-instruct/endpoints, 2026-11-16; DeepInfra endpoints only, trimmed to the fields doctor reads",
+  "data": {
+    "id": "mistralai/mistral-small-3.2-24b-instruct",
+    "endpoints": [
+      {
+        "name": "DeepInfra | mistralai/mistral-small-3.2-24b-instruct-2506",
+        "provider_name": "DeepInfra",
+        "tag": "deepinfra/fp8/flex",
+        "quantization": "fp8",
+        "context_length": 128000,
+        "service_tier": "flex",
+        "supported_parameters": [
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "stop",
+          "frequency_penalty",
+          "presence_penalty",
+          "repetition_penalty",
+          "top_k",
+          "seed",
+          "min_p",
+          "logit_bias",
+          "response_format",
+          "structured_outputs",
+          "tools"
+        ],
+        "pricing": {
+          "prompt": "0.00000006",
+          "completion": "0.00000016"
+        }
+      },
+      {
+        "name": "DeepInfra | mistralai/mistral-small-3.2-24b-instruct-2506",
+        "provider_name": "DeepInfra",
+        "tag": "deepinfra/fp8",
+        "quantization": "fp8",
+        "context_length": 128000,
+        "service_tier": null,
+        "supported_parameters": [
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "stop",
+          "frequency_penalty",
+          "presence_penalty",
+          "repetition_penalty",
+          "top_k",
+          "seed",
+          "min_p",
+          "logit_bias",
+          "structured_outputs",
+          "tools",
+          "tool_choice",
+          "response_format"
+        ],
+        "pricing": {
+          "prompt": "0.000000075",
+          "completion": "0.0000002"
+        }
+      },
+      {
+        "name": "DeepInfra | mistralai/mistral-small-3.2-24b-instruct-2506",
+        "provider_name": "DeepInfra",
+        "tag": "deepinfra/fp8/priority",
+        "quantization": "fp8",
+        "context_length": 128000,
+        "service_tier": "priority",
+        "supported_parameters": [
+          "max_tokens",
+          "temperature",
+          "top_p",
+          "stop",
+          "frequency_penalty",
+          "presence_penalty",
+          "repetition_penalty",
+          "top_k",
+          "seed",
+          "min_p",
+          "logit_bias",
+          "response_format",
+          "structured_outputs",
+          "tools"
+        ],
+        "pricing": {
+          "prompt": "0.0000001125",
+          "completion": "0.0000003"
+        }
+      }
+    ]
+  }
+}

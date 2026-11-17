@@ -210,6 +210,11 @@ def test_replayed_run_reports_host_price_file_and_costs(
     stored = [json.loads(p.read_text(encoding="utf-8")) for p in (tmp_path / "cas").iterdir()]
     sent = stored[0]["interactions"][0]["request"]["provider"]
     assert sent["quantizations"] == ["fp8"]
+    routing = report["routing"]
+    assert routing["calls"] >= 1
+    assert routing["served_provider"] == {HOST: routing["calls"]}
+    assert routing["served_quantization"] == {"null": routing["calls"]}
+    assert routing["provider_cost_usd"] == pytest.approx(0.5 * routing["calls"])
     assert llm["pricing_file_sha256"] == load_price_table(prices).sha256
     assert report["pricing"]["as_of"] == "2026-11-16"
     trial = report["scenarios"][0]["cells"][0]["trials"][0]

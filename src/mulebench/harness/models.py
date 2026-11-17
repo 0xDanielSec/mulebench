@@ -336,6 +336,20 @@ class CostTotals(_Model):
     recorded: bool = True
 
 
+class RoutingTotals(_Model):
+    """Routed providers (OpenRouter) only: who served the run's model calls.
+
+    `served_quantization` counts calls by the quantization their response
+    reported; key "null" counts calls whose response reported none (those are
+    covered only by the request pin, not checked per call).
+    """
+
+    calls: int
+    served_provider: dict[str, int]
+    served_quantization: dict[str, int]
+    provider_cost_usd: float | None  # sum of OpenRouter's usage.cost; None if any missing
+
+
 class SummaryRow(_Model):
     scenario_id: str
     prompt_variant: str
@@ -406,6 +420,7 @@ class Report(_Model):
     axes: Axes
     run_status: RunStatus
     cost_totals: CostTotals
+    routing: RoutingTotals | None = None  # routed providers only (schema_minor 3)
     limitations: list[str]
     summary: Summary
     scenarios: list[ScenarioResult]

@@ -4,6 +4,7 @@ for cassette replay; live LLM runs are not deterministic by nature."""
 from __future__ import annotations
 
 import json
+from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -24,10 +25,12 @@ from mulebench.harness.models import (
     LLMConfig,
     PricingInfo,
     Report,
+    RoutingTotals,
     ScenarioResult,
     Summary,
     SummaryRow,
     SummaryTotals,
+    TrialResult,
 )
 from mulebench.harness.runner import RunOutcome, agent_name
 from mulebench.harness.stats import HEADLINE_MIN_TRIALS
@@ -147,10 +150,29 @@ def build_report(
             priced=priced,
             recorded=calls_recorded,
         ),
+        routing=routing_totals(all_trials),
         limitations=list(LIMITATIONS),
         summary=Summary(rows=rows, totals=totals),
         scenarios=results,
         conformance=conformance,
+    )
+
+
+def routing_totals(trials: Sequence[TrialResult]) -> RoutingTotals | None:
+    """Served provider and quantization counts; None if no call was routed."""
+    calls = [c for t in trials for c in t.model_calls if c.served_provider is not None]
+    if not calls:
+        return None
+    providers = Counter(c.served_provider or "" for c in calls)
+    quants = Counter(c.served_quantization or "null" for c in calls)
+    costs = [c.provider_cost_usd for c in calls]
+    return RoutingTotals(
+        calls=len(calls),
+        served_provider=dict(sorted(providers.items())),
+        served_quantization=dict(sorted(quants.items())),
+        provider_cost_usd=None
+        if any(c is None for c in costs)
+        else round(sum(c or 0.0 for c in costs), 6),
     )
 
 

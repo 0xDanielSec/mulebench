@@ -134,7 +134,7 @@ def test_key_presence_only(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
 
 @pytest.mark.parametrize(
     ("host", "detail"),
-    [("OtherHost", "does not serve"), ("NoToolsHost", "missing tools")],
+    [("OtherHost", "does not serve"), ("NoToolsHost", "no endpoint with tools")],
 )
 def test_host_must_serve_the_model_with_tools(tmp_path: Path, host: str, detail: str) -> None:
     client, _ = mock()
@@ -247,13 +247,15 @@ def same_host_client(chat: list[dict[str, Any]] | None = None) -> httpx.Client:
     return httpx.Client(transport=httpx.MockTransport(handler))
 
 
-def test_several_endpoints_at_one_host_need_a_quantization_pin(tmp_path: Path) -> None:
-    p = prices(tmp_path, pin=0.2, pout=0.4)  # the highest of the host's endpoints
+def test_only_tool_capable_endpoints_are_eligible(tmp_path: Path) -> None:
+    p = prices(tmp_path, pin=0.1, pout=0.3)  # the bf16 endpoint's higher price is ignored
+    # no pin: the only eligible endpoint is fp8, so there is nothing to pin
     unpinned = run_openrouter_doctor(
         MODEL, host=HOST, pricing=p, allow_remote=True, client=same_host_client()
     )
-    assert unpinned[-1].level == "fail"
-    assert "--openrouter-quantization" in unpinned[-1].detail
+    host = next(c for c in unpinned if c.name == "host")
+    assert host.level == "ok"
+    assert "1 eligible" in host.detail
     no_tools = run_openrouter_doctor(
         MODEL,
         host=HOST,
@@ -263,7 +265,7 @@ def test_several_endpoints_at_one_host_need_a_quantization_pin(tmp_path: Path) -
         client=same_host_client(),
     )
     assert no_tools[-1].level == "fail"
-    assert "missing tools" in no_tools[-1].detail
+    assert "no endpoint with tools" in no_tools[-1].detail
     absent = run_openrouter_doctor(
         MODEL,
         host=HOST,
@@ -284,7 +286,7 @@ def test_several_endpoints_at_one_host_need_a_quantization_pin(tmp_path: Path) -
     assert ("host", "ok") in levels(pinned)
     price = next(c for c in pinned if c.name == "price")
     assert price.level == "ok"
-    assert "highest of the host's endpoints" in price.detail
+    assert "highest eligible endpoint price" in price.detail
 
 
 def test_live_probe_reports_and_checks_served_quantization(
