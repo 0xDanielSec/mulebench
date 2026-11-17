@@ -2,7 +2,11 @@
 
 Scans the working tree (tracked files plus untracked, non-ignored files) and the
 full git history (commit metadata, messages and every added line of every diff)
-for:
+for the items below. `.tar.xz` cassette archives are scanned member by member, in
+memory, after the safety checks of scripts/cassette_archive.py: the current file
+in the tree, and every committed version of it in the history.
+
+Checks:
 
 1. domains other than example.test (and a small allowlist of infrastructure
    domains, see DEFAULT_ALLOWED_DOMAINS);
@@ -32,12 +36,17 @@ Exit code: 0 if nothing was found, 1 if there are findings.
 from __future__ import annotations
 
 import argparse
+import importlib.util
+import lzma
 import os
 import re
 import subprocess
 import sys
+import tarfile
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 
 ROOT = Path(__file__).resolve().parent.parent
 TERMS_FILE = ROOT / ".prepublish-terms"
@@ -225,6 +234,67 @@ def scan_tree(policy: Policy) -> list[Finding]:
             continue  # binary or unreadable
         for n, line in enumerate(text.splitlines(), start=1):
             findings += scan_text(line, f"{rel}:{n}", policy)
+    return findings + scan_tree_archives(policy)
+
+
+ARCHIVE_SUFFIX = ".tar.xz"
+
+
+def _archive_module() -> ModuleType:
+    name = "cassette_archive_for_prepublish"
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / "cassette_archive.py")
+    if spec is None or spec.loader is None:
+        raise ImportError("scripts/cassette_archive.py not found")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module  # dataclasses look the module up while it loads
+    spec.loader.exec_module(module)
+    return module
+
+
+def scan_archive(path: Path, label: str, policy: Policy) -> list[Finding]:
+    """Scan every member of a cassette archive in memory (members checked first;
+    nothing is extracted). A rejected archive is itself a finding."""
+    archive = _archive_module()
+    findings: list[Finding] = []
+    try:
+        for name, text in archive.iter_texts(path):
+            for n, line in enumerate(text.splitlines(), start=1):
+                findings += scan_text(line, f"{label}!{name}:{n}", policy)
+    except (archive.ArchiveError, tarfile.TarError, lzma.LZMAError, OSError) as e:
+        findings.append(Finding("archive", f"unreadable archive {label}: {e}", label))
+    return findings
+
+
+def scan_tree_archives(policy: Policy) -> list[Finding]:
+    files = _git("ls-files", "--cached", "--others", "--exclude-standard").splitlines()
+    findings: list[Finding] = []
+    for rel in sorted({f for f in files if f.endswith(ARCHIVE_SUFFIX)}):
+        if (ROOT / rel).is_file():
+            findings += scan_archive(ROOT / rel, rel, policy)
+    return findings
+
+
+def scan_history_archives(policy: Policy) -> list[Finding]:
+    """Every committed version of every archive (binary diffs are not in `git log -p`)."""
+    findings: list[Finding] = []
+    blobs: set[tuple[str, str]] = set()
+    for line in _git("rev-list", "--all", "--objects").splitlines():
+        sha, _, rel = line.partition(" ")
+        if rel.endswith(ARCHIVE_SUFFIX):
+            blobs.add((sha, rel))
+    for sha, rel in sorted(blobs):
+        data = subprocess.run(  # noqa: S603 - fixed git argv
+            ["git", "cat-file", "blob", sha],  # noqa: S607 - git from PATH is intended
+            cwd=ROOT,
+            capture_output=True,
+            check=True,
+        ).stdout
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "a.tar.xz"
+            path.write_bytes(data)
+            findings += scan_archive(path, f"{sha[:12]} {rel}", policy)
     return findings
 
 
@@ -252,7 +322,7 @@ def scan_history(policy: Policy) -> list[Finding]:
             path = line[6:]
         elif line.startswith("+") and not line.startswith("+++"):
             findings += scan_text(line[1:], f"{commit} {path}", policy)
-    return findings
+    return findings + scan_history_archives(policy)
 
 
 def main(argv: list[str] | None = None) -> int:

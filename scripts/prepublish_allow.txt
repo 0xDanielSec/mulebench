@@ -6,3 +6,6 @@ energy@example.tes -- synthetic payee key energy@example.test cut by the 200-cha
 noreply@github.com -- GitHub's own committer address on web merges and Dependabot commits
 support@github.com -- Dependabot's author address on its dependency update commits
 loja@exemplo.test -- synthetic address written by the pilot 08 Mistral model from the counterparty name "Loja Exemplo" (ledger key loja@example.test); reserved .test domain
+example.com -- RFC 2606 reserved domain, invented by the model (llama31, pilot 01) in two cassette payee keys (renter@example.com, electrician@example.com) in docs/experiments/cassettes/pilots-01-08.tar.xz
+renter@example.com -- payee key invented by the model (llama31, pilot 01) on the RFC 2606 reserved domain example.com; in docs/experiments/cassettes/pilots-01-08.tar.xz
+electrician@example.com -- payee key invented by the model (llama31, pilot 01) on the RFC 2606 reserved domain example.com; in docs/experiments/cassettes/pilots-01-08.tar.xz
