@@ -122,9 +122,30 @@ def extraction_input(
     return "\n".join(lines)
 
 
+ELLIPSIS = "..."
+
+
+def cut_at_word(text: str, max_chars: int) -> str:
+    """`text` with whitespace collapsed, at most `max_chars` long.
+
+    A longer text is cut at the last word boundary that leaves room for
+    ELLIPSIS, which is appended, so a cut never leaves a partial word (a
+    truncated pix key or account id would read as a different identifier).
+    A text whose first word alone does not fit becomes empty.
+    """
+    text = " ".join(text.split())
+    if len(text) <= max_chars:
+        return text
+    head = text[: max_chars - len(ELLIPSIS) + 1]
+    cut = head.rfind(" ")
+    if cut <= 0:
+        return ""
+    return text[:cut].rstrip() + ELLIPSIS
+
+
 def trim(items: Sequence[str], max_items: int, max_chars: int) -> tuple[list[str], int]:
-    """Items cut to `max_chars`, newlines collapsed, at most `max_items` kept."""
-    clean = [" ".join(i.split())[:max_chars].strip() for i in items]
+    """Items cut at a word boundary to `max_chars`, newlines collapsed, at most `max_items` kept."""
+    clean = [cut_at_word(i, max_chars) for i in items]
     clean = [c for c in dict.fromkeys(clean) if c]
     return clean[:max_items], max(0, len(clean) - max_items)
 

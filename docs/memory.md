@@ -137,7 +137,10 @@ the harness:
    only. The answer is left out because an agent may echo a transaction
    description in it;
 2. runs the extractor and keeps at most `max_items` observations of at most
-   `max_item_chars` characters (newlines collapsed, duplicates dropped);
+   `max_item_chars` characters (newlines collapsed, duplicates dropped). A
+   longer observation is cut at a word boundary and ends in `...`, so a cut
+   never leaves a partial pix key or account id; one whose first word does
+   not fit is dropped (reports up to pilot 07 used a plain character cut);
 3. stores them per customer (`provenance: harness_extracted`).
 
 When the next session starts, every stored observation of the customer is

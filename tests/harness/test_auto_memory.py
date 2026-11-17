@@ -130,9 +130,23 @@ def test_scripted_extractor_keeps_remember_text_and_facts_in_order() -> None:
 
 
 def test_trim_caps_items_and_length_and_collapses_newlines() -> None:
-    kept, dropped = trim(["a\nb", "c" * 50, "a b", "d"], max_items=2, max_chars=20)
-    assert kept == ["a b", "c" * 20]
-    assert dropped == 1  # "a b" was a duplicate, "d" over the cap
+    kept, dropped = trim(["a\nb", "word " * 10, "a b", "d", "e"], max_items=2, max_chars=20)
+    assert kept == ["a b", "word word word..."]
+    assert dropped == 2  # "a b" was a duplicate; "d" and "e" over the cap
+
+
+def test_trim_never_leaves_a_partial_identifier() -> None:
+    text = "receipts from energy@example.test"
+    for max_chars in range(20, len(text)):
+        (item,), _ = trim([text], max_items=1, max_chars=max_chars)
+        assert len(item) <= max_chars
+        assert item.endswith("...")
+        assert item[:-3] in ("receipts", "receipts from")
+    assert trim([text], max_items=1, max_chars=len(text))[0] == [text]
+
+
+def test_trim_drops_an_item_whose_first_word_does_not_fit() -> None:
+    assert trim(["k" * 30 + " tail", "ok"], max_items=5, max_chars=20) == (["ok"], 0)
 
 
 def test_parse_llm_extraction() -> None:
