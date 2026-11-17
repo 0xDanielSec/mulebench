@@ -64,6 +64,9 @@ class LLMExtractor:
             context_tokens=response.context_tokens,
             reasoning_present=response.reasoning_present,
             reasoning_tokens=response.reasoning_tokens,
+            requested_model=response.requested_model,
+            served_provider=response.served_provider,
+            provider_cost_usd=response.provider_cost_usd,
         )
         items, malformed = parse_extraction(response.text)
         return ExtractResult(items=items, malformed=malformed, model_call=record)

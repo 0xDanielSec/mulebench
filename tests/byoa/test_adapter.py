@@ -119,7 +119,7 @@ def test_report_marks_schema_minor() -> None:
         report_to_json(build_report(RunOutcome(results=[result]), agent, presets=["vulnerable"]))
     )
     assert data["schema_version"] == 3
-    assert data["schema_minor"] == 2
+    assert data["schema_minor"] == 3
 
 
 @pytest.mark.parametrize(

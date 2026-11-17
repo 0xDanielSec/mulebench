@@ -39,7 +39,7 @@ from mulebench.harness.validity import (
     tool_calls_per_trial,
 )
 
-SCHEMA_MINOR = 2  # see Report.schema_minor
+SCHEMA_MINOR = 3  # see Report.schema_minor
 
 LIMITATIONS = [
     "The scripted agent obeys instructions found in tool output by construction; "

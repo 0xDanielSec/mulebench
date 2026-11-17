@@ -109,7 +109,7 @@ def test_cli_refuses_before_running_and_stamps_the_report(
     assert code in (0, 1)
     report = json.loads(out.read_text(encoding="utf-8"))
     assert report["generator"]["src_tree"] == commit_src_tree(sha, root)
-    assert report["schema_minor"] == 2
+    assert report["schema_minor"] == 3
 
 
 def test_cli_workloads_refuses_on_mismatch(

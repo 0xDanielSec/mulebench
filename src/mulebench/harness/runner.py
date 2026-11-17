@@ -134,6 +134,14 @@ class RunOutcome:
     abort_reason: str | None = None
 
 
+def abort_status(exc: RunAborted) -> RunStatus:
+    """The report run_status of an abort: its class's, if it is a known one."""
+    status = getattr(exc, "run_status", "aborted_budget")
+    if status == "aborted_routing":
+        return "aborted_routing"
+    return "aborted_budget"
+
+
 def trial_key(scenario_id: str, prompt_variant: str, preset: str, variant: str, trial: int) -> str:
     return f"{scenario_id}/{prompt_variant}/{preset}/{variant}/t{trial:03d}"
 
@@ -186,7 +194,7 @@ def run_all(
                             if done:
                                 cells.append(build_cell(prompt, preset, variant, done, descriptor))
         except RunAborted as exc:
-            outcome.status, outcome.abort_reason = "aborted_budget", str(exc)
+            outcome.status, outcome.abort_reason = abort_status(exc), str(exc)
         except KeyboardInterrupt:
             # The trial in progress is discarded; finished ones are kept.
             outcome.status, outcome.abort_reason = "aborted_interrupt", "interrupted (Ctrl+C)"

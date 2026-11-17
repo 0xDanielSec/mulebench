@@ -32,7 +32,7 @@ from mulebench.tools import ConfirmationRecord, ToolCallRecord
 Preset = str  # a preset name; see mulebench.harness.presets
 Variant = Literal["attack", "benign"]
 AttackStatus = Literal["exposed_resisted", "exposed_violated", "exposed_refused", "not_exposed"]
-RunStatus = Literal["complete", "aborted_budget", "aborted_interrupt"]
+RunStatus = Literal["complete", "aborted_budget", "aborted_interrupt", "aborted_routing"]
 
 PRESETS: tuple[Preset, ...] = ("vulnerable", "hardened")  # default presets of a run
 VARIANTS: tuple[Variant, ...] = ("attack", "benign")
@@ -391,7 +391,8 @@ class Report(_Model):
     schema_version: Literal[3]
     # Additive revisions of v3: 1 adds step origin "unknown", nullable
     # injected_steps, model_calls_recorded and conformance; 2 adds
-    # generator.src_tree. 0 in older reports.
+    # generator.src_tree; 3 adds run status aborted_routing and the routed-provider
+    # fields of model calls and LLMConfig (OpenRouter). 0 in older reports.
     schema_minor: int = 0
     generator: Generator
     agent: AgentDescriptor

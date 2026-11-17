@@ -87,6 +87,11 @@ class ChatResponse(_Model):
     context_tokens: int | None = None
     reasoning_present: bool | None = None  # None: the adapter does not detect reasoning
     reasoning_tokens: int | None = None  # if the server reports it
+    # Routed providers (OpenRouter) only: the model id requested, the host
+    # provider that served the call, and the provider-reported cost.
+    requested_model: str | None = None
+    served_provider: str | None = None
+    provider_cost_usd: float | None = None
 
 
 class ModelCallError(Exception):

@@ -78,6 +78,11 @@ class ModelCallRecord(_Model):
     reasoning_tokens: int | None = None
     # "tool.field" names whose digit-only string was coerced to an integer.
     coerced_args: list[str] = []
+    # Routed providers (OpenRouter) only; None otherwise. The cost cap uses
+    # cost_usd (local price table); provider_cost_usd is a cross-check.
+    requested_model: str | None = None
+    served_provider: str | None = None
+    provider_cost_usd: float | None = None
 
 
 class ServerMeta(_Model):
@@ -121,6 +126,9 @@ class AgentRun(_Model):
 
 class RunAborted(Exception):
     """Raised by an agent to stop the whole harness run (e.g. cost cap reached)."""
+
+    # Report run_status for this abort; subclasses override.
+    run_status = "aborted_budget"
 
 
 class Agent(Protocol):

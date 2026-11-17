@@ -1688,6 +1688,42 @@
           },
           "title": "Coerced Args",
           "type": "array"
+        },
+        "requested_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requested Model"
+        },
+        "served_provider": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Served Provider"
+        },
+        "provider_cost_usd": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider Cost Usd"
         }
       },
       "required": [
@@ -3245,7 +3281,8 @@
       "enum": [
         "complete",
         "aborted_budget",
-        "aborted_interrupt"
+        "aborted_interrupt",
+        "aborted_routing"
       ],
       "title": "Run Status",
       "type": "string"

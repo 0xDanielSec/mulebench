@@ -86,10 +86,14 @@ class OpenAICompatTransport:
         self.base_url = check_base_url(base_url, allow_remote=allow_remote)
         self._client = client or httpx.Client(timeout=timeout_s)
 
+    def headers(self) -> dict[str, str]:
+        """Request headers. Never logged, stored or put into error messages."""
+        return _headers()
+
     def send(self, params: dict[str, Any], trial_key: str) -> TransportResponse:
         try:
             response = self._client.post(
-                f"{self.base_url}/chat/completions", json=params, headers=_headers()
+                f"{self.base_url}/chat/completions", json=params, headers=self.headers()
             )
         except httpx.TimeoutException:
             raise ModelCallError("timeout", "request timed out") from None

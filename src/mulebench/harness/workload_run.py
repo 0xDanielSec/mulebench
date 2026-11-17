@@ -27,6 +27,7 @@ from mulebench.agents import Agent
 from mulebench.agents.base import RunAborted
 from mulebench.harness.models import AgentDescriptor, Generator, LLMConfig, RunStatus
 from mulebench.harness.presets import preset_guard_names
+from mulebench.harness.runner import abort_status
 from mulebench.harness.workloads import WorkloadTrial, run_workload, workload_key
 from mulebench.workloads import Workload
 
@@ -159,7 +160,7 @@ def run_workload_matrix(
                             on_trial(result)
                         out.append(result)
     except RunAborted as exc:
-        status, reason = "aborted_budget", str(exc)
+        status, reason = abort_status(exc), str(exc)
     except KeyboardInterrupt:
         status, reason = "aborted_interrupt", "interrupted (Ctrl+C)"
     return WorkloadRunReport(
