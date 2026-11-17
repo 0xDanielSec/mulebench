@@ -1,0 +1,88 @@
+# Pilot cassettes
+
+`pilots-01-08.tar.xz` holds every recorded model call of pilots 01 to 08
+(8,425 JSON files; 167.6 MB uncompressed; 3,944,652 bytes compressed). With it,
+every pilot replays offline: no API key, no model server, no network.
+
+sha256: `7bcad996b2f0805c943d116a6839c4f0a18b09b7c28609cf296417165c3b8482` (also in `pilots-01-08.tar.xz.sha256`).
+
+Cassettes hold request and response bodies only, never HTTP headers or keys
+(`src/mulebench/agents/llm/transport.py`). `scripts/prepublish_check.py`
+scans every member of the archive, in the working tree and in every
+committed version.
+
+## Verify and extract
+
+Bash:
+
+```bash
+unset MB_LIVE                                   # replay only: no live calls
+uv sync --all-extras
+(cd docs/experiments/cassettes && sha256sum -c pilots-01-08.tar.xz.sha256)
+uv run python scripts/cassette_archive.py extract   # checks the sha256 again, then extracts
+```
+
+PowerShell:
+
+```powershell
+Remove-Item Env:MB_LIVE -ErrorAction SilentlyContinue   # replay only: no live calls
+uv sync --all-extras
+(Get-FileHash docs\experiments\cassettes\pilots-01-08.tar.xz -Algorithm SHA256).Hash.ToLower()
+# must print 7bcad996b2f0805c943d116a6839c4f0a18b09b7c28609cf296417165c3b8482
+uv run python scripts/cassette_archive.py extract   # checks the sha256 again, then extracts
+```
+
+`extract` treats the archive as untrusted. It checks the sha256 before
+opening it; accepts only regular files named `pilot-<name>/<16 hex>.json` or
+`pilot-<name>/_server_meta.json`; rejects absolute paths, `..`, links,
+devices and directories; caps the archive size, file count, file size and
+total uncompressed size; rejects the whole archive before writing anything
+if any member fails; and extracts with tarfile's `data` filter into
+`runs/cassettes/`. An existing file that differs is not overwritten unless
+`--force` is given. `--only pilot-08-` extracts a single pilot.
+
+## Rebuild
+
+The archive is deterministic: entries sorted by name, USTAR format, mtime 0,
+mode 0644, uid/gid 0, empty user and group names, xz preset 9. From a full
+`runs/cassettes/`:
+
+```
+uv run python scripts/cassette_archive.py verify   # rebuild in memory, compare with the committed sha256
+uv run python scripts/cassette_archive.py build    # rewrite the archive and its .sha256
+```
+
+## Replay
+
+Pilots 01 and 02 have frozen documents (their sha256 is checked by
+`tests/test_reanalysis.py`), so their replay commands are here. Pilots 03 to
+08 have them in the "Offline replay" section of their documents:
+[03](../local-pilot-03.md#offline-replay), [04](../local-pilot-04.md#offline-replay),
+[05](../local-pilot-05.md#offline-replay), [06](../local-pilot-06.md#offline-replay),
+[07](../local-pilot-07.md#offline-replay), [08](../pilot-08-openrouter.md#offline-replay).
+Pilots 02 to 08 replay at the current commit; pilot 01 needs its harness
+commit `2fe1dc7`. Run "Verify and extract" above first.
+
+### Pilot 01
+
+Pilot 01 predates the per-trial seed scheme and replays only at its harness commit `2fe1dc7`. Run from a worktree next to the main checkout (here `../Mulebench`; adjust the path), in Bash or PowerShell (each command is one line):
+
+```
+git worktree add ../mulebench-2fe1dc7 2fe1dc7
+cd ../mulebench-2fe1dc7
+uv sync --all-extras
+uv run python -m mulebench run --builtin --agent llm --provider openai-compatible --model qwen3-14b-8k --preset vulnerable --prompt-variants baseline,data_not_instructions --trials 10 --temperature 0.7 --max-tokens 2048 --arg-coercion digit_strings --cassettes ../Mulebench/runs/cassettes/pilot-01-qwen3-14b-8k --out ../replay-pilot-01-qwen3-14b-8k.json
+uv run python -m mulebench run --builtin --agent llm --provider openai-compatible --model llama31-8b-8k --preset vulnerable --prompt-variants baseline,data_not_instructions --trials 10 --temperature 0.7 --max-tokens 2048 --arg-coercion digit_strings --cassettes ../Mulebench/runs/cassettes/pilot-01-llama31-8b-8k --out ../replay-pilot-01-llama31-8b-8k.json
+```
+
+Verified on 2026-11-17: a replay of the first trials of 004 for both models matched the committed reports trial by trial (status, tool calls, final answer, ledger).
+
+### Pilot 02
+
+At the current commit, in Bash or PowerShell (each command is one line). These are the frozen commands without `MB_LIVE`, `--record`, `--resume` and `--expect-harness` (which would refuse a newer commit); the cassettes still match because the request bodies did not change:
+
+```
+uv run python -m mulebench run --builtin --scenario pix-description-cross-customer-read-004 --scenario pix-description-foreign-history-008 --scenario dispute-flow-foreign-read-009 --scenario payee-name-cross-customer-read-010 --scenario pix-description-read-before-pay-011 --scenario pix-description-read-before-pay-key-swap-012 --agent llm --provider openai-compatible --model qwen3-14b-8k --preset vulnerable --prompt-variants baseline,data_not_instructions --trials 30 --temperature 0.7 --seed 1000 --max-tokens 2048 --arg-coercion digit_strings --cassettes runs/cassettes/pilot-02-qwen3-14b-8k --out runs/replay-pilot-02.json
+```
+
+Verified on 2026-11-17: a replay of the first trials of one scenario matched the committed report trial by trial (status, tool calls, final answer, ledger).

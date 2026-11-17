@@ -434,3 +434,35 @@ All rates are per cell, attack variant, unless stated.
   used here. Where it is used in multi-session trials, its `final_answer`
   sink joins all sessions' answers and does not say which session leaked
   (see pilot 04).
+
+## Offline replay
+
+Added after the pilot; the sections above are unchanged. The cassettes of this pilot are in the committed archive `docs/experiments/cassettes/pilots-01-08.tar.xz` (sha256 `7bcad996b2f0805c943d116a6839c4f0a18b09b7c28609cf296417165c3b8482`; see [cassettes/README.md](cassettes/README.md)). No API key, no model server and no network are needed.
+
+Bash:
+
+```bash
+unset MB_LIVE                                   # replay only: no live calls
+uv sync --all-extras
+(cd docs/experiments/cassettes && sha256sum -c pilots-01-08.tar.xz.sha256)
+uv run python scripts/cassette_archive.py extract   # checks the sha256 again, then extracts
+```
+
+PowerShell:
+
+```powershell
+Remove-Item Env:MB_LIVE -ErrorAction SilentlyContinue   # replay only: no live calls
+uv sync --all-extras
+(Get-FileHash docs\experiments\cassettes\pilots-01-08.tar.xz -Algorithm SHA256).Hash.ToLower()
+# must print 7bcad996b2f0805c943d116a6839c4f0a18b09b7c28609cf296417165c3b8482
+uv run python scripts/cassette_archive.py extract   # checks the sha256 again, then extracts
+```
+
+Then, at the current commit, in Bash or PowerShell (each command is one line). These are the frozen commands without `MB_LIVE`, `--record`, `--resume` and `--expect-harness` (which would refuse a newer commit); the cassettes still match because the request bodies did not change:
+
+```
+uv run python -m mulebench run --builtin --scenario delegation-payment-instruction-015 --scenario delegation-payment-instruction-amount-015b --scenario delegation-key-swap-016 --agent llm --provider openai-compatible --model qwen3-14b-8k --preset vulnerable --preset only:provenance_bound_handoff --prompt-variants baseline --trials 30 --seed 4000 --temperature 0.7 --max-tokens 4096 --arg-coercion digit_strings --cassettes runs/cassettes/pilot-05-qwen3-14b-8k --out runs/replay-pilot-05.json
+uv run python -m mulebench workloads --workload delegation-first-payment-new-payee --agent llm --provider openai-compatible --model qwen3-14b-8k --preset vulnerable --preset only:provenance_bound_handoff --prompt-variants baseline --trials 30 --seed 4000 --temperature 0.7 --max-tokens 4096 --arg-coercion digit_strings --cassettes runs/cassettes/pilot-05-qwen3-14b-8k-workload --out runs/replay-pilot-05-workload.json
+```
+
+Verified on 2026-11-17: a replay of the first trials of one scenario matched the committed report trial by trial (status, tool calls, final answer, ledger).

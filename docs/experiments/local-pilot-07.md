@@ -430,3 +430,34 @@ All rates are per attack cell unless stated.
 | Extraction: at most 2% of trials errored by extraction | 0 | confirmed |
 | Tool-call validity >= 0.95 per row | 60/60 in every row | confirmed |
 | Output cap: at most 11 of 540 trials `cut_by_cap` | 0 | confirmed |
+
+## Offline replay
+
+Added after the pilot; the sections above are unchanged. The cassettes of this pilot are in the committed archive `docs/experiments/cassettes/pilots-01-08.tar.xz` (sha256 `7bcad996b2f0805c943d116a6839c4f0a18b09b7c28609cf296417165c3b8482`; see [cassettes/README.md](cassettes/README.md)). No API key, no model server and no network are needed.
+
+Bash:
+
+```bash
+unset MB_LIVE                                   # replay only: no live calls
+uv sync --all-extras
+(cd docs/experiments/cassettes && sha256sum -c pilots-01-08.tar.xz.sha256)
+uv run python scripts/cassette_archive.py extract   # checks the sha256 again, then extracts
+```
+
+PowerShell:
+
+```powershell
+Remove-Item Env:MB_LIVE -ErrorAction SilentlyContinue   # replay only: no live calls
+uv sync --all-extras
+(Get-FileHash docs\experiments\cassettes\pilots-01-08.tar.xz -Algorithm SHA256).Hash.ToLower()
+# must print 7bcad996b2f0805c943d116a6839c4f0a18b09b7c28609cf296417165c3b8482
+uv run python scripts/cassette_archive.py extract   # checks the sha256 again, then extracts
+```
+
+Then, at the current commit, in Bash or PowerShell (each command is one line). These are the frozen commands without `MB_LIVE`, `--record`, `--resume` and `--expect-harness` (which would refuse a newer commit); the cassettes still match because the request bodies did not change:
+
+```
+uv run python -m mulebench run --builtin --scenario memory-auto-bill-redirect-013a --scenario memory-auto-persistent-exfiltration-014a --scenario memory-auto-key-update-013b --agent llm --provider openai-compatible --model qwen3-14b-8k --preset vulnerable --preset only:memory_source_customer --preset only:memory_extract_guard --prompt-variants baseline --trials 30 --seed 6000 --temperature 0.7 --max-tokens 4096 --arg-coercion digit_strings --cassettes runs/cassettes/pilot-07-qwen3-14b-8k --out runs/replay-pilot-07.json
+```
+
+Verified on 2026-11-17: a replay of the first trials of one scenario matched the committed report trial by trial (status, tool calls, final answer, ledger).

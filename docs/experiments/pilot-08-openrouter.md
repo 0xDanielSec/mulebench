@@ -710,3 +710,37 @@ most 60% for the three new models, and two of them reached 93%.
   say nothing about real banking systems or real customers.
 - Nothing is pooled across models or scenarios, and no significance tests
   were run (as frozen).
+
+## Offline replay
+
+Added after the pilot; the sections above are unchanged. The cassettes of this pilot are in the committed archive `docs/experiments/cassettes/pilots-01-08.tar.xz` (sha256 `7bcad996b2f0805c943d116a6839c4f0a18b09b7c28609cf296417165c3b8482`; see [cassettes/README.md](cassettes/README.md)). No API key, no model server and no network are needed.
+
+Bash:
+
+```bash
+unset MB_LIVE                                   # replay only: no live calls
+uv sync --all-extras
+(cd docs/experiments/cassettes && sha256sum -c pilots-01-08.tar.xz.sha256)
+uv run python scripts/cassette_archive.py extract   # checks the sha256 again, then extracts
+```
+
+PowerShell:
+
+```powershell
+Remove-Item Env:MB_LIVE -ErrorAction SilentlyContinue   # replay only: no live calls
+uv sync --all-extras
+(Get-FileHash docs\experiments\cassettes\pilots-01-08.tar.xz -Algorithm SHA256).Hash.ToLower()
+# must print 7bcad996b2f0805c943d116a6839c4f0a18b09b7c28609cf296417165c3b8482
+uv run python scripts/cassette_archive.py extract   # checks the sha256 again, then extracts
+```
+
+Then, at the current commit, in Bash or PowerShell (each command is one line). These are the frozen commands without `MB_LIVE`, `--record`, `--resume` and `--expect-harness` (which would refuse a newer commit); the cassettes still match because the request bodies did not change:
+
+```
+uv run python -m mulebench run --builtin --scenario pix-description-cross-customer-read-004 --scenario dispute-flow-foreign-read-009 --scenario pix-description-read-before-pay-key-swap-012 --scenario delegation-payment-instruction-amount-015b --scenario memory-auto-persistent-exfiltration-014a --agent llm --provider openrouter --allow-remote --preset vulnerable --prompt-variants baseline --trials 30 --temperature 0.7 --seed 7000 --max-tokens 4096 --arg-coercion digit_strings --max-cost-usd 1.00 --model qwen/qwen3-14b --openrouter-host DeepInfra --openrouter-quantization fp8 --cassettes runs/cassettes/pilot-08-qwen3-14b --out runs/replay-pilot-08-qwen3-14b.json
+uv run python -m mulebench run --builtin --scenario pix-description-cross-customer-read-004 --scenario dispute-flow-foreign-read-009 --scenario pix-description-read-before-pay-key-swap-012 --scenario delegation-payment-instruction-amount-015b --scenario memory-auto-persistent-exfiltration-014a --agent llm --provider openrouter --allow-remote --preset vulnerable --prompt-variants baseline --trials 30 --temperature 0.7 --seed 7000 --max-tokens 4096 --arg-coercion digit_strings --max-cost-usd 1.00 --model openai/gpt-oss-20b --openrouter-host DekaLLM --openrouter-quantization bf16 --cassettes runs/cassettes/pilot-08-gpt-oss-20b --out runs/replay-pilot-08-gpt-oss-20b.json
+uv run python -m mulebench run --builtin --scenario pix-description-cross-customer-read-004 --scenario dispute-flow-foreign-read-009 --scenario pix-description-read-before-pay-key-swap-012 --scenario delegation-payment-instruction-amount-015b --scenario memory-auto-persistent-exfiltration-014a --agent llm --provider openrouter --allow-remote --preset vulnerable --prompt-variants baseline --trials 30 --temperature 0.7 --seed 7000 --max-tokens 4096 --arg-coercion digit_strings --max-cost-usd 1.00 --model google/gemma-4-26b-a4b-it --openrouter-host DeepInfra --openrouter-quantization fp8 --cassettes runs/cassettes/pilot-08-gemma-4-26b --out runs/replay-pilot-08-gemma-4-26b.json
+uv run python -m mulebench run --builtin --scenario pix-description-cross-customer-read-004 --scenario dispute-flow-foreign-read-009 --scenario pix-description-read-before-pay-key-swap-012 --scenario delegation-payment-instruction-amount-015b --scenario memory-auto-persistent-exfiltration-014a --agent llm --provider openrouter --allow-remote --preset vulnerable --prompt-variants baseline --trials 30 --temperature 0.7 --seed 7000 --max-tokens 4096 --arg-coercion digit_strings --max-cost-usd 1.00 --model mistralai/mistral-small-3.2-24b-instruct --openrouter-host DeepInfra --openrouter-quantization fp8 --cassettes runs/cassettes/pilot-08-mistral-small-3.2 --out runs/replay-pilot-08-mistral-small-3.2.json
+```
+
+`tests/llm/test_pilot_08_replay.py` replays scenario 012 (first 3 trials of each variant) for each model in CI and compares it trial by trial with the committed reports.

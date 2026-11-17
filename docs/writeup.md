@@ -253,19 +253,49 @@ uv run python -m scripts.pilot_results --pilot 08 \
 uv run mulebench view docs/experiments/data/pilot-08-mistral-small-3.2.json --out site
 ```
 
-The pilot cassettes are kept local and are not in the repository. With a
-copy of them, a run replays offline with no key: the recorded command
-without `--record` (here pilot 08, Mistral, scenario 012; it reproduces
-1/29 and benign utility 25/30):
+Every recorded model call of pilots 01 to 08 is committed as one
+deterministic archive, `docs/experiments/cassettes/pilots-01-08.tar.xz`
+(sha256 in the `.sha256` file next to it). Verify it, extract it (the
+script checks the hash again and rejects unsafe members), and replay. Here
+pilot 08, Mistral, scenario 012, which reproduces 1/29 and benign utility
+25/30. No API key, model server or network is needed.
 
-```
-uv run mulebench run --builtin --scenario pix-description-read-before-pay-key-swap-012 \
+Bash:
+
+```bash
+unset MB_LIVE
+(cd docs/experiments/cassettes && sha256sum -c pilots-01-08.tar.xz.sha256)
+uv run python scripts/cassette_archive.py extract
+uv run python -m mulebench run --builtin \
+  --scenario pix-description-read-before-pay-key-swap-012 \
   --agent llm --provider openrouter --model mistralai/mistral-small-3.2-24b-instruct \
   --openrouter-host DeepInfra --openrouter-quantization fp8 --allow-remote \
   --preset vulnerable --prompt-variants baseline --trials 30 --temperature 0.7 \
   --seed 7000 --max-tokens 4096 --arg-coercion digit_strings --max-cost-usd 1.00 \
   --cassettes runs/cassettes/pilot-08-mistral-small-3.2 --out replay.json
 ```
+
+PowerShell:
+
+```powershell
+Remove-Item Env:MB_LIVE -ErrorAction SilentlyContinue
+(Get-FileHash docs\experiments\cassettes\pilots-01-08.tar.xz -Algorithm SHA256).Hash.ToLower()
+Get-Content docs\experiments\cassettes\pilots-01-08.tar.xz.sha256   # the two hashes must match
+uv run python scripts/cassette_archive.py extract
+uv run python -m mulebench run --builtin `
+  --scenario pix-description-read-before-pay-key-swap-012 `
+  --agent llm --provider openrouter --model mistralai/mistral-small-3.2-24b-instruct `
+  --openrouter-host DeepInfra --openrouter-quantization fp8 --allow-remote `
+  --preset vulnerable --prompt-variants baseline --trials 30 --temperature 0.7 `
+  --seed 7000 --max-tokens 4096 --arg-coercion digit_strings --max-cost-usd 1.00 `
+  --cassettes runs/cassettes/pilot-08-mistral-small-3.2 --out replay.json
+```
+
+The exact replay commands for every pilot are in the "Offline replay"
+section of each pilot document; see
+[`docs/experiments/cassettes/README.md`](experiments/cassettes/README.md).
+Pilots 02 to 08 replay at the current commit; pilot 01 needs its harness
+commit `2fe1dc7`.
 
 To test your own agent, write an adapter with a `run(task, tools)` method
 and a no-argument factory, then:

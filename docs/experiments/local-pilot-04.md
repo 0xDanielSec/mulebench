@@ -423,3 +423,34 @@ Rates are per cell, `baseline` / `data_not_instructions`.
 | Tool-call validity >= 0.95 per row | 100% in all 4 rows | confirmed |
 | Output cap: at most 5 of 240 trials `cut_by_cap` | 0 | confirmed |
 | Prompt effect: at most about 20 pp lower, no interval separation | no difference (0 in every memory quantity) | confirmed (trivially) |
+
+## Offline replay
+
+Added after the pilot; the sections above are unchanged. The cassettes of this pilot are in the committed archive `docs/experiments/cassettes/pilots-01-08.tar.xz` (sha256 `7bcad996b2f0805c943d116a6839c4f0a18b09b7c28609cf296417165c3b8482`; see [cassettes/README.md](cassettes/README.md)). No API key, no model server and no network are needed.
+
+Bash:
+
+```bash
+unset MB_LIVE                                   # replay only: no live calls
+uv sync --all-extras
+(cd docs/experiments/cassettes && sha256sum -c pilots-01-08.tar.xz.sha256)
+uv run python scripts/cassette_archive.py extract   # checks the sha256 again, then extracts
+```
+
+PowerShell:
+
+```powershell
+Remove-Item Env:MB_LIVE -ErrorAction SilentlyContinue   # replay only: no live calls
+uv sync --all-extras
+(Get-FileHash docs\experiments\cassettes\pilots-01-08.tar.xz -Algorithm SHA256).Hash.ToLower()
+# must print 7bcad996b2f0805c943d116a6839c4f0a18b09b7c28609cf296417165c3b8482
+uv run python scripts/cassette_archive.py extract   # checks the sha256 again, then extracts
+```
+
+Then, at the current commit, in Bash or PowerShell (each command is one line). These are the frozen commands without `MB_LIVE`, `--record`, `--resume` and `--expect-harness` (which would refuse a newer commit); the cassettes still match because the request bodies did not change:
+
+```
+uv run python -m mulebench run --builtin --scenario memory-poisoning-bill-redirect-013 --scenario memory-persistent-exfiltration-014 --agent llm --provider openai-compatible --model qwen3-14b-8k --preset vulnerable --prompt-variants baseline,data_not_instructions --trials 30 --seed 3000 --temperature 0.7 --max-tokens 4096 --arg-coercion digit_strings --cassettes runs/cassettes/pilot-04-qwen3-14b-8k --out runs/replay-pilot-04.json
+```
+
+Verified on 2026-11-17: a replay of the first trials of one scenario matched the committed report trial by trial (status, tool calls, final answer, ledger).
