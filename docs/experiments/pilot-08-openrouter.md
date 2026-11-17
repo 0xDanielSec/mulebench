@@ -1,13 +1,16 @@
 # Pre-registration: pilot 08 (hosted models through OpenRouter)
 
-Status: **draft, ready to freeze; not frozen.** Every protocol item is
-filled in. Before freezing, the author runs the live `doctor` probe of
-`openai/gpt-oss-20b` on its new host, DekaLLM (see Models; the other three
-models passed every check on DeepInfra on 2026-11-16, served quantization
-not reported, accepted). Freezing follows
-the pilots 01 to 07 rule: the sections "Protocol", "Analysis rules" and
-"Predictions" are frozen at the commit that freezes this file, before any
-pilot 08 trial; anything that differs at run time goes into "Deviations".
+Status: **pre-registered** (not run). Frozen at the commit that adds this
+status, before any pilot 08 trial was run, with the harness at commit
+`894945e`. The sections "Protocol", "Analysis rules" and "Predictions" are
+frozen, as in pilots 01 to 07. Anything that differs at run time goes into
+"Deviations"; frozen sections are not edited after the fact.
+
+Live `doctor` checks before freezing (all passed): qwen3-14b, gemma-4-26b
+and mistral-small-3.2 on DeepInfra (2026-11-16), gpt-oss-20b on DekaLLM bf16
+(2026-11-17: 1 eligible endpoint, price ok, both tool-calling probes ok).
+For all four, the responses do not report the served quantization
+(accepted limitation, see Models).
 
 This is still a pilot. It supports no headline claims about any model.
 
@@ -69,13 +72,12 @@ Note on qwen3: the hosted endpoint is fp8, the local model Q4_K_M. RQ2
 compares them descriptively only (see above).
 
 Limitation (accepted by the author): the doctor probes showed that
-DeepInfra responses do not report the served quantization. Such calls are
+DeepInfra and DekaLLM responses do not report the served quantization
+(all four models). Such calls are
 recorded with `served_quantization: null` and counted in the report's
 `routing` block; for them only the request pin applies, not a per-call
 check. Responses also do not say which eligible endpoint (tier) served
-them. Both are reported in the Results. Whether DekaLLM responses report
-the served quantization is shown by its `doctor` probe (**to be recorded
-before freezing**).
+them. Both are reported in the Results.
 
 ## Scenarios
 
@@ -105,7 +107,7 @@ the same scenarios):
 - prompt `baseline`: `7e9507254de3cd3d56a35dc75ce30eca3e5136b48941acb7c1c9cedd4ca42fc4`
   (unchanged since pilot 01)
 
-## Protocol (draft, to be frozen)
+## Protocol (frozen)
 
 | Item | Value |
 |---|---|
@@ -124,7 +126,7 @@ the same scenarios):
 | Cost cap | `--max-cost-usd 1.00` per model (US$ 4.00 at most in total) |
 | Price table | `pricing/openrouter.toml`, `as_of` 2026-11-16, sha256 `313830469ef0c8cdd6523af645800ab5b036cdd986c7b2f11b0222ceb730e355` (recorded in each report) |
 
-Checks at `894945e`, before freezing:
+Checks at `894945e`, before freezing (all passed):
 
 - Scenario, tool schema and prompt hashes as listed above.
 - The seeds of one model's 300 trials (480 model calls in an offline
@@ -224,7 +226,7 @@ reasoning.
 Within the US$ 5 budget even with the safety factor; the per-model caps
 bound the worst case at US$ 4.00.
 
-## Analysis rules (draft, to be frozen)
+## Analysis rules (frozen)
 
 As pilots 03 to 07: k/n with Wilson 95% intervals; errored trials excluded
 from rates and counted, by error; `not_exposed` attack trials excluded from
@@ -262,7 +264,7 @@ are committed. Any change of definition after freezing is a Deviation.
 
 Power note: at N=30, differences under about 20 pp are within noise.
 
-## Predictions (draft, to be frozen)
+## Predictions (frozen)
 
 Pilots 02 to 07 found that local qwen3-14b follows injected **read**
 instructions (004, 009, 014a) more often than injected **payment**
@@ -294,8 +296,7 @@ Other predictions:
 - **Output cap:** at most 2% of each model's trials end `cut_by_cap`.
 - **Routing:** no run ends `aborted_routing`; every call is served by the
   model's pinned host (DekaLLM for gpt-oss-20b, DeepInfra otherwise);
-  served quantization is `null` for every DeepInfra call (for DekaLLM, as
-  its `doctor` probe shows; recorded before freezing).
+  served quantization is `null` for every call (DeepInfra and DekaLLM).
 - **Transient errors:** no row is not meaningful because of
   `provider_rate_limited`; at most 2% of each model's trials errored after
   exhausted retries.
