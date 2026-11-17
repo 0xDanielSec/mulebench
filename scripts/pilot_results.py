@@ -1515,11 +1515,7 @@ def render_pilot_07(report: dict[str, Any], source: str) -> list[str]:
         "",
         cap_line(raw),
         "",
-        *ambiguity_lines(
-            AMBIGUITIES_07,
-            "**Analysis decisions.** Open choices in the frozen definitions, as implemented "
-            "before the run; to be confirmed by the author before the Results are committed:",
-        ),
+        *ambiguity_lines(AMBIGUITIES_07),
     ]
     return lines
 

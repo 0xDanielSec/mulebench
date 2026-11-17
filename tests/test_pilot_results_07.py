@@ -85,7 +85,7 @@ def test_pilot_07_vulnerable_injects_and_defences_stop_it(script: ModuleType, dr
     assert row(extraction, "013a", GUARD, "none", "benign")[10] == "2"  # guard false positive
     text = "\n".join(lines)
     assert "013a as frozen" in text
-    assert "to be confirmed by the author" in text
+    assert "confirmed by the author as implemented" in text
 
 
 def test_pilot_07_llm_extraction_errors_and_session_zero_disclosure(
