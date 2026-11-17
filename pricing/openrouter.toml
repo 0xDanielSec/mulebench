@@ -10,13 +10,21 @@
 # pinned endpoint's price.
 
 as_of = "2026-11-16"
-source = "OpenRouter endpoint listings (GET /api/v1/models/{id}/endpoints); highest DeepInfra endpoint price per model"
+source = "OpenRouter endpoint listings (GET /api/v1/models/{id}/endpoints); highest eligible endpoint price per model and host (DekaLLM entry read 2026-11-17)"
 
-# pilot 08 pin: quantization bf16
+# Not used by pilot 08: DeepInfra rate-limited gpt-oss-20b persistently
+# (HTTP 429 after 6 attempts, twice, 2026-11-17).
 [[price]]
 model = "openai/gpt-oss-20b"
 host = "DeepInfra"
 input_per_mtok = 0.030
+output_per_mtok = 0.140
+
+# pilot 08 pin: quantization bf16 (single eligible endpoint; price as of 2026-11-17)
+[[price]]
+model = "openai/gpt-oss-20b"
+host = "DekaLLM"
+input_per_mtok = 0.029
 output_per_mtok = 0.140
 
 # pilot 08 pin: quantization fp8

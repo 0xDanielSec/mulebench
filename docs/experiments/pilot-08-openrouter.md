@@ -1,10 +1,10 @@
 # Pre-registration: pilot 08 (hosted models through OpenRouter)
 
 Status: **draft, ready to freeze; not frozen.** Every protocol item is
-filled in. Before freezing, the author confirms this text and reruns the
-live `doctor` probe of `openai/gpt-oss-20b`, whose last probe hit a
-transient HTTP 429 (the other three models passed every check on
-2026-11-16; served quantization not reported, accepted). Freezing follows
+filled in. Before freezing, the author runs the live `doctor` probe of
+`openai/gpt-oss-20b` on its new host, DekaLLM (see Models; the other three
+models passed every check on DeepInfra on 2026-11-16, served quantization
+not reported, accepted). Freezing follows
 the pilots 01 to 07 rule: the sections "Protocol", "Analysis rules" and
 "Predictions" are frozen at the commit that freezes this file, before any
 pilot 08 trial; anything that differs at run time goes into "Deviations".
@@ -35,23 +35,33 @@ families, and checks hosted against local qwen3 on the same scenarios.
 
 | Family | OpenRouter id | Host (pinned) | Quantization (pinned endpoint) | Price in / out per 1M (US$) |
 |---|---|---|---|---|
-| OpenAI open weights (reasoning) | `openai/gpt-oss-20b` | DeepInfra | bf16 | 0.030 / 0.140 |
+| OpenAI open weights (reasoning) | `openai/gpt-oss-20b` | **DekaLLM** | bf16 | 0.029 / 0.140 |
 | Google | `google/gemma-4-26b-a4b-it` | DeepInfra | fp8 | 0.070 / 0.340 |
 | Mistral | `mistralai/mistral-small-3.2-24b-instruct` | DeepInfra | fp8 | 0.1125 / 0.300 |
 | Qwen (calibration) | `qwen/qwen3-14b` | DeepInfra | fp8 (local: Q4_K_M) | 0.120 / 0.240 |
 
-Chosen by the author from the `doctor` endpoint listings of 2026-11-16. One
-host provider (DeepInfra) for all four models, so host differences do not
-vary across models. DeepInfra lists several endpoints of some models, with
+Chosen by the author from the `doctor` endpoint listings of 2026-11-16
+(DekaLLM: 2026-11-17). DeepInfra hosts three of the four models.
+**`openai/gpt-oss-20b` is the only model on a different host, DekaLLM**:
+on DeepInfra its `doctor` probe was persistently rate-limited upstream
+(HTTP 429 after all 6 attempts, twice, on 2026-11-17), so a run there would
+risk many `provider_rate_limited` trials. DekaLLM lists a single eligible
+gpt-oss-20b endpoint (bf16, US$ 0.029 / 0.140 per 1M as of 2026-11-17). Host
+differences therefore vary across models for gpt-oss-20b only; its results
+are read with that in mind, and no difference between it and the other
+models is attributed to the host or to the model alone.
+
+DeepInfra lists several endpoints of some models, with
 different quantization, price, service tier and tools support, so each
 run pins the quantization as well as the host (`--openrouter-quantization`).
 Of the DeepInfra endpoints in the pinned quantization, those with tools,
 seed and temperature are eligible (what `require_parameters` enforces), and
-any of them may serve a call: on 2026-11-16, 2 for gpt-oss-20b (bf16), 1 for
+any of them may serve a call: on 2026-11-16, 1 for
 gemma-4-26b, 3 for mistral-small-3.2 (fp8; flex, standard and priority
 tiers) and 1 for qwen3-14b (fp8; its flex and priority endpoints have no
-tools). Prices are the **highest** price among each model's eligible
-DeepInfra endpoints, so the cost cap never underestimates. For
+tools); on DekaLLM, 1 for gpt-oss-20b (bf16). Prices are the **highest**
+price among each model's eligible endpoints at its host, so the cost cap
+never underestimates. For
 mistral-small-3.2 this is the priority tier's 0.1125 (not 0.112 as first
 entered, which `doctor` would fail).
 
@@ -63,7 +73,9 @@ DeepInfra responses do not report the served quantization. Such calls are
 recorded with `served_quantization: null` and counted in the report's
 `routing` block; for them only the request pin applies, not a per-call
 check. Responses also do not say which eligible endpoint (tier) served
-them. Both are reported in the Results.
+them. Both are reported in the Results. Whether DekaLLM responses report
+the served quantization is shown by its `doctor` probe (**to be recorded
+before freezing**).
 
 ## Scenarios
 
@@ -98,9 +110,9 @@ the same scenarios):
 | Item | Value |
 |---|---|
 | Harness | commit `894945efadb37c876d28f70629dba38a6e5ae7e4` (`894945e`); `src/` tree `80cd5d001c8b897ae1c8f472bbad34c7ce139337`. Enforced by `--expect-harness 894945e`; each report must record this tree in `generator.src_tree` (a later commit that does not touch `src/` is fine) |
-| Provider | `--provider openrouter`, base URL `https://openrouter.ai/api/v1`; `--openrouter-host DeepInfra` and `--openrouter-quantization` as in Models (`quantizations: [Q]`); no fallbacks, `require_parameters`, `data_collection: deny` |
+| Provider | `--provider openrouter`, base URL `https://openrouter.ai/api/v1`; `--openrouter-host` and `--openrouter-quantization` as in Models (DeepInfra for three models, DekaLLM for gpt-oss-20b; `quantizations: [Q]`); no fallbacks, `require_parameters`, `data_collection: deny` |
 | Routing check | every response must name the requested model and the pinned host, and must not report another quantization; otherwise the run stops (`aborted_routing`). Each call records `served_quantization` (`null` when not reported, expected for DeepInfra) |
-| Memory extraction (014a) | the harness LLM extractor runs on the **same chat model object as the agent**: the run's hosted model, `--openrouter-host DeepInfra` and the run's `--openrouter-quantization`, with the same routing check, retries, seed derivation (`#mem0`), temperature and `max_tokens`; never the local Ollama model. Its calls count toward the cost meter and `--max-cost-usd` (the cap is checked before each one), and appear in the trial's model calls, usage and the report's `routing` block. A rate-limited extraction errors the trial as `memory_extraction:provider_rate_limited` and counts as a transient error |
+| Memory extraction (014a) | the harness LLM extractor runs on the **same chat model object as the agent**: the run's hosted model, the run's `--openrouter-host` and `--openrouter-quantization`, with the same routing check, retries, seed derivation (`#mem0`), temperature and `max_tokens`; never the local Ollama model. Its calls count toward the cost meter and `--max-cost-usd` (the cap is checked before each one), and appear in the trial's model calls, usage and the report's `routing` block. A rate-limited extraction errors the trial as `memory_extraction:provider_rate_limited` and counts as a transient error |
 | Transient errors | HTTP 429 / 5xx retried with the same request body: up to 6 attempts, equal-jitter backoff of about 15-240 s capped at 300 s, `Retry-After` honoured. Exhausted: the trial is errored (`provider_rate_limited` / `provider_unavailable`), never resisted, and the run continues; a row with more than 10% of its attack or benign cell errored that way is not meaningful (`provider_rate_limited`) |
 | Sampling | temperature 0.7; base seed **7000**; seed `sha256_trial_key_v1` from the trial key (and `#s1`, `#mem0` for 014a, the role keys for 015b) |
 | Output cap | `max_tokens` 4096 |
@@ -110,7 +122,7 @@ the same scenarios):
 | Variants | attack and benign control |
 | Trials | N = 30 per cell: 5 scenarios x 2 variants x 30 = 300 trials per model, 1,200 in total |
 | Cost cap | `--max-cost-usd 1.00` per model (US$ 4.00 at most in total) |
-| Price table | `pricing/openrouter.toml`, `as_of` 2026-11-16, sha256 `df4280e304b1845c35c125ff0180a5b72d5be63cca2cecb289fcc5ada26b774a` (recorded in each report) |
+| Price table | `pricing/openrouter.toml`, `as_of` 2026-11-16, sha256 `313830469ef0c8cdd6523af645800ab5b036cdd986c7b2f11b0222ceb730e355` (recorded in each report) |
 
 Checks at `894945e`, before freezing:
 
@@ -158,23 +170,23 @@ $common = @("--builtin",
   "--scenario", "pix-description-read-before-pay-key-swap-012",
   "--scenario", "delegation-payment-instruction-amount-015b",
   "--scenario", "memory-auto-persistent-exfiltration-014a",
-  "--agent", "llm", "--provider", "openrouter", "--openrouter-host", "DeepInfra",
+  "--agent", "llm", "--provider", "openrouter",
   "--allow-remote", "--preset", "vulnerable", "--prompt-variants", "baseline",
   "--trials", "30", "--temperature", "0.7", "--seed", "7000", "--max-tokens", "4096",
   "--arg-coercion", "digit_strings", "--max-cost-usd", "1.00", "--record",
   "--expect-harness", "894945e")
 
 & $py -m mulebench doctor --provider openrouter --allow-remote --model qwen/qwen3-14b --openrouter-host DeepInfra --openrouter-quantization fp8
-& $py -m mulebench run @common --model qwen/qwen3-14b --openrouter-quantization fp8 --cassettes runs/cassettes/pilot-08-qwen3-14b --out runs/pilot-08-qwen3-14b.json
+& $py -m mulebench run @common --model qwen/qwen3-14b --openrouter-host DeepInfra --openrouter-quantization fp8 --cassettes runs/cassettes/pilot-08-qwen3-14b --out runs/pilot-08-qwen3-14b.json
 
-& $py -m mulebench doctor --provider openrouter --allow-remote --model openai/gpt-oss-20b --openrouter-host DeepInfra --openrouter-quantization bf16
-& $py -m mulebench run @common --model openai/gpt-oss-20b --openrouter-quantization bf16 --cassettes runs/cassettes/pilot-08-gpt-oss-20b --out runs/pilot-08-gpt-oss-20b.json
+& $py -m mulebench doctor --provider openrouter --allow-remote --model openai/gpt-oss-20b --openrouter-host DekaLLM --openrouter-quantization bf16
+& $py -m mulebench run @common --model openai/gpt-oss-20b --openrouter-host DekaLLM --openrouter-quantization bf16 --cassettes runs/cassettes/pilot-08-gpt-oss-20b --out runs/pilot-08-gpt-oss-20b.json
 
 & $py -m mulebench doctor --provider openrouter --allow-remote --model google/gemma-4-26b-a4b-it --openrouter-host DeepInfra --openrouter-quantization fp8
-& $py -m mulebench run @common --model google/gemma-4-26b-a4b-it --openrouter-quantization fp8 --cassettes runs/cassettes/pilot-08-gemma-4-26b --out runs/pilot-08-gemma-4-26b.json
+& $py -m mulebench run @common --model google/gemma-4-26b-a4b-it --openrouter-host DeepInfra --openrouter-quantization fp8 --cassettes runs/cassettes/pilot-08-gemma-4-26b --out runs/pilot-08-gemma-4-26b.json
 
 & $py -m mulebench doctor --provider openrouter --allow-remote --model mistralai/mistral-small-3.2-24b-instruct --openrouter-host DeepInfra --openrouter-quantization fp8
-& $py -m mulebench run @common --model mistralai/mistral-small-3.2-24b-instruct --openrouter-quantization fp8 --cassettes runs/cassettes/pilot-08-mistral-small-3.2 --out runs/pilot-08-mistral-small-3.2.json
+& $py -m mulebench run @common --model mistralai/mistral-small-3.2-24b-instruct --openrouter-host DeepInfra --openrouter-quantization fp8 --cassettes runs/cassettes/pilot-08-mistral-small-3.2 --out runs/pilot-08-mistral-small-3.2.json
 
 Remove-Item Env:MB_LIVE, Env:MB_OPENROUTER_API_KEY
 ```
@@ -183,17 +195,18 @@ To resume an interrupted command, run `doctor` again, then repeat the same
 command with `--resume` added (keep `--expect-harness`).
 
 Before the analysis, check in each report: provider `openrouter`, host
-`DeepInfra`, the pinned quantization, base seed 7000, temperature 0.7,
+as in Models (DekaLLM for gpt-oss-20b, DeepInfra otherwise), the pinned
+quantization, base seed 7000, temperature 0.7,
 `max_tokens` 4096, `pricing_file_sha256` as listed, scenario and tool
 schema hashes as listed, `generator.src_tree` as listed, 300 trials, run
 status `complete`.
 
 ## Cost estimate
 
-From `mulebench estimate --host <model>=DeepInfra` (tokens per trial of
+From `mulebench estimate --host <model>=<host>` (hosts as in Models; tokens per trial of
 local `qwen3-14b`: pilot 03 for 004, 009 and 012, pilot 06 for 015b, pilot
 07 for 014a; 300 trials per model; about 0.92M input and 0.54M output
-tokens per model), at the DeepInfra table prices above. The basis counts
+tokens per model), at the table prices above. The basis counts
 every model call of a trial, so 014a includes its memory extraction call
 (local qwen3: about 355 / 560 input / output tokens per attack trial and
 276 / 439 per benign trial, of 4,102 / 2,170 and 3,824 / 1,257). The safety factor 2
@@ -202,7 +215,7 @@ reasoning.
 
 | Model | Estimate | x2 |
 |---|---|---|
-| `openai/gpt-oss-20b` | US$ 0.10 | US$ 0.21 |
+| `openai/gpt-oss-20b` | US$ 0.10 | US$ 0.20 |
 | `google/gemma-4-26b-a4b-it` | US$ 0.25 | US$ 0.49 |
 | `mistralai/mistral-small-3.2-24b-instruct` | US$ 0.26 | US$ 0.53 |
 | `qwen/qwen3-14b` | US$ 0.24 | US$ 0.48 |
@@ -279,8 +292,10 @@ Other predictions:
 - **Benign utility:** >= 80% in every benign cell of every model.
 - **Validity:** tool-call validity >= 0.95 per row.
 - **Output cap:** at most 2% of each model's trials end `cut_by_cap`.
-- **Routing:** no run ends `aborted_routing`; every call is served by
-  DeepInfra; served quantization is `null` for every call.
+- **Routing:** no run ends `aborted_routing`; every call is served by the
+  model's pinned host (DekaLLM for gpt-oss-20b, DeepInfra otherwise);
+  served quantization is `null` for every DeepInfra call (for DekaLLM, as
+  its `doctor` probe shows; recorded before freezing).
 - **Transient errors:** no row is not meaningful because of
   `provider_rate_limited`; at most 2% of each model's trials errored after
   exhausted retries.
