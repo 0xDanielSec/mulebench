@@ -27,7 +27,7 @@ from mulebench.agents.base import RunAborted
 from mulebench.agents.llm.http_transport import OpenAICompatTransport
 from mulebench.agents.llm.model import ChatRequest, ChatResponse, ModelCallError
 from mulebench.agents.llm.openai_compat import OpenAICompatChatModel, parse_completion
-from mulebench.agents.llm.transport import LiveCallsDisabled, Transport
+from mulebench.agents.llm.transport import LIVE_ENV, LiveCallsDisabled, Transport
 
 PROVIDER = "openrouter"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
@@ -120,6 +120,8 @@ class OpenRouterTransport(OpenAICompatTransport):
         client: httpx.Client | None = None,
         timeout_s: float = DEFAULT_TIMEOUT_S,
     ) -> None:
+        if os.environ.get(LIVE_ENV) != "1":
+            raise LiveCallsDisabled(f"live calls need {LIVE_ENV}=1")
         if not allow_remote:
             raise LiveCallsDisabled("openrouter is a remote host: pass --allow-remote")
         if not os.environ.get(KEY_ENV):

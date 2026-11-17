@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from mulebench.agents.base import (
@@ -22,6 +23,7 @@ from mulebench.agents.base import (
     ModelCallRecord,
     ServerMeta,
     StopReason,
+    TokenUsage,
 )
 from mulebench.agents.llm.budget import CostMeter
 from mulebench.agents.llm.coercion import (
@@ -88,8 +90,12 @@ class LLMAgent:
         seed: int | None = None,
         arg_coercion: ArgCoercion = DEFAULT_ARG_COERCION,
         role_prompts: dict[str, str] | None = None,
+        pricer: Callable[[TokenUsage, str], float | None] = cost_usd,
     ) -> None:
         self.chat = chat
+        # usage, served model -> USD; the built-in table unless a provider
+        # brings its own (OpenRouter: the local price file).
+        self.pricer = pricer
         # Delegation role -> role prompt variant (prompts.ROLE_PROMPT_VARIANTS);
         # roles not named use "default".
         self.role_prompts = dict(role_prompts or {})
@@ -191,7 +197,7 @@ class LLMAgent:
                 response = self.chat.complete(request)
             except ModelCallError as exc:
                 return finish("errored", exc.kind)
-            cost = cost_usd(response.usage, response.served_model)
+            cost = self.pricer(response.usage, response.served_model)
             self.meter.add(cost)
             tool_calls = []
             call_coerced: list[str] = []

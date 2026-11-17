@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING
 
 from mulebench.agents.base import ModelCallRecord
 from mulebench.agents.llm.model import ChatRequest, ModelCallError, Turn
-from mulebench.agents.llm.pricing import cost_usd
 from mulebench.agents.llm.seeds import derive_seed
 from mulebench.agents.memory_extraction import (
     EXTRACTION_PROMPT,
@@ -51,7 +50,7 @@ class LLMExtractor:
             response = a.chat.complete(request)
         except ModelCallError as exc:
             return ExtractResult(items=[], error=exc.kind)
-        cost = cost_usd(response.usage, response.served_model)
+        cost = a.pricer(response.usage, response.served_model)
         a.meter.add(cost)
         record = ModelCallRecord(
             served_model=response.served_model,

@@ -1453,6 +1453,30 @@
           ],
           "default": null,
           "title": "Role Prompt Sha256"
+        },
+        "openrouter_host": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Openrouter Host"
+        },
+        "pricing_file_sha256": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pricing File Sha256"
         }
       },
       "required": [

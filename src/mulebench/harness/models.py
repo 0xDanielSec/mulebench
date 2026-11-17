@@ -307,6 +307,10 @@ class LLMConfig(_Model):
     # prompt of that role. None in older reports.
     role_prompts: dict[str, str] | None = None
     role_prompt_sha256: dict[str, str] | None = None
+    # openrouter only: the pinned host provider and the sha256 of the local
+    # price table file the cost cap used. None otherwise.
+    openrouter_host: str | None = None
+    pricing_file_sha256: str | None = None
 
 
 class PricingInfo(_Model):

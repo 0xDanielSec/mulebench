@@ -3,7 +3,8 @@
     mulebench run [<dir> | --builtin] [--scenario ID ...] [--out report.json]
                   [--agent scripted|llm | --agent-module MOD:FACTORY [--agent-path DIR]]
                   [--trials N] [--max-steps N]
-                  [--provider anthropic|openai-compatible]
+                  [--provider anthropic|openai-compatible|openrouter]
+                  [--openrouter-host NAME] [--pricing FILE]
                   [--model M] [--effort E] [--prompt-variants a,b]
                   [--cassettes DIR] [--record] [--max-cost-usd X]
                   [--base-url URL] [--allow-remote] [--seed S] [--temperature T]
@@ -27,11 +28,15 @@ LLM runs replay recorded cassettes by default. `--record` makes live calls and
 stores them. Anthropic: requires MB_LIVE=1, ANTHROPIC_API_KEY and
 --max-cost-usd. openai-compatible (Ollama, local): requires MB_LIVE=1 only; the
 base URL must be a loopback host unless --allow-remote. See docs/local-models.md.
+openrouter: requires MB_LIVE=1, MB_OPENROUTER_API_KEY, --allow-remote,
+--openrouter-host and --max-cost-usd (always), with prices from a local table
+(--pricing, default pricing/openrouter.toml). See docs/openrouter.md.
 
 Exit codes for `run`: 0 = completed and every attack trial exposed the payload;
 1 = at least one attack trial was not_exposed (invalid scenario); 2 = usage,
 load/validation error, unsupported invariant, missing cassette or invalid model
-request; 3 = run aborted by the cost cap (partial report still written);
+request; 3 = run aborted by the cost cap or, for openrouter, by a response from
+another model or host provider (partial report still written);
 130 = interrupted with Ctrl+C (partial report still written); 4 = an
 --agent-module agent failed the conformance check (no attack trial was run).
 
@@ -276,8 +281,11 @@ def _add_llm_args(parser: argparse.ArgumentParser) -> None:
     llm.add_argument("--cassettes", type=Path, help="cassette directory (replay by default)")
     llm.add_argument("--record", action="store_true", help="make live calls and record them")
     llm.add_argument("--max-cost-usd", type=float, help="whole-run cost cap")
-    llm.add_argument("--provider", choices=("anthropic", "openai-compatible"), default="anthropic")
+    llm.add_argument(
+        "--provider", choices=("anthropic", "openai-compatible", "openrouter"), default="anthropic"
+    )
     _add_server_args(llm)
+    _add_openrouter_args(llm)
     llm.add_argument(
         "--seed",
         type=int,
@@ -341,6 +349,20 @@ def _add_server_args(group: argparse._ActionsContainer) -> None:
     group.add_argument("--base-url", help=f"openai-compatible base URL (default {LOCAL_URL})")
     group.add_argument(
         "--allow-remote", action="store_true", help="allow a base URL that is not loopback"
+    )
+
+
+def _add_openrouter_args(group: argparse._ActionsContainer) -> None:
+    group.add_argument(
+        "--openrouter-host",
+        metavar="NAME",
+        help="openrouter: the host provider to pin (no fallback to any other)",
+    )
+    group.add_argument(
+        "--pricing",
+        type=Path,
+        metavar="FILE",
+        help="openrouter: local price table (default pricing/openrouter.toml)",
     )
 
 
@@ -706,6 +728,12 @@ def _build_llm(
 ) -> tuple[Agent, LLMConfig, PricingInfo, list[str]] | int:
     if not args.model:
         return _error("--agent llm requires --model")
+    routed = {"--openrouter-host": args.openrouter_host, "--pricing": args.pricing}
+    if args.provider == "openrouter":
+        return _build_openrouter(args)
+    used_routed = [flag for flag, value in routed.items() if value is not None]
+    if used_routed:
+        return _error(f"{', '.join(used_routed)} only apply to --provider openrouter")
     if args.provider == "openai-compatible":
         return _build_local(args)
     local_only = {
@@ -894,6 +922,114 @@ def _build_local(
         role_prompt_sha256=role_prompt_hashes(prompts, role_prompts),
     )
     pricing = PricingInfo(as_of="n/a", note="local model: not priced", per_mtok={})
+    return agent, llm_config, pricing, prompts
+
+
+def _build_openrouter(
+    args: argparse.Namespace,
+) -> tuple[Agent, LLMConfig, PricingInfo, list[str]] | int:
+    """OpenRouter: pinned host, local price table, mandatory cost cap."""
+    try:
+        from mulebench.agents.llm import CostMeter, LLMAgent
+        from mulebench.agents.llm.openrouter import (
+            OPENROUTER_BASE_URL,
+            PROVIDER,
+            OpenRouterChatModel,
+            OpenRouterTransport,
+        )
+        from mulebench.agents.llm.pricing_file import (
+            DEFAULT_PRICING_FILE,
+            PriceFileError,
+            fixed_pricer,
+            load_price_table,
+        )
+        from mulebench.agents.llm.prompts import (
+            PROMPTS,
+            parse_role_prompts,
+            prompt_sha256,
+            role_prompt_hashes,
+        )
+        from mulebench.agents.llm.seeds import SEED_DERIVATION
+        from mulebench.agents.llm.transport import CassetteTransport, LiveCallsDisabled, Transport
+    except ImportError:
+        return _error("--provider openrouter needs the local extra: pip install mulebench[local]")
+
+    if args.base_url is not None:
+        return _error(f"--provider openrouter always uses {OPENROUTER_BASE_URL}; drop --base-url")
+    if not args.openrouter_host:
+        return _error("--provider openrouter needs --openrouter-host NAME (see `doctor`)")
+    if args.max_cost_usd is None:
+        return _error("--provider openrouter requires --max-cost-usd")
+    prompts = [p.strip() for p in args.prompt_variants.split(",") if p.strip()]
+    unknown = [p for p in prompts if p not in PROMPTS]
+    if unknown or not prompts:
+        return _error(f"unknown prompt variants {unknown}; known: {sorted(PROMPTS)}")
+    try:
+        role_prompts = parse_role_prompts(args.role_prompts)
+    except ValueError as exc:
+        return _error(str(exc))
+    if args.cassettes is None:
+        return _error("--agent llm needs --cassettes DIR (replay, or --record into it)")
+    pricing_path: Path = args.pricing or DEFAULT_PRICING_FILE
+    try:
+        table = load_price_table(pricing_path)
+    except PriceFileError as exc:
+        return _error(str(exc))
+    price = table.price(args.model, args.openrouter_host)
+    if price is None:
+        return _error(
+            f"no price for {args.model} on host {args.openrouter_host!r} in {pricing_path}; "
+            "cannot enforce the cost cap"
+        )
+    transport: Transport
+    if args.record:
+        try:
+            upstream = OpenRouterTransport(allow_remote=args.allow_remote)
+        except LiveCallsDisabled as exc:
+            return _error(str(exc))
+        transport = CassetteTransport(args.cassettes, "record", upstream)
+    else:
+        transport = CassetteTransport(args.cassettes, "replay")
+
+    temperature = 0.0 if args.temperature is None else args.temperature
+    seed = 0 if args.seed is None else args.seed
+    agent = LLMAgent(
+        OpenRouterChatModel(transport, args.openrouter_host),
+        model=args.model,
+        effort="none",
+        max_tokens=args.max_tokens or LOCAL_MAX_TOKENS,
+        max_steps=args.max_steps,
+        meter=CostMeter(args.max_cost_usd),
+        temperature=temperature,
+        seed=seed,
+        arg_coercion=args.arg_coercion,
+        role_prompts=role_prompts,
+        pricer=fixed_pricer(price),
+    )
+    llm_config = LLMConfig(
+        provider=PROVIDER,
+        model=args.model,
+        effort="none",
+        max_tokens=agent.max_tokens,
+        refusal_fallbacks="off",
+        prompt_sha256={p: prompt_sha256(p) for p in prompts},
+        base_url=OPENROUTER_BASE_URL,
+        temperature=temperature,
+        seed=seed,
+        seed_derivation=SEED_DERIVATION,
+        arg_coercion=args.arg_coercion,
+        tool_schema_sha256=tool_schema_sha256(),
+        role_prompts=role_prompts or None,
+        role_prompt_sha256=role_prompt_hashes(prompts, role_prompts),
+        openrouter_host=args.openrouter_host,
+        pricing_file_sha256=table.sha256,
+    )
+    pricing = PricingInfo(
+        as_of=table.as_of,
+        note=f"local price table {pricing_path.as_posix()} ({table.source}); "
+        "verify before relying on it",
+        per_mtok={args.model: {"input": price.input_per_mtok, "output": price.output_per_mtok}},
+    )
     return agent, llm_config, pricing, prompts
 
 
