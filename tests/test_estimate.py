@@ -100,6 +100,10 @@ def test_committed_reports_give_the_pilot_08_basis() -> None:
     assert sources[PILOT_08[3]] == "pilot-06-qwen3-14b-8k.json"
     assert sources[PILOT_08[4]] == "pilot-07-qwen3-14b-8k.json"
     assert all(b.trials == 30 for b in basis)
+    memory = [b for b in basis if b.scenario_id == PILOT_08[4]]
+    assert all(b.extraction_input_per_trial > 0 for b in memory)
+    assert all(b.input_per_trial > b.extraction_input_per_trial for b in memory)
+    assert all(b.extraction_input_per_trial == 0 for b in basis if b not in memory)
 
 
 def test_cli_prints_per_model_and_total(

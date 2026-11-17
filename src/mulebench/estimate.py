@@ -4,7 +4,8 @@ No network call. For each requested scenario, the mean input and output
 tokens per trial (per variant: attack, benign) come from the first given
 report that ran it with the `vulnerable` preset and the `baseline` prompt.
 Model calls of every session and of memory extraction are included, since
-they are all in the trial's usage. Prices come from the local price table:
+they are all in the trial's usage; the extraction share is shown apart.
+Prices come from the local price table:
 the pinned host's price when one is given, else the highest price listed
 for the model (hosts may still be "TBD"). A safety factor (default 2.0)
 covers models that write more than the model of the source reports
@@ -41,8 +42,11 @@ class TokenBasis:
     variant: str
     source: str
     trials: int
-    input_per_trial: float
+    input_per_trial: float  # every model call of the trial, extraction included
     output_per_trial: float
+    # Of which memory extraction calls (automatic memory scenarios; 0 otherwise).
+    extraction_input_per_trial: float = 0.0
+    extraction_output_per_trial: float = 0.0
 
 
 def token_basis(scenario_ids: list[str], reports: list[Path]) -> list[TokenBasis]:
@@ -90,8 +94,14 @@ def _trials(report: dict[str, Any], sid: str, variant: str) -> list[dict[str, An
     return trials
 
 
+def _extraction_calls(trial: dict[str, Any]) -> list[dict[str, Any]]:
+    memory = trial.get("memory") or {}
+    return [e["model_call"] for e in memory.get("extractions") or [] if e.get("model_call")]
+
+
 def _basis(sid: str, variant: str, path: Path, trials: list[dict[str, Any]]) -> TokenBasis:
     n = len(trials)
+    extraction = [c for t in trials for c in _extraction_calls(t)]
     return TokenBasis(
         scenario_id=sid,
         variant=variant,
@@ -99,6 +109,8 @@ def _basis(sid: str, variant: str, path: Path, trials: list[dict[str, Any]]) -> 
         trials=n,
         input_per_trial=sum(t["usage"]["input_tokens"] for t in trials) / n,
         output_per_trial=sum(t["usage"]["output_tokens"] for t in trials) / n,
+        extraction_input_per_trial=sum(c["usage"]["input_tokens"] for c in extraction) / n,
+        extraction_output_per_trial=sum(c["usage"]["output_tokens"] for c in extraction) / n,
     )
 
 
@@ -150,9 +162,15 @@ def render(
         "token basis (mean per trial, from earlier runs):",
     ]
     for b in basis:
+        extraction = (
+            f"; incl. memory extraction in {b.extraction_input_per_trial:,.0f} out "
+            f"{b.extraction_output_per_trial:,.0f}"
+            if b.extraction_input_per_trial or b.extraction_output_per_trial
+            else ""
+        )
         lines.append(
             f"  {b.scenario_id} {b.variant}: in {b.input_per_trial:,.0f} out "
-            f"{b.output_per_trial:,.0f} ({b.source}, n={b.trials})"
+            f"{b.output_per_trial:,.0f}{extraction} ({b.source}, n={b.trials})"
         )
     lines += ["", "per model:"]
     total = 0.0
