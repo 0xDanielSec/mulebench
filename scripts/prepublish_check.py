@@ -98,6 +98,7 @@ class Policy:
     allowed_domains: frozenset[str]
     allowed_emails: frozenset[str]
     terms: tuple[str, ...]
+    author: str = ""
 
     def domain_allowed(self, domain: str) -> bool:
         d = domain.lower().rstrip(".")
@@ -153,8 +154,22 @@ def _git(*args: str) -> str:
     ).stdout
 
 
+def configured_author() -> str:
+    """The git user.email, lowercased; "" when none is configured.
+
+    `git config <key>` exits 1 when the key is unset (e.g. on a fresh CI
+    runner); that means "no configured author", not an error.
+    """
+    try:
+        return _git("config", "user.email").strip().lower()
+    except subprocess.CalledProcessError as exc:
+        if exc.returncode == 1:
+            return ""
+        raise
+
+
 def load_policy() -> Policy:
-    author = _git("config", "user.email").strip().lower()
+    author = configured_author()
     extra_domains = {
         d.strip().lower() for d in os.environ.get("MB_ALLOWED_DOMAINS", "").split(",") if d.strip()
     }
@@ -168,6 +183,7 @@ def load_policy() -> Policy:
         allowed_domains=DEFAULT_ALLOWED_DOMAINS | extra_domains,
         allowed_emails=DEFAULT_ALLOWED_EMAILS | ({author} if author else set()),
         terms=tuple(dict.fromkeys(terms)),
+        author=author,
     )
 
 
@@ -247,6 +263,8 @@ def main(argv: list[str] | None = None) -> int:
     policy = load_policy()
     allow = load_allowlist()
     print(f"forbidden terms loaded: {len(policy.terms)}; allowlist entries: {len(allow)}")
+    if not policy.author:
+        print("note: git user.email is not set; no email is allowlisted by authorship")
     sections = [("working tree", scan_tree(policy))]
     if not args.no_history:
         sections.append(("git history", scan_history(policy)))

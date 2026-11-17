@@ -7,6 +7,7 @@ not itself trip the scanner when it runs over the repository.
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -128,6 +129,7 @@ def test_allowlisted_finding_is_reported_not_counted(
     other = pc.Finding("email", OTHER, "f:2")
     blocking, allowed = pc.split_allowed([hit, other], {HIT: "why"})
     assert (blocking, allowed) == ([other], [hit])
+    monkeypatch.setattr(pc, "load_policy", lambda: policy(pc))
     monkeypatch.setattr(pc, "load_allowlist", lambda: {HIT: "why"})
     monkeypatch.setattr(pc, "scan_tree", lambda policy: [hit])
     assert pc.main(["--no-history"]) == 0
@@ -135,6 +137,37 @@ def test_allowlisted_finding_is_reported_not_counted(
     assert HIT + "  (f:1)  allowed (why)" in out
     assert "0 finding(s), 1 allowed" in out
     assert out.rstrip().endswith("clean")
+
+
+def test_missing_git_email_means_no_configured_author(
+    pc: ModuleType, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def unset(*args: str) -> str:
+        raise subprocess.CalledProcessError(1, ["git", *args])
+
+    monkeypatch.setattr(pc, "_git", unset)
+    monkeypatch.setattr(pc, "TERMS_FILE", Path("does-not-exist.terms"))
+    monkeypatch.delenv("MB_FORBIDDEN_TERMS", raising=False)
+    loaded = pc.load_policy()
+    assert loaded.author == ""
+    assert loaded.allowed_emails == pc.DEFAULT_ALLOWED_EMAILS
+    assert not loaded.email_allowed(AUTHOR)
+
+    monkeypatch.setattr(pc, "load_allowlist", dict)
+    monkeypatch.setattr(pc, "scan_tree", lambda policy: [])
+    assert pc.main(["--no-history"]) == 0
+    assert "git user.email is not set" in capsys.readouterr().out
+
+
+def test_other_git_config_errors_still_raise(
+    pc: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(*args: str) -> str:
+        raise subprocess.CalledProcessError(128, ["git", *args])
+
+    monkeypatch.setattr(pc, "_git", broken)
+    with pytest.raises(subprocess.CalledProcessError):
+        pc.configured_author()
 
 
 def test_committed_allowlist_is_valid(pc: ModuleType) -> None:
