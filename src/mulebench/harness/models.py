@@ -310,6 +310,7 @@ class LLMConfig(_Model):
     # openrouter only: the pinned host provider and the sha256 of the local
     # price table file the cost cap used. None otherwise.
     openrouter_host: str | None = None
+    openrouter_quantization: str | None = None  # pinned endpoint quantization
     pricing_file_sha256: str | None = None
 
 

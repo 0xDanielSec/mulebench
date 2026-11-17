@@ -31,24 +31,35 @@ to another model, and only uses an endpoint that accepts every parameter
 sent (tools, seed, temperature). The host is `--openrouter-host NAME`, the
 `provider_name` that `doctor` lists.
 
+One host can list several endpoints of the same model, with different
+quantization, price and capabilities. `--openrouter-quantization Q` (for
+example `fp8`) adds `"quantizations": ["Q"]` to the block and pins one of
+them; `doctor` refuses a host with several endpoints unless it is given.
+
 **No silent fallback.** Each response, live or replayed from a cassette,
 must name the requested model (exactly, or its dated slug
-`<id>-YYYYMMDD`) and the pinned host. Anything else stops the whole run
+`<id>-YYYYMMDD`) and the pinned host, and must not report a quantization
+other than the pinned one. A response that reports no quantization is
+accepted and recorded as `null`: the request pin is then the only guarantee
+(`doctor` shows whether the probe responses report it). Anything else stops the whole run
 with run status `aborted_routing` (exit code 3; the partial report is
 written). An error body returned with HTTP 200 is a provider error of that
 trial, as for other providers.
 
 **What is recorded.** Every model call record keeps `requested_model`,
-`served_model`, `served_provider` and `provider_cost_usd` (OpenRouter's
+`served_model`, `served_provider`, `served_quantization` and
+`provider_cost_usd` (OpenRouter's
 own `usage.cost`, as a cross-check only). The report's `llm` block keeps
-`openrouter_host` and `pricing_file_sha256`.
+`openrouter_host`, `openrouter_quantization` and `pricing_file_sha256`.
 
 **Prices and the cost cap.** Prices come from a local, dated TOML file you
 edit, `pricing/openrouter.toml` by default (`--pricing FILE`): USD per
 million input and output tokens per (model, host). A host of `TBD` never
 matches, so a run cannot start before its host is pinned and priced.
 `--max-cost-usd` is required for every openrouter run; the cap is checked
-before each model call with the table price. The report stores the
+before each model call with the table price. To make sure the cap never
+underestimates, enter the highest price among the host's endpoints of the
+model; `doctor` fails if the table price is below the pinned endpoint's. The report stores the
 table's `as_of`, its sha256 and the price used.
 
 ## Before a run
@@ -67,7 +78,7 @@ table's `as_of`, its sha256 and the price used.
 
    ```
    MB_LIVE=1 mulebench doctor --provider openrouter --model openai/gpt-oss-20b \
-       --allow-remote --openrouter-host <host>
+       --allow-remote --openrouter-host <host> --openrouter-quantization <q>
    ```
 
 4. Estimate the cost (no network call). Tokens per trial come from the
@@ -83,7 +94,8 @@ table's `as_of`, its sha256 and the price used.
 
 ```
 MB_LIVE=1 mulebench run --builtin --scenario ... --agent llm --provider openrouter \
-    --model openai/gpt-oss-20b --openrouter-host <host> --allow-remote \
+    --model openai/gpt-oss-20b --openrouter-host <host> --openrouter-quantization <q> \
+    --allow-remote \
     --max-cost-usd 1.50 --cassettes runs/cassettes/<name> --record --out runs/<name>.json
 ```
 

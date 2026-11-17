@@ -1466,6 +1466,18 @@
           "default": null,
           "title": "Openrouter Host"
         },
+        "openrouter_quantization": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Openrouter Quantization"
+        },
         "pricing_file_sha256": {
           "anyOf": [
             {
@@ -1736,6 +1748,18 @@
           ],
           "default": null,
           "title": "Served Provider"
+        },
+        "served_quantization": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Served Quantization"
         },
         "provider_cost_usd": {
           "anyOf": [

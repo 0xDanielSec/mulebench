@@ -91,6 +91,7 @@ class ChatResponse(_Model):
     # provider that served the call, and the provider-reported cost.
     requested_model: str | None = None
     served_provider: str | None = None
+    served_quantization: str | None = None
     provider_cost_usd: float | None = None
 
 

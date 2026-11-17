@@ -162,9 +162,9 @@ def test_price_table_must_have_the_host_and_matching_price(tmp_path: Path) -> No
     assert ("price", "ok") in levels(ok)
     assert levels(ok)[-1] == ("tool calling", "skip")
     differs = run_openrouter_doctor(
-        MODEL, host=HOST, pricing=prices(tmp_path, pout=0.5), allow_remote=True, client=client
+        MODEL, host=HOST, pricing=prices(tmp_path, pout=0.2), allow_remote=True, client=client
     )
-    assert ("price", "warn") in levels(differs)
+    assert ("price", "fail") in levels(differs)
     missing = tmp_path / "none.toml"
     missing.write_text('as_of = "2026-11-16"\nsource = "t"\n', encoding="utf-8")
     absent = run_openrouter_doctor(
@@ -181,9 +181,10 @@ def test_live_probes_are_pinned_and_checked(
     checks = run_openrouter_doctor(
         MODEL, host=HOST, pricing=prices(tmp_path), allow_remote=True, client=client
     )
-    assert levels(checks)[-2:] == [
+    assert levels(checks)[-3:] == [
         ("tool calling", "ok"),
         ("tool calling after a tool result", "ok"),
+        ("served quantization", "warn"),
     ]
     chats = [r for r in seen if r.url.path.endswith("/chat/completions")]
     assert len(chats) == 2
@@ -212,3 +213,107 @@ def test_cli_flags(capsys: pytest.CaptureFixture[str]) -> None:
     assert "--allow-remote" in capsys.readouterr().out
     assert main(["doctor", "--model", "m", "--openrouter-host", HOST]) == 2
     assert "only apply to --provider openrouter" in capsys.readouterr().err
+
+
+SAME_HOST = {
+    "data": {
+        "id": MODEL,
+        "endpoints": [
+            {
+                "provider_name": HOST,
+                "quantization": "fp8",
+                "pricing": {"prompt": "0.0000001", "completion": "0.0000003"},
+                "supported_parameters": ["tools", "seed", "temperature"],
+            },
+            {
+                "provider_name": HOST,
+                "quantization": "bf16",
+                "pricing": {"prompt": "0.0000002", "completion": "0.0000004"},
+                "supported_parameters": ["temperature"],
+            },
+        ],
+    }
+}
+
+
+def same_host_client(chat: list[dict[str, Any]] | None = None) -> httpx.Client:
+    replies = list(chat or [])
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        if req.url.path.endswith("/endpoints"):
+            return httpx.Response(200, json=SAME_HOST)
+        return httpx.Response(200, json=replies.pop(0))
+
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def test_several_endpoints_at_one_host_need_a_quantization_pin(tmp_path: Path) -> None:
+    p = prices(tmp_path, pin=0.2, pout=0.4)  # the highest of the host's endpoints
+    unpinned = run_openrouter_doctor(
+        MODEL, host=HOST, pricing=p, allow_remote=True, client=same_host_client()
+    )
+    assert unpinned[-1].level == "fail"
+    assert "--openrouter-quantization" in unpinned[-1].detail
+    no_tools = run_openrouter_doctor(
+        MODEL,
+        host=HOST,
+        quantization="bf16",
+        pricing=p,
+        allow_remote=True,
+        client=same_host_client(),
+    )
+    assert no_tools[-1].level == "fail"
+    assert "missing tools" in no_tools[-1].detail
+    absent = run_openrouter_doctor(
+        MODEL,
+        host=HOST,
+        quantization="int4",
+        pricing=p,
+        allow_remote=True,
+        client=same_host_client(),
+    )
+    assert "no int4 endpoint" in absent[-1].detail
+    pinned = run_openrouter_doctor(
+        MODEL,
+        host=HOST,
+        quantization="fp8",
+        pricing=p,
+        allow_remote=True,
+        client=same_host_client(),
+    )
+    assert ("host", "ok") in levels(pinned)
+    price = next(c for c in pinned if c.name == "price")
+    assert price.level == "ok"
+    assert "highest of the host's endpoints" in price.detail
+
+
+def test_live_probe_reports_and_checks_served_quantization(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MB_LIVE", "1")
+    p = prices(tmp_path, pin=0.2, pout=0.4)
+    good = [
+        {**ping("mb-probe", "c1"), "quantization": "fp8"},
+        {**ping("mb-probe-2", "c2"), "quantization": "fp8"},
+    ]
+    ok = run_openrouter_doctor(
+        MODEL,
+        host=HOST,
+        quantization="fp8",
+        pricing=p,
+        allow_remote=True,
+        client=same_host_client(good),
+    )
+    assert levels(ok)[-1] == ("served quantization", "ok")
+    assert ok[-1].detail == "fp8"
+    bad = [{**ping("mb-probe", "c1"), "quantization": "bf16"}]
+    wrong = run_openrouter_doctor(
+        MODEL,
+        host=HOST,
+        quantization="fp8",
+        pricing=p,
+        allow_remote=True,
+        client=same_host_client(bad),
+    )
+    assert wrong[-1].level == "fail"
+    assert "quantization_mismatch" in wrong[-1].detail

@@ -5,12 +5,15 @@ Checks, in order:
 2. endpoints: the model's host providers, from OpenRouter's public
    `GET /models/{id}/endpoints` (no key sent), with price per million tokens,
    quantization, context length and support for tools, seed and temperature;
-3. host: the host given with --openrouter-host is listed and supports them;
-4. price: the local price table has (model, host); warns if its price differs
-   from the endpoint's;
+3. host: the host given with --openrouter-host is listed and supports them; a
+   host that lists several endpoints of the model needs --openrouter-quantization
+   to pick one;
+4. price: the local price table has (model, host) at no less than the pinned
+   endpoint's price (the cap must never underestimate);
 5. tool calling and tool calling after a tool result: two probe chat calls,
-   pinned to the host, only with MB_LIVE=1. Each response must come from the
-   requested model and the pinned host.
+   pinned to the host (and quantization), only with MB_LIVE=1. Each response must
+   come from the requested model and the pinned host, and must not report another
+   quantization; the quantization the responses report is shown (warn if none).
 
 All network calls need --allow-remote. No model text or header is printed.
 """
@@ -88,18 +91,27 @@ def describe(endpoint: dict[str, Any]) -> str:
 
 
 class _CheckedTransport:
-    """Live transport whose responses must come from the model and pinned host."""
+    """Live transport whose responses must come from the pinned model, host and
+    quantization. Keeps the quantization each response reported (None if none)."""
 
-    def __init__(self, inner: OpenRouterTransport, model: str, host: str) -> None:
-        self.inner, self.model, self.host = inner, model, host
+    def __init__(
+        self, inner: OpenRouterTransport, model: str, host: str, quantization: str | None
+    ) -> None:
+        self.inner, self.model, self.host, self.quantization = inner, model, host, quantization
+        self.served_quantizations: list[str | None] = []
 
     def send(self, params: dict[str, Any], trial_key: str) -> TransportResponse:
         response = self.inner.send(params, trial_key)
         try:
-            check_routing(response.body, self.model, self.host)
+            _, _, quant = check_routing(response.body, self.model, self.host, self.quantization)
         except RoutingMismatch as exc:
             raise ModelCallError("routing", str(exc)) from None
+        self.served_quantizations.append(quant)
         return response
+
+
+def same_quantization(endpoint: dict[str, Any], quantization: str) -> bool:
+    return str(endpoint.get("quantization") or "").casefold() == quantization.casefold()
 
 
 def run_openrouter_doctor(
@@ -108,6 +120,7 @@ def run_openrouter_doctor(
     host: str | None,
     pricing: Path,
     allow_remote: bool,
+    quantization: str | None = None,
     client: httpx.Client | None = None,
 ) -> list[Check]:
     if not allow_remote:
@@ -133,52 +146,104 @@ def run_openrouter_doctor(
         return [*checks, Check("fail", "endpoints", "no host supports tools, seed and temperature")]
 
     if not host:
-        names = ", ".join(str(e.get("provider_name")) for e in usable)
+        names = ", ".join(sorted({str(e.get("provider_name")) for e in usable}))
         return [
             *checks,
             Check("warn", "host", f"none pinned; pass --openrouter-host with one of: {names}"),
         ]
-    chosen = next(
-        (e for e in listed if str(e.get("provider_name", "")).casefold() == host.casefold()),
-        None,
-    )
-    if chosen is None:
+    at_host = [e for e in listed if str(e.get("provider_name", "")).casefold() == host.casefold()]
+    if not at_host:
         return [*checks, Check("fail", "host", f"{host!r} does not serve {model}")]
+    if quantization:
+        matching = [e for e in at_host if same_quantization(e, quantization)]
+        if not matching:
+            return [
+                *checks,
+                Check("fail", "host", f"{host!r} lists no {quantization} endpoint of {model}"),
+            ]
+    elif len(at_host) > 1:
+        quants = ", ".join(str(e.get("quantization") or "?") for e in at_host)
+        return [
+            *checks,
+            Check(
+                "fail",
+                "host",
+                f"{host!r} lists {len(at_host)} endpoints of {model} ({quants}); "
+                "pin one with --openrouter-quantization",
+            ),
+        ]
+    else:
+        matching = at_host
+    if len(matching) > 1:
+        return [
+            *checks,
+            Check(
+                "fail",
+                "host",
+                f"{host!r} lists {len(matching)} {quantization} endpoints of {model}; "
+                "the pin is ambiguous",
+            ),
+        ]
+    (chosen,) = matching
     if missing_parameters(chosen):
         return [*checks, Check("fail", "host", f"{host!r}: {describe(chosen)}")]
-    checks.append(Check("ok", "host", f"{host} serves {model} with tools, seed, temperature"))
-    checks.append(_price_check(model, host, chosen, pricing))
-    return checks + _probes(model, host, client)
+    pinned = f" ({quantization})" if quantization else ""
+    checks.append(
+        Check("ok", "host", f"{host}{pinned} serves {model} with tools, seed, temperature")
+    )
+    checks.append(_price_check(model, host, at_host, chosen, pricing))
+    return checks + _probes(model, host, quantization, client)
 
 
-def _price_check(model: str, host: str, endpoint: dict[str, Any], pricing: Path) -> Check:
+def _price_check(
+    model: str,
+    host: str,
+    at_host: list[dict[str, Any]],
+    chosen: dict[str, Any],
+    pricing: Path,
+) -> Check:
+    """The table price must not be below the pinned endpoint's (the cap would
+    then underestimate). It may be higher: the highest of the host's endpoints."""
     try:
         price = load_price_table(pricing).price(model, host)
     except PriceFileError as exc:
         return Check("fail", "price", str(exc))
     if price is None:
         return Check("fail", "price", f"no entry for ({model}, {host}) in {pricing}; add it")
-    listed = endpoint.get("pricing") or {}
+    listed = chosen.get("pricing") or {}
     pin, pout = per_mtok(listed.get("prompt")), per_mtok(listed.get("completion"))
-    table = (price.input_per_mtok, price.output_per_mtok)
+    tin, tout = price.input_per_mtok, price.output_per_mtok
     if pin is None or pout is None:
         return Check("warn", "price", "the endpoint lists no price; table price used")
-    if abs(pin - table[0]) > 1e-9 or abs(pout - table[1]) > 1e-9:
+    if tin + 1e-9 < pin or tout + 1e-9 < pout:
         return Check(
-            "warn",
+            "fail",
             "price",
-            f"table ${table[0]:g}/${table[1]:g} differs from endpoint ${pin:g}/${pout:g} "
-            f"per 1M in/out; update {pricing}",
+            f"table ${tin:g}/${tout:g} is below the endpoint's ${pin:g}/${pout:g} per 1M "
+            f"in/out: the cost cap would underestimate; update {pricing}",
         )
-    return Check("ok", "price", f"table matches the endpoint: ${pin:g}/${pout:g} per 1M in/out")
+    highest = [
+        (
+            per_mtok((e.get("pricing") or {}).get("prompt")) or 0.0,
+            per_mtok((e.get("pricing") or {}).get("completion")) or 0.0,
+        )
+        for e in at_host
+    ]
+    top = (max(h[0] for h in highest), max(h[1] for h in highest))
+    note = "the highest of the host's endpoints" if (tin, tout) >= top else "above the endpoint's"
+    return Check(
+        "ok",
+        "price",
+        f"table ${tin:g}/${tout:g} >= endpoint ${pin:g}/${pout:g} per 1M in/out ({note})",
+    )
 
 
-def _probes(model: str, host: str, client: httpx.Client) -> list[Check]:
+def _probes(model: str, host: str, quantization: str | None, client: httpx.Client) -> list[Check]:
     if os.environ.get(LIVE_ENV) != "1":
         return [Check("skip", "tool calling", f"probe needs {LIVE_ENV}=1 (two chat calls)")]
     try:
         transport = _CheckedTransport(
-            OpenRouterTransport(allow_remote=True, client=client), model, host
+            OpenRouterTransport(allow_remote=True, client=client), model, host, quantization
         )
     except LiveCallsDisabled as exc:  # missing key
         return [Check("fail", "tool calling", str(exc))]
@@ -198,7 +263,7 @@ def _probes(model: str, host: str, client: httpx.Client) -> list[Check]:
         "seed": 0,
         "max_tokens": PROBE_MAX_TOKENS,
         "stream": False,
-        "provider": routing(host),
+        "provider": routing(host, quantization),
     }
     try:
         first = parse_completion(transport.send(params, "doctor/probe").body)
@@ -207,4 +272,17 @@ def _probes(model: str, host: str, client: httpx.Client) -> list[Check]:
     check = _call_check("tool calling", first)
     if check.level != "ok":
         return [check]
-    return [check, _second_turn(transport, params, first)]
+    checks = [check, _second_turn(transport, params, first)]
+    return [*checks, _served_quantization_check(transport.served_quantizations, quantization)]
+
+
+def _served_quantization_check(served: list[str | None], pinned: str | None) -> Check:
+    reported = sorted({q for q in served if q is not None})
+    if not reported:
+        return Check(
+            "warn",
+            "served quantization",
+            "the responses report no quantization: it cannot be checked per call; "
+            "only the request pin" + (f" ({pinned})" if pinned else "") + " applies",
+        )
+    return Check("ok", "served quantization", ", ".join(reported))

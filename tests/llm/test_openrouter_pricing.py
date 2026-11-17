@@ -187,6 +187,8 @@ def test_replayed_run_reports_host_price_file_and_costs(
     out = tmp_path / "r.json"
     args = [
         *run(tmp_path, "--pricing", str(prices), "--openrouter-host", HOST),
+        "--openrouter-quantization",
+        "fp8",
         "--max-cost-usd",
         "1",
         "--out",
@@ -204,6 +206,10 @@ def test_replayed_run_reports_host_price_file_and_costs(
     llm = report["llm"]
     assert llm["provider"] == "openrouter"
     assert llm["openrouter_host"] == HOST
+    assert llm["openrouter_quantization"] == "fp8"
+    stored = [json.loads(p.read_text(encoding="utf-8")) for p in (tmp_path / "cas").iterdir()]
+    sent = stored[0]["interactions"][0]["request"]["provider"]
+    assert sent["quantizations"] == ["fp8"]
     assert llm["pricing_file_sha256"] == load_price_table(prices).sha256
     assert report["pricing"]["as_of"] == "2026-11-16"
     trial = report["scenarios"][0]["cells"][0]["trials"][0]

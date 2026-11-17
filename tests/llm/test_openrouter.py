@@ -114,7 +114,7 @@ def test_fallback_to_another_model_or_host_stops_the_run() -> None:
         check_routing(body(provider="OtherHost"), MODEL, HOST)
     with pytest.raises(RoutingMismatch, match="provider_mismatch"):
         check_routing(body(provider=None), MODEL, HOST)
-    assert check_routing(body(provider=HOST.lower()), MODEL, HOST) == (MODEL, HOST.lower())
+    assert check_routing(body(provider=HOST.lower()), MODEL, HOST) == (MODEL, HOST.lower(), None)
     assert RoutingMismatch("x").run_status == "aborted_routing"
 
 
@@ -195,3 +195,19 @@ def test_key_only_in_the_header_never_in_bodies_cassettes_or_errors(
     with pytest.raises(ModelRequestInvalid) as info:
         upstream.send({"model": MODEL}, "k2")
     assert FAKE_KEY not in str(info.value)
+
+
+def test_quantization_is_pinned_recorded_and_checked() -> None:
+    quantized = {**body(), "quantization": "fp8"}
+    fake = FakeTransport([quantized])
+    got = OpenRouterChatModel(fake, HOST, "fp8").complete(request())
+    ((_, params),) = fake.requests
+    assert params["provider"]["quantizations"] == ["fp8"]
+    assert params["provider"]["require_parameters"] is True
+    assert got.served_quantization == "fp8"
+    assert "quantizations" not in routing(HOST)
+    with pytest.raises(RoutingMismatch, match="quantization_mismatch"):
+        check_routing({**body(), "quantization": "bf16"}, MODEL, HOST, "fp8")
+    # not reported: accepted and recorded as None (the request pin applies)
+    assert check_routing(body(), MODEL, HOST, "fp8")[2] is None
+    assert check_routing({**body(), "quantization": "FP8"}, MODEL, HOST, "fp8")[2] == "FP8"

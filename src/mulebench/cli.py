@@ -4,7 +4,7 @@
                   [--agent scripted|llm | --agent-module MOD:FACTORY [--agent-path DIR]]
                   [--trials N] [--max-steps N]
                   [--provider anthropic|openai-compatible|openrouter]
-                  [--openrouter-host NAME] [--pricing FILE]
+                  [--openrouter-host NAME] [--openrouter-quantization Q] [--pricing FILE]
                   [--model M] [--effort E] [--prompt-variants a,b]
                   [--cassettes DIR] [--record] [--max-cost-usd X]
                   [--base-url URL] [--allow-remote] [--seed S] [--temperature T]
@@ -15,7 +15,7 @@
                   [--scenario ID ...] [--trials N] [--min-benign-pass R]
     mulebench doctor --model TAG [--base-url URL] [--allow-remote]
     mulebench doctor --provider openrouter --model ID --allow-remote
-                  [--openrouter-host NAME] [--pricing FILE]
+                  [--openrouter-host NAME] [--openrouter-quantization Q] [--pricing FILE]
     mulebench estimate --model ID [...] --scenario ID [...] [--trials N]
                   [--host MODEL=HOST ...] [--pricing FILE] [--tokens-from REPORT ...]
                   [--safety F]
@@ -404,6 +404,11 @@ def _add_openrouter_args(group: argparse._ActionsContainer) -> None:
         help="openrouter: the host provider to pin (no fallback to any other)",
     )
     group.add_argument(
+        "--openrouter-quantization",
+        metavar="Q",
+        help="openrouter: pin the host endpoint's quantization (e.g. fp8, bf16)",
+    )
+    group.add_argument(
         "--pricing",
         type=Path,
         metavar="FILE",
@@ -414,8 +419,11 @@ def _add_openrouter_args(group: argparse._ActionsContainer) -> None:
 def _doctor(args: argparse.Namespace) -> int:
     if args.provider == "openrouter":
         return _doctor_openrouter(args)
-    if args.openrouter_host or args.pricing:
-        return _error("--openrouter-host and --pricing only apply to --provider openrouter")
+    if args.openrouter_host or args.openrouter_quantization or args.pricing:
+        return _error(
+            "--openrouter-host, --openrouter-quantization and --pricing only apply to "
+            "--provider openrouter"
+        )
     try:
         from mulebench.agents.llm.http_transport import RemoteHostRefused
         from mulebench.doctor import print_checks, run_doctor
@@ -440,6 +448,7 @@ def _doctor_openrouter(args: argparse.Namespace) -> int:
     checks = run_openrouter_doctor(
         args.model,
         host=args.openrouter_host,
+        quantization=args.openrouter_quantization,
         pricing=args.pricing or DEFAULT_PRICING_FILE,
         allow_remote=args.allow_remote,
     )
@@ -830,7 +839,11 @@ def _build_llm(
 ) -> tuple[Agent, LLMConfig, PricingInfo, list[str]] | int:
     if not args.model:
         return _error("--agent llm requires --model")
-    routed = {"--openrouter-host": args.openrouter_host, "--pricing": args.pricing}
+    routed = {
+        "--openrouter-host": args.openrouter_host,
+        "--openrouter-quantization": args.openrouter_quantization,
+        "--pricing": args.pricing,
+    }
     if args.provider == "openrouter":
         return _build_openrouter(args)
     used_routed = [flag for flag, value in routed.items() if value is not None]
@@ -1096,7 +1109,7 @@ def _build_openrouter(
     temperature = 0.0 if args.temperature is None else args.temperature
     seed = 0 if args.seed is None else args.seed
     agent = LLMAgent(
-        OpenRouterChatModel(transport, args.openrouter_host),
+        OpenRouterChatModel(transport, args.openrouter_host, args.openrouter_quantization),
         model=args.model,
         effort="none",
         max_tokens=args.max_tokens or LOCAL_MAX_TOKENS,
@@ -1124,6 +1137,7 @@ def _build_openrouter(
         role_prompts=role_prompts or None,
         role_prompt_sha256=role_prompt_hashes(prompts, role_prompts),
         openrouter_host=args.openrouter_host,
+        openrouter_quantization=args.openrouter_quantization,
         pricing_file_sha256=table.sha256,
     )
     pricing = PricingInfo(

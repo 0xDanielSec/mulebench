@@ -222,6 +222,7 @@ class LLMAgent:
                     reasoning_tokens=response.reasoning_tokens,
                     requested_model=response.requested_model,
                     served_provider=response.served_provider,
+                    served_quantization=response.served_quantization,
                     provider_cost_usd=response.provider_cost_usd,
                     coerced_args=call_coerced,
                 )

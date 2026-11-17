@@ -82,6 +82,7 @@ class ModelCallRecord(_Model):
     # cost_usd (local price table); provider_cost_usd is a cross-check.
     requested_model: str | None = None
     served_provider: str | None = None
+    served_quantization: str | None = None
     provider_cost_usd: float | None = None
 
 
