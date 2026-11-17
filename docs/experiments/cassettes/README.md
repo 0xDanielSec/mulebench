@@ -54,6 +54,8 @@ uv run python scripts/cassette_archive.py build    # rewrite the archive and its
 
 ## Replay
 
+Replay commands omit `--expect-harness`: it pins the commit that recorded the run and would refuse the current one, while replay correctness is checked instead by matching the cassette request hashes and the committed reports.
+
 Pilots 01 and 02 have frozen documents (their sha256 is checked by
 `tests/test_reanalysis.py`), so their replay commands are here. Pilots 03 to
 08 have them in the "Offline replay" section of their documents:

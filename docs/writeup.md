@@ -291,6 +291,8 @@ uv run python -m mulebench run --builtin `
   --cassettes runs/cassettes/pilot-08-mistral-small-3.2 --out replay.json
 ```
 
+The full pilot 08 (4 models, 5 scenarios, 300 trials each) replays trial for trial at the current commit: on 2026-11-17 every trial, summary row, cost and routing block matched the committed reports, except that qwen3-14b's 2 trials that errored live (`connection`) have no recorded response and must be carried in from the report with `--resume`.
+
 The exact replay commands for every pilot are in the "Offline replay"
 section of each pilot document; see
 [`docs/experiments/cassettes/README.md`](experiments/cassettes/README.md).
