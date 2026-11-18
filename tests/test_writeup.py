@@ -73,3 +73,13 @@ def test_writeup_memory_claims_match_the_data() -> None:
     assert "50% (qwen3-14b, 15/30)" in text
     assert "93% (gemma-4-26b, 28/30)" in text
     assert "frontier" not in text.lower()
+
+
+def test_writeup_pilot_09_claims_match_the_data() -> None:
+    script = load_script()
+    text = WRITEUP.read_text(encoding="utf-8")
+    for cond in ("none", "agent_system_prompt"):
+        trials = _cell(script, f"pilot-09-mistral-small-3.2-{cond}.json", "014a")
+        injected = script.part(script.ok_trials(trials), "memory", "memory_injected")
+        assert injected.startswith("30/30"), cond
+    assert "30/30 in\nboth conditions" in text or "(30/30 in both conditions)" in text

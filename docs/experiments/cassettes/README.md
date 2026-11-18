@@ -6,6 +6,15 @@ every pilot replays offline: no API key, no model server, no network.
 
 sha256: `7bcad996b2f0805c943d116a6839c4f0a18b09b7c28609cf296417165c3b8482` (also in `pilots-01-08.tar.xz.sha256`).
 
+`pilot-09.tar.xz` holds pilot 09 (720 JSON files, four runs; 157,972 bytes
+compressed), sha256
+`f8b749d7198e09cb2df148337705781c3edee2254d2d1119bbee882d59b9a668` (also in
+`pilot-09.tar.xz.sha256`). It is a separate archive so that the frozen
+`pilots-01-08` hash, cited by the pilot 08 document, never changes. Every
+command below takes `--archive pilot-09` to act on it instead (default
+`pilots-01-08`); verify with
+`sha256sum -c pilot-09.tar.xz.sha256` or `Get-FileHash` as below.
+
 Cassettes hold request and response bodies only, never HTTP headers or keys
 (`src/mulebench/agents/llm/transport.py`). `scripts/prepublish_check.py`
 scans every member of the archive, in the working tree and in every

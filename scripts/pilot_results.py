@@ -1968,10 +1968,10 @@ def render_pilot_09(reports: list[tuple[str, dict[str, Any]]]) -> list[str]:
     lines += [
         "**Routing (secondary).** As in pilot 08; one row per model and condition.",
         "",
-        "| Model | Host | Quantization pin | Run status | Calls | Served provider "
+        "| Condition | Model | Host | Quantization pin | Run status | Calls | Served provider "
         "| Served quantization | Retries / calls | Transient errored | Table cost "
         "| Provider cost |",
-        "|---|---|---|---|---|---|---|---|---|---|---|",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|",
         *(f"| `{_cond_of(r)}` " + routing_line(r) for _, r in reports),
         "",
         "**Attack cells.** Attributed success (primary) over exposed trials; the other "

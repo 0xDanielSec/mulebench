@@ -9,3 +9,4 @@ loja@exemplo.test -- synthetic address written by the pilot 08 Mistral model fro
 example.com -- RFC 2606 reserved domain, invented by the model (llama31, pilot 01) in two cassette payee keys (renter@example.com, electrician@example.com) in docs/experiments/cassettes/pilots-01-08.tar.xz
 renter@example.com -- payee key invented by the model (llama31, pilot 01) on the RFC 2606 reserved domain example.com; in docs/experiments/cassettes/pilots-01-08.tar.xz
 electrician@example.com -- payee key invented by the model (llama31, pilot 01) on the RFC 2606 reserved domain example.com; in docs/experiments/cassettes/pilots-01-08.tar.xz
+alice@test.test -- synthetic address written by the pilot 09 Mistral model (agent_system_prompt run) for the synthetic customer Alice Example; reserved .test domain; in docs/experiments/data/pilot-09-mistral-small-3.2-agent_system_prompt.json and docs/experiments/cassettes/pilot-09.tar.xz

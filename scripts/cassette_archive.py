@@ -5,6 +5,12 @@ Usage:
     uv run python scripts/cassette_archive.py verify   # rebuild from runs/cassettes/, compare hash
     uv run python scripts/cassette_archive.py extract  # check hash, then extract to runs/cassettes/
 
+Two archives, chosen with `--archive` (default `pilots-01-08`):
+`pilots-01-08.tar.xz` (pilots 01 to 08; frozen, its sha256 is cited by the pilot 08
+document) and `pilot-09.tar.xz` (pilot 09 only). Each archive holds only the
+cassette directories of its own pilots, so adding a pilot never changes the hash
+of an earlier archive.
+
 The archive is treated as untrusted input. `extract` checks its sha256 against the
 committed `.sha256` file BEFORE opening it, then accepts only regular `.json` files
 with names of the form `pilot-<name>/<16 hex>.json` or `pilot-<name>/_server_meta.json`,
@@ -33,9 +39,24 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CASSETTES = ROOT / "runs" / "cassettes"
-ARCHIVE = ROOT / "docs" / "experiments" / "cassettes" / "pilots-01-08.tar.xz"
+ARCHIVE_DIR = ROOT / "docs" / "experiments" / "cassettes"
+# archive name -> glob of its cassette directories under runs/cassettes/
+ARCHIVES: dict[str, str] = {
+    "pilots-01-08": "pilot-0[1-8]-*",
+    "pilot-09": "pilot-09-*",
+}
+DEFAULT_ARCHIVE = "pilots-01-08"
+ARCHIVE = ARCHIVE_DIR / f"{DEFAULT_ARCHIVE}.tar.xz"
 SHA_FILE = ARCHIVE.with_name(ARCHIVE.name + ".sha256")
-MEMBER = re.compile(r"^pilot-[a-z0-9.-]+/(?:[0-9a-f]{16}|_server_meta)\.json$")
+MEMBER = re.compile(r"^pilot-[a-z0-9._-]+/(?:[0-9a-f]{16}|_server_meta)\.json$")
+
+
+def archive_paths(name: str) -> tuple[Path, Path]:
+    """(archive, sha256 file) of a named archive."""
+    archive = ARCHIVE_DIR / f"{name}.tar.xz"
+    return archive, archive.with_name(archive.name + ".sha256")
+
+
 XZ_PRESET = 9
 
 
@@ -58,10 +79,10 @@ def sha256_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def source_files(src: Path = CASSETTES) -> list[tuple[str, Path]]:
-    """(member name, path) of every pilot cassette, sorted by member name."""
+def source_files(src: Path = CASSETTES, dirs: str = "pilot-*") -> list[tuple[str, Path]]:
+    """(member name, path) of every cassette in the `dirs` directories, sorted by name."""
     out: list[tuple[str, Path]] = []
-    for path in src.glob("pilot-*/*"):
+    for path in src.glob(f"{dirs}/*"):
         name = path.relative_to(src).as_posix()
         if not path.is_file() or path.is_symlink() or not MEMBER.match(name):
             raise ArchiveError(f"unexpected source entry: {name}")
@@ -85,8 +106,8 @@ def build_bytes(files: Iterable[tuple[str, bytes]]) -> bytes:
     return lzma.compress(raw.getvalue(), format=lzma.FORMAT_XZ, preset=XZ_PRESET)
 
 
-def build_from(src: Path = CASSETTES) -> bytes:
-    return build_bytes((name, path.read_bytes()) for name, path in source_files(src))
+def build_from(src: Path = CASSETTES, dirs: str = ARCHIVES[DEFAULT_ARCHIVE]) -> bytes:
+    return build_bytes((name, path.read_bytes()) for name, path in source_files(src, dirs))
 
 
 def expected_sha(sha_file: Path = SHA_FILE) -> str:
@@ -132,13 +153,14 @@ def extract(
     caps: Caps = DEFAULT_CAPS,
     force: bool = False,
     prefix: str = "",
+    sha_file: Path = SHA_FILE,
 ) -> int:
     """Check the hash, check every member, then extract the members whose name starts
     with `prefix` (all by default). Returns the number of files extracted."""
     if archive.stat().st_size > caps.archive_bytes:
         raise ArchiveError(f"archive file too large (> {caps.archive_bytes} bytes)")
     data = archive.read_bytes()
-    want = sha if sha is not None else expected_sha()
+    want = sha if sha is not None else expected_sha(sha_file)
     got = sha256_bytes(data)
     if got != want:
         raise ArchiveError(f"sha256 mismatch: got {got}, expected {want}")
@@ -175,25 +197,30 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("mode", choices=("build", "verify", "extract"))
     parser.add_argument("--force", action="store_true", help="extract: overwrite differing files")
     parser.add_argument("--only", default="", help="extract: member name prefix, e.g. pilot-08-")
+    parser.add_argument(
+        "--archive", choices=sorted(ARCHIVES), default=DEFAULT_ARCHIVE, help="which archive"
+    )
     args = parser.parse_args(argv)
+    archive, sha_file = archive_paths(args.archive)
+    dirs = ARCHIVES[args.archive]
     try:
         if args.mode == "build":
-            data = build_from()
-            ARCHIVE.parent.mkdir(parents=True, exist_ok=True)
-            ARCHIVE.write_bytes(data)
-            SHA_FILE.write_text(
-                f"{sha256_bytes(data)}  {ARCHIVE.name}\n", encoding="utf-8", newline="\n"
+            data = build_from(dirs=dirs)
+            archive.parent.mkdir(parents=True, exist_ok=True)
+            archive.write_bytes(data)
+            sha_file.write_text(
+                f"{sha256_bytes(data)}  {archive.name}\n", encoding="utf-8", newline="\n"
             )
-            print(f"wrote {ARCHIVE.relative_to(ROOT)} ({len(data)} bytes) {sha256_bytes(data)}")
+            print(f"wrote {archive.relative_to(ROOT)} ({len(data)} bytes) {sha256_bytes(data)}")
         elif args.mode == "verify":
-            got, want = sha256_bytes(build_from()), expected_sha()
+            got, want = sha256_bytes(build_from(dirs=dirs)), expected_sha(sha_file)
             print(f"rebuilt {got}\ncommitted {want}")
             if got != want:
                 print("MISMATCH: runs/cassettes/ differs from the committed archive")
                 return 1
             print("ok: rebuild matches the committed hash")
         else:
-            n = extract(force=args.force, prefix=args.only)
+            n = extract(archive, force=args.force, prefix=args.only, sha_file=sha_file)
             print(f"ok: sha256 verified, {n} files extracted to {CASSETTES.relative_to(ROOT)}")
     except ArchiveError as e:
         print(f"error: {e}", file=sys.stderr)

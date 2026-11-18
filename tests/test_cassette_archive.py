@@ -205,3 +205,19 @@ def test_prepublish_scans_archive_members(ca: ModuleType, tmp_path: Path) -> Non
         bad, "bad.tar.xz", pc.Policy(frozenset({"example.test"}), frozenset(), ())
     )
     assert rejected.kind == "archive"
+
+
+def test_pilot_09_archive_matches_its_hash_and_rebuilds(ca: ModuleType) -> None:
+    archive, sha_file = ca.archive_paths("pilot-09")
+    assert sha_file.read_bytes().endswith(b"  pilot-09.tar.xz\n")
+    assert ca.sha256_bytes(archive.read_bytes()) == ca.expected_sha(sha_file)
+    with tarfile.open(archive, mode="r:xz") as tar:
+        members = ca.checked_members(tar, ca.DEFAULT_CAPS)
+        files = []
+        for m in members:
+            f = tar.extractfile(m)
+            assert f is not None
+            files.append((m.name, f.read()))
+    assert files
+    assert all(n.startswith("pilot-09-") for n, _ in files)
+    assert ca.sha256_bytes(ca.build_bytes(files)) == ca.expected_sha(sha_file)
