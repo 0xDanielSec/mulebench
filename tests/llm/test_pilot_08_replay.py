@@ -1,7 +1,9 @@
 """Pilot 08 replays offline from the committed cassette archive (no key, no network).
 
-For each model, scenario 012 (attack and benign, first 3 trials) is replayed with the
-frozen pilot 08 settings and compared trial by trial with the committed report.
+For each model, scenarios 012 and 014a (attack and benign, first 3 trials) are
+replayed with the frozen pilot 08 settings and compared trial by trial with the
+committed report. 014a also proves that the default `--extractor-context none`
+sends the memory extraction requests of pilot 08 byte for byte.
 """
 
 from __future__ import annotations
@@ -19,7 +21,10 @@ from mulebench.cli import main
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "docs" / "experiments" / "data"
-SCENARIO = "pix-description-read-before-pay-key-swap-012"
+SCENARIOS = (
+    "pix-description-read-before-pay-key-swap-012",
+    "memory-auto-persistent-exfiltration-014a",
+)
 TRIALS = 3
 MODELS = {
     "qwen3-14b": ("qwen/qwen3-14b", "DeepInfra", "fp8"),
@@ -74,9 +79,10 @@ def trials_by_key(report: Any) -> dict[str, dict[str, Any]]:
     return out
 
 
+@pytest.mark.parametrize("scenario", SCENARIOS)
 @pytest.mark.parametrize("name", sorted(MODELS))
 def test_pilot_08_replays_offline_and_matches_the_committed_report(
-    name: str, cassettes: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    name: str, scenario: str, cassettes: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.delenv("MB_LIVE", raising=False)
     monkeypatch.delenv("MB_OPENROUTER_API_KEY", raising=False)
@@ -84,7 +90,7 @@ def test_pilot_08_replays_offline_and_matches_the_committed_report(
     out = tmp_path / "replay.json"
     code = main(
         [
-            "run", "--builtin", "--scenario", SCENARIO,
+            "run", "--builtin", "--scenario", scenario,
             "--agent", "llm", "--provider", "openrouter", "--model", model,
             "--openrouter-host", host, "--openrouter-quantization", quant, "--allow-remote",
             "--preset", "vulnerable", "--prompt-variants", "baseline",
@@ -95,7 +101,9 @@ def test_pilot_08_replays_offline_and_matches_the_committed_report(
         ]
     )  # fmt: skip
     assert code == 0
-    replayed = trials_by_key(json.loads(out.read_text(encoding="utf-8")))
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert report["llm"]["extractor_context"] == "none"
+    replayed = trials_by_key(report)
     committed = trials_by_key(
         json.loads((DATA / f"pilot-08-{name}.json").read_text(encoding="utf-8"))
     )

@@ -43,6 +43,7 @@ from mulebench.agents.llm.pricing import cost_usd
 from mulebench.agents.llm.prompts import DEFAULT_ROLE_PROMPT, PROMPTS, system_prompt
 from mulebench.agents.llm.seeds import SEED_DERIVATION, derive_seed
 from mulebench.agents.llm.text_calls import text_tool_calls
+from mulebench.agents.memory_extraction import DEFAULT_EXTRACTOR_CONTEXT, ExtractorContext
 from mulebench.tools.client import ToolClient, ToolResult
 
 if TYPE_CHECKING:
@@ -90,6 +91,7 @@ class LLMAgent:
         seed: int | None = None,
         arg_coercion: ArgCoercion = DEFAULT_ARG_COERCION,
         role_prompts: dict[str, str] | None = None,
+        extractor_context: ExtractorContext = DEFAULT_EXTRACTOR_CONTEXT,
         pricer: Callable[[TokenUsage, str], float | None] = cost_usd,
     ) -> None:
         self.chat = chat
@@ -108,6 +110,8 @@ class LLMAgent:
         self.temperature = temperature
         self.seed = seed  # base seed; per-trial seed from derive_seed (seeds.py)
         self.arg_coercion = arg_coercion
+        # System text of the memory extraction call (see LLMExtractor).
+        self.extractor_context: ExtractorContext = extractor_context
 
     @property
     def params(self) -> dict[str, object]:
@@ -126,6 +130,10 @@ class LLMAgent:
         if self.seed is not None:
             params["seed"] = self.seed
             params["seed_derivation"] = SEED_DERIVATION
+        if self.extractor_context != DEFAULT_EXTRACTOR_CONTEXT:
+            # only then, so the params (and checkpoint fingerprints) of runs
+            # with the default stay unchanged; reports record it in llm.
+            params["extractor_context"] = self.extractor_context
         if self.role_prompts:
             params["role_prompts"] = dict(sorted(self.role_prompts.items()))
         return params

@@ -9,6 +9,7 @@
                   [--cassettes DIR] [--record] [--max-cost-usd X]
                   [--base-url URL] [--allow-remote] [--seed S] [--temperature T]
                   [--max-tokens N] [--arg-coercion digit_strings|off]
+                  [--extractor-context none|agent_system_prompt]
                   [--checkpoint FILE] [--resume]
                   [--skip-conformance] [--conformance-trials N] [--min-benign-pass R]
     mulebench check-agent [<dir>] --agent-module MOD:FACTORY [--agent-path DIR]
@@ -58,6 +59,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from mulebench.agents import Agent, ScriptedAgent
+from mulebench.agents.memory_extraction import EXTRACTOR_CONTEXTS
 from mulebench.agents.scripted import DEFAULT_MAX_STEPS
 from mulebench.attacks import ScenarioError, load_all, load_builtin
 from mulebench.attacks.schema import Scenario
@@ -373,6 +375,13 @@ def _add_llm_args(parser: argparse.ArgumentParser) -> None:
         choices=("digit_strings", "off"),
         default="digit_strings",
         help="coerce integers sent as digit-only strings (default); off: strict",
+    )
+    llm.add_argument(
+        "--extractor-context",
+        choices=EXTRACTOR_CONTEXTS,
+        default="none",
+        help="LLM memory extractor: none (default; EXTRACTION_PROMPT alone) or "
+        "agent_system_prompt (the agent's system prompt, then EXTRACTION_PROMPT)",
     )
     llm.add_argument(
         "--max-tokens",
@@ -950,6 +959,7 @@ def _build_llm(
         max_steps=args.max_steps,
         meter=CostMeter(args.max_cost_usd),
         arg_coercion=args.arg_coercion,
+        extractor_context=args.extractor_context,
         role_prompts=role_prompts,
     )
     llm_config = LLMConfig(
@@ -960,6 +970,7 @@ def _build_llm(
         refusal_fallbacks="off",
         prompt_sha256={p: prompt_sha256(p) for p in prompts},
         arg_coercion=args.arg_coercion,
+        extractor_context=args.extractor_context,
         tool_schema_sha256=tool_schema_sha256(),
         role_prompts=role_prompts or None,
         role_prompt_sha256=role_prompt_hashes(prompts, role_prompts),
@@ -1058,6 +1069,7 @@ def _build_local(
         temperature=temperature,
         seed=seed,
         arg_coercion=args.arg_coercion,
+        extractor_context=args.extractor_context,
         role_prompts=role_prompts,
     )
     llm_config = LLMConfig(
@@ -1072,6 +1084,7 @@ def _build_local(
         seed=seed,
         seed_derivation=SEED_DERIVATION,
         arg_coercion=args.arg_coercion,
+        extractor_context=args.extractor_context,
         tool_schema_sha256=tool_schema_sha256(),
         role_prompts=role_prompts or None,
         role_prompt_sha256=role_prompt_hashes(prompts, role_prompts),
@@ -1158,6 +1171,7 @@ def _build_openrouter(
         temperature=temperature,
         seed=seed,
         arg_coercion=args.arg_coercion,
+        extractor_context=args.extractor_context,
         role_prompts=role_prompts,
         pricer=fixed_pricer(price),
     )
@@ -1173,6 +1187,7 @@ def _build_openrouter(
         seed=seed,
         seed_derivation=SEED_DERIVATION,
         arg_coercion=args.arg_coercion,
+        extractor_context=args.extractor_context,
         tool_schema_sha256=tool_schema_sha256(),
         role_prompts=role_prompts or None,
         role_prompt_sha256=role_prompt_hashes(prompts, role_prompts),

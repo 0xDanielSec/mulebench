@@ -286,7 +286,9 @@ def test_single_session_trials_have_no_per_session_disclosure() -> None:
 class _FailingExtractor:
     kind = "llm"
 
-    def extract(self, text: str, *, trial_key: str, max_items: int) -> ExtractResult:
+    def extract(
+        self, text: str, *, trial_key: str, max_items: int, prompt_variant: str | None = None
+    ) -> ExtractResult:
         return ExtractResult(items=[], error="rate_limit")
 
 

@@ -374,6 +374,7 @@ def run_trial(
                     customer,
                     clock.now(),
                     observations,
+                    prompt_variant,
                 )
                 extractions.append(record)
                 if record.errored:
@@ -553,6 +554,7 @@ def _extract(
     customer: str,
     now: datetime,
     observations: list[Observation],
+    prompt_variant: str | None = None,
 ) -> ExtractionRecord:
     """Run the extractor on one finished session; append what it stores."""
     offered = getattr(agent, "memory_extractor", None)
@@ -560,7 +562,12 @@ def _extract(
         offered() if settings.extractor == "llm" and callable(offered) else ScriptedExtractor()
     )
     text = extraction_input(settings.source, request, trace, session, final_text)
-    result = extractor.extract(text, trial_key=f"{key}#mem{session}", max_items=settings.max_items)
+    result = extractor.extract(
+        text,
+        trial_key=f"{key}#mem{session}",
+        max_items=settings.max_items,
+        prompt_variant=prompt_variant,
+    )
     if result.error is not None:
         return ExtractionRecord(
             session=session,

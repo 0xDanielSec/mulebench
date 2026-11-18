@@ -1412,6 +1412,18 @@
           "default": null,
           "title": "Arg Coercion"
         },
+        "extractor_context": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Extractor Context"
+        },
         "tool_schema_sha256": {
           "anyOf": [
             {

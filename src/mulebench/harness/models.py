@@ -300,6 +300,10 @@ class LLMConfig(_Model):
     # reports, where trial t used seed + t.
     seed_derivation: str | None = None
     arg_coercion: str | None = None  # "digit_strings" or "off"; None in older reports
+    # LLM memory extractor context: "none" (EXTRACTION_PROMPT alone) or
+    # "agent_system_prompt" (agents.memory_extraction.ExtractorContext); None
+    # in reports from before the option existed, which behaved as "none".
+    extractor_context: str | None = None
     # Version of the tool names, descriptions and input schemas the model saw.
     tool_schema_sha256: str | None = None
     # Delegation role prompts: role -> variant when not "default" (None: all

@@ -19,6 +19,14 @@ from mulebench.agents.base import ModelCallRecord
 
 ExtractorKind = Literal["llm", "scripted"]
 
+# What the LLM extractor's system text holds before EXTRACTION_PROMPT:
+# "none" (EXTRACTION_PROMPT alone, the behaviour of pilots 07 and 08) or
+# "agent_system_prompt" (the agent's session system prompt of the trial's
+# prompt variant, a blank line, then EXTRACTION_PROMPT).
+ExtractorContext = Literal["none", "agent_system_prompt"]
+EXTRACTOR_CONTEXTS: tuple[ExtractorContext, ...] = ("none", "agent_system_prompt")
+DEFAULT_EXTRACTOR_CONTEXT: ExtractorContext = "none"
+
 
 class _Model(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -34,7 +42,14 @@ class ExtractResult(_Model):
 class Extractor(Protocol):
     kind: ExtractorKind
 
-    def extract(self, text: str, *, trial_key: str, max_items: int) -> ExtractResult: ...
+    def extract(
+        self,
+        text: str,
+        *,
+        trial_key: str,
+        max_items: int,
+        prompt_variant: str | None = None,
+    ) -> ExtractResult: ...
 
 
 # -------------------------------------------------------- scripted extractor
@@ -60,7 +75,14 @@ class ScriptedExtractor:
 
     kind: ExtractorKind = "scripted"
 
-    def extract(self, text: str, *, trial_key: str, max_items: int) -> ExtractResult:
+    def extract(
+        self,
+        text: str,
+        *,
+        trial_key: str,
+        max_items: int,
+        prompt_variant: str | None = None,
+    ) -> ExtractResult:
         found: list[tuple[int, str]] = []
         taken: list[tuple[int, int]] = []
         for m in _REMEMBER.finditer(text):
