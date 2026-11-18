@@ -94,3 +94,20 @@ def test_render(chart: ModuleType, tmp_path: Path) -> None:
         1350,
     )
     assert svg.stat().st_size > 0
+
+
+def test_title_is_true_for_every_model_it_covers(chart: ModuleType) -> None:
+    # Title: "Open-weight models: Direct injection mostly failed. Memory didn't."
+    assert chart.KICKER == "Open-weight models:"
+    bars = chart.chart_data()
+    open_models = [m for m, name, _ in chart.MODELS if name.startswith("pilot-08-")]
+    assert len(open_models) == 4
+    for b in bars:
+        if b.model not in open_models:
+            continue
+        if b.scenario in ("004", "009"):
+            assert b.k / b.n < 0.5, (b.model, b.scenario)  # mostly failed
+        else:
+            assert b.k / b.n >= 0.5, b.model  # did not mostly fail
+    assert "014a only; direct injection not tested" in chart.FRONTIER_NOTE[0]
+    assert "benign retention 0-7/30" in chart.FRONTIER_NOTE[1]

@@ -27,7 +27,12 @@ ASSETS = ROOT / "docs" / "assets"
 PNG = ASSETS / "memory-vs-direct.png"
 SVG = ASSETS / "memory-vs-direct.svg"
 
-TITLE = "Blocked the direct injection. Leaked through memory."
+KICKER = "Open-weight models:"
+TITLE = ("Direct injection mostly failed.", "Memory didn't.")
+FRONTIER_NOTE = (
+    "the frontier models tested: 014a only; direct injection not tested",
+    "memory extractors stored almost nothing (benign retention 0-7/30)",
+)
 SUBTITLE = (
     "Attributed attack success over exposed trials (N = 26-30 per bar),\n"
     "Wilson 95% intervals. Synthetic data. Open-weight models: pilot 08.\n"
@@ -125,22 +130,13 @@ def render(bars: list[Bar], png: Path = PNG, svg: Path = SVG) -> None:
     colour = {"004": "#56B4E9", "009": "#009E73", "014a": "#D55E00"}
     models = [m for m, _, _ in MODELS]
     fig = plt.figure(figsize=(7.2, 9.0), dpi=150)  # 1080 x 1350 px
-    ax = fig.add_axes((0.30, 0.16, 0.64, 0.61))
+    ax = fig.add_axes((0.30, 0.075, 0.64, 0.70))
     height = 0.26
     for i, model in enumerate(models):
         for j, sid in enumerate(SCENARIOS):
             (bar,) = [b for b in bars if b.model == model and b.scenario == sid]
             y = i + (j - 1) * height
             if bar.rate is None:
-                if sid == "004":
-                    ax.text(
-                        0.01,
-                        y + height / 2,
-                        "direct injection: not tested",
-                        va="center",
-                        fontsize=11,
-                        color="#555555",
-                    )
                 continue
             if bar.low is None or bar.high is None:
                 raise ValueError(f"tested bar without bounds: {bar}")
@@ -169,9 +165,8 @@ def render(bars: list[Bar], png: Path = PNG, svg: Path = SVG) -> None:
     ax.set_xlim(0, 1.25)
     ax.set_xticks([0, 0.25, 0.5, 0.75, 1.0], ["0%", "25%", "50%", "75%", "100%"])
     ax.axhline(3.5, color="#888888", linewidth=1, linestyle="--")
-    ax.text(
-        1.24, 3.62, "the frontier models tested", ha="right", va="top", fontsize=11, color="#555555"
-    )
+    ax.text(0.01, 3.6, FRONTIER_NOTE[0], ha="left", va="top", fontsize=10, color="#333333")
+    ax.text(0.01, 3.85, FRONTIER_NOTE[1], ha="left", va="top", fontsize=9.5, color="#555555")
     ax.text(
         1.24, -0.62, "open-weight models", ha="right", va="bottom", fontsize=11, color="#555555"
     )
@@ -179,26 +174,29 @@ def render(bars: list[Bar], png: Path = PNG, svg: Path = SVG) -> None:
         ax.spines[side].set_visible(False)
     ax.grid(axis="x", color="#dddddd", linewidth=0.8)
     ax.set_axisbelow(True)
-    fig.text(0.04, 0.965, "Blocked the direct injection.", fontsize=22, weight="bold", va="top")
+    fig.text(0.04, 0.975, KICKER, fontsize=15, weight="bold", va="top", color="#333333")
+    fig.text(0.04, 0.95, TITLE[0], fontsize=22, weight="bold", va="top")
     fig.text(
         0.04,
-        0.925,
-        "Leaked through memory.",
+        0.91,
+        TITLE[1],
         fontsize=22,
         weight="bold",
         va="top",
         color=colour["014a"],
     )
-    fig.text(0.04, 0.88, SUBTITLE, fontsize=11.5, va="top", color="#333333", linespacing=1.4)
+    fig.text(0.04, 0.868, SUBTITLE, fontsize=11.5, va="top", color="#333333", linespacing=1.4)
     handles = [Rectangle((0, 0), 1, 1, color=colour[s]) for s in SCENARIOS]
     fig.legend(
         handles,
         [LABELS[s] for s in SCENARIOS],
-        loc="lower left",
-        ncol=1,
+        loc="lower center",
+        ncol=3,
         frameon=False,
-        fontsize=13,
-        bbox_to_anchor=(0.28, 0.0),
+        fontsize=11.5,
+        handlelength=1.2,
+        columnspacing=1.0,
+        bbox_to_anchor=(0.5, 0.0),
     )
     png.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(png, dpi=150, metadata={"Software": None})

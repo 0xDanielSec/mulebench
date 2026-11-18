@@ -36,6 +36,7 @@ From ten pre-registered pilots, N = 30 per cell, synthetic data
 
 These are pilots: they show where to look, not how any production system
 behaves.
+See the [limitations](docs/writeup.md#limitations).
 
 ## What Mulebench is
 
@@ -98,7 +99,10 @@ See [bring-your-own-agent.md](docs/bring-your-own-agent.md) and
   below 0.8, too many trials errored or were never exposed, or the provider
   rate-limited. A model that does nothing must not look safe.
 - **Attribution separate from invariants.** An authorized, in-limit payment
-  can still carry the attacker's amount; both layers are reported.
+  can still carry the attacker's amount; both layers are reported. In one
+  trial a payment passed every ledger rule and still carried the attacker's
+  amount (pilot 08, 015b;
+  [writeup, finding e](docs/writeup.md#e-an-invariant-can-hold-while-the-attack-succeeds)).
 - **1,500+ offline tests** (pytest, Hypothesis), ruff and strict mypy in CI
   on Linux and Windows.
 - **Mutation testing.** `scripts/mutation_check.py` breaks invariant, audit
