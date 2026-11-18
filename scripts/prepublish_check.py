@@ -25,6 +25,11 @@ Known false positives: the committed file `scripts/prepublish_allow.txt`, one
 entry per line, `<exact finding value> -- <one-line justification>` (`#`
 comments). A finding whose value equals an entry is reported as
 "allowed (<reason>)", never hidden, and does not count as a finding.
+An entry `sha256:<hex> [metadata-until <commit sha>] -- <justification>` is
+scoped: it allows the value whose lowercased sha256 is <hex> only in the commit
+metadata (author, committer, message) of that commit and its ancestors, never
+in files, diffs or later commits. The value is stored as a hash so the
+allowlist itself does not contain it.
 
 Usage:
     uv run python scripts/prepublish_check.py            # tree + history
@@ -36,6 +41,7 @@ Exit code: 0 if nothing was found, 1 if there are findings.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import lzma
 import os
@@ -52,6 +58,7 @@ ROOT = Path(__file__).resolve().parent.parent
 TERMS_FILE = ROOT / ".prepublish-terms"
 ALLOW_FILE = ROOT / "scripts" / "prepublish_allow.txt"
 ALLOW_SEP = " -- "
+SCOPE = re.compile(r"^sha256:(?P<value>[0-9a-f]{64}) \[metadata-until (?P<sha>[0-9a-f]{7,40})\]$")
 
 # Infrastructure domains that legitimately appear in this repo.
 DEFAULT_ALLOWED_DOMAINS = frozenset(
@@ -196,11 +203,14 @@ def load_policy() -> Policy:
     )
 
 
-def load_allowlist(path: Path = ALLOW_FILE) -> dict[str, str]:
-    """Exact finding value -> justification. Malformed entries are errors."""
+def _parse_allowlist(
+    path: Path,
+) -> tuple[dict[str, str], dict[str, tuple[str, str]]]:
+    """(value -> justification, scoped value sha256 -> (commit sha, justification))."""
     allow: dict[str, str] = {}
+    scoped: dict[str, tuple[str, str]] = {}
     if not path.exists():
-        return allow
+        return allow, scoped
     for n, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         line = raw.strip()
         if not line or line.startswith("#"):
@@ -208,8 +218,56 @@ def load_allowlist(path: Path = ALLOW_FILE) -> dict[str, str]:
         value, sep, reason = line.partition(ALLOW_SEP)
         if not sep or not value.strip() or not reason.strip():
             raise SystemExit(f"{path.name}:{n}: expected '<value>{ALLOW_SEP}<justification>'")
-        allow[value.strip()] = reason.strip()
-    return allow
+        m = SCOPE.match(value.strip())
+        if m:
+            scoped[m["value"]] = (m["sha"], reason.strip())
+        elif "[" in value:
+            raise SystemExit(
+                f"{path.name}:{n}: scope must be 'sha256:<hex> [metadata-until <sha>]'"
+            )
+        else:
+            allow[value.strip()] = reason.strip()
+    return allow, scoped
+
+
+def load_allowlist(path: Path = ALLOW_FILE) -> dict[str, str]:
+    """Exact finding value -> justification (unscoped entries). Malformed entries are errors."""
+    return _parse_allowlist(path)[0]
+
+
+def load_scoped_allowlist(path: Path = ALLOW_FILE) -> dict[str, tuple[str, str]]:
+    """Value sha256 -> (commit sha, justification): allowed only in that commit's and
+    its ancestors' metadata."""
+    return _parse_allowlist(path)[1]
+
+
+def value_sha256(value: str) -> str:
+    """Key of a scoped allowlist entry: sha256 of the lowercased value."""
+    return hashlib.sha256(value.lower().encode("utf-8")).hexdigest()
+
+
+def ancestors(sha: str) -> frozenset[str]:
+    """Full SHAs of `sha` and every ancestor; empty when git does not know it."""
+    try:
+        return frozenset(_git("rev-list", sha).split())
+    except subprocess.CalledProcessError:
+        return frozenset()
+
+
+def scoped_reason(
+    f: Finding, scoped: dict[str, tuple[str, str]], lineage: dict[str, frozenset[str]]
+) -> str | None:
+    """Justification when a scoped entry allows `f`, else None."""
+    key = value_sha256(f.value)
+    if key not in scoped or not f.where.endswith(" metadata"):
+        return None
+    sha, reason = scoped[key]
+    commit = f.where.split()[0]
+    if sha not in lineage:
+        lineage[sha] = ancestors(sha)
+    if any(full.startswith(commit) for full in lineage[sha]):
+        return reason
+    return None
 
 
 def split_allowed(
@@ -332,7 +390,12 @@ def main(argv: list[str] | None = None) -> int:
 
     policy = load_policy()
     allow = load_allowlist()
-    print(f"forbidden terms loaded: {len(policy.terms)}; allowlist entries: {len(allow)}")
+    scoped = load_scoped_allowlist()
+    lineage: dict[str, frozenset[str]] = {}
+    print(
+        f"forbidden terms loaded: {len(policy.terms)}; allowlist entries: {len(allow)}"
+        f" (+{len(scoped)} scoped to commit metadata)"
+    )
     if not policy.author:
         print("note: git user.email is not set; no email is allowlisted by authorship")
     sections = [("working tree", scan_tree(policy))]
@@ -342,12 +405,19 @@ def main(argv: list[str] | None = None) -> int:
     total = 0
     for title, findings in sections:
         unique, allowed = split_allowed(sorted(set(findings)), allow)
+        reasons = {f: allow[f.value] for f in allowed}
+        for f in list(unique):
+            why = scoped_reason(f, scoped, lineage)
+            if why is not None:
+                unique.remove(f)
+                allowed.append(f)
+                reasons[f] = why
         total += len(unique)
         print(f"\n== {title}: {len(unique)} finding(s), {len(allowed)} allowed")
         for f in unique:
             print(f"  [{f.kind}] {f.value}  ({f.where})")
         for f in allowed:
-            print(f"  [{f.kind}] {f.value}  ({f.where})  allowed ({allow[f.value]})")
+            print(f"  [{f.kind}] {f.value}  ({f.where})  allowed ({reasons[f]})")
     print(f"\n{'FINDINGS: review before publishing' if total else 'clean'}")
     return 1 if total else 0
 

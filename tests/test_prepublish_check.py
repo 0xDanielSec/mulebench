@@ -173,3 +173,43 @@ def test_other_git_config_errors_still_raise(
 def test_committed_allowlist_is_valid(pc: ModuleType) -> None:
     allow = pc.load_allowlist()
     assert all(reason for reason in allow.values())
+
+
+def test_scoped_entry_allows_only_metadata_up_to_its_commit(
+    pc: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    old, new = "a" * 40, "b" * 40
+    f = tmp_path / "allow.txt"
+    f.write_text(
+        f"sha256:{pc.value_sha256(HIT)} [metadata-until {old}] -- historical metadata\n",
+        encoding="utf-8",
+    )
+    assert pc.load_allowlist(f) == {}
+    scoped = pc.load_scoped_allowlist(f)
+    assert scoped == {pc.value_sha256(HIT): (old, "historical metadata")}
+    assert HIT not in f.read_text(encoding="utf-8")
+    monkeypatch.setattr(pc, "ancestors", lambda sha: frozenset({old, "c" * 40}))
+    lineage: dict[str, frozenset[str]] = {}
+    ok = pc.Finding("email", HIT, f"{old[:7]} metadata")
+    assert pc.scoped_reason(ok, scoped, lineage) == "historical metadata"
+    assert pc.scoped_reason(pc.Finding("email", HIT, "ccccccc metadata"), scoped, lineage)
+    # a later commit (not an ancestor), a diff line, or a file in the tree: still flagged
+    assert (
+        pc.scoped_reason(pc.Finding("email", HIT, f"{new[:7]} metadata"), scoped, lineage) is None
+    )
+    assert (
+        pc.scoped_reason(pc.Finding("email", HIT, f"{old[:7]} README.md"), scoped, lineage) is None
+    )
+    assert pc.scoped_reason(pc.Finding("email", HIT, "README.md:3"), scoped, lineage) is None
+    assert (
+        pc.scoped_reason(pc.Finding("email", OTHER, f"{old[:7]} metadata"), scoped, lineage) is None
+    )
+    f.write_text(f"sha256:{'0' * 64} [metadata-after {old}] -- bad scope\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match="scope"):
+        pc.load_allowlist(f)
+
+
+def test_committed_scoped_entries_name_known_commits(pc: ModuleType) -> None:
+    for sha, reason in pc.load_scoped_allowlist().values():
+        assert reason
+        assert pc.ancestors(sha), sha

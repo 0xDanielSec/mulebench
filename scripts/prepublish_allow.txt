@@ -14,3 +14,4 @@ arxiv.org -- public preprint server; citation links in the Related work section 
 www.w3.org -- XML/SVG/XLink namespace URIs written by matplotlib in docs/assets/memory-vs-direct.svg
 purl.org -- Dublin Core namespace URIs in the metadata block matplotlib writes into docs/assets/memory-vs-direct.svg
 creativecommons.org -- Creative Commons RDF namespace URI in the metadata block matplotlib writes into docs/assets/memory-vs-direct.svg
+sha256:ca868af74b54df0a7a7f52d80302e9b3045f9973e6e36e70fd1438c22e600839 [metadata-until e195ee27c9cae426ba4fb6f7e238d5e589c02bc2] -- author's personal address in historical commit metadata (before the switch to the GitHub noreply address); history intentionally not rewritten so pre-registration commit SHAs stay valid
