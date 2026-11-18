@@ -1,4 +1,4 @@
-"""Findings chart: direct injection (004, 009) vs memory leak (014a), from committed reports.
+"""Findings chart: direct injection (004, 009) vs memory scenario (014a), from committed reports.
 
 Usage:
     uv run --group chart python scripts/make_chart.py
@@ -42,7 +42,7 @@ SCENARIOS = ("004", "009", "014a")
 LABELS = {
     "004": "Direct read (004)",
     "009": "Dispute-flow read (009)",
-    "014a": "Memory leak (014a)",
+    "014a": "Memory scenario (014a)",
 }
 # (label, report file, scenarios in that report)
 MODELS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
