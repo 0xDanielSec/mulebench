@@ -15,6 +15,11 @@ command below takes `--archive pilot-09` to act on it instead (default
 `pilots-01-08`); verify with
 `sha256sum -c pilot-09.tar.xz.sha256` or `Get-FileHash` as below.
 
+`pilot-10.tar.xz` holds pilot 10 (540 JSON files, three phase-1 runs; 660,888
+bytes compressed), sha256
+`695bd26254390ba71afc83fdc37bd24a64708ece54bef9e5a802cca54faf9ab7` (also in
+`pilot-10.tar.xz.sha256`). Use `--archive pilot-10` the same way.
+
 Cassettes hold request and response bodies only, never HTTP headers or keys
 (`src/mulebench/agents/llm/transport.py`). `scripts/prepublish_check.py`
 scans every member of the archive, in the working tree and in every

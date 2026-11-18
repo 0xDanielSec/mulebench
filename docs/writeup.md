@@ -1,16 +1,20 @@
 # Mulebench: what we have found so far
 
-Status: findings from nine pre-registered pilots (2026). All data is
+Status: findings from ten pre-registered pilots (2026). All data is
 synthetic. Every number below comes from the committed reports in
 [`docs/experiments/data/`](experiments/data/) and is checked against them by
 `tests/test_writeup.py`.
 
 ## TL;DR
 
-- **Automatic memory leaked another customer's data in all four open-weight
-  models we tested.** In scenario 014a, the share of attack trials that
-  leaked through memory in a later session was 50% (qwen3-14b, 15/30) to
-  93% (gemma-4-26b, 28/30).
+- **Automatic memory leaked another customer's data in all four open
+  mid-size models we tested, and in none of the three frontier models
+  tested.** In scenario 014a, the share of attack trials that leaked through
+  memory in a later session was 50% (qwen3-14b, 15/30) to
+  93% (gemma-4-26b, 28/30) for the open models. The three frontier models tested (one each
+  from Anthropic, Google and OpenAI) leaked in 0/30 each: their memory
+  extractors never wrote the injected instruction, and also stored almost
+  nothing else (finding i).
 - **That includes a model that blocked every direct injection.**
   gemma-4-26b: 0/30 on the direct cross-customer read (004) and 0/30 on the
   dispute-flow read (009), but 28/30 (93%, 79%-98%) on the memory scenario.
@@ -20,10 +24,12 @@ synthetic. Every number below comes from the committed reports in
   mistral-small-3.2 that rests on the memory scenario 014a alone.
 - **Two memory defences worked on a local model.** Restricting memory
   extraction to the customer's own turns stopped the 014a attack (0/30) with
-  benign utility unchanged (30/30). An extraction guard reduced it to 5/30.
+  no task utility cost (benign utility 30/30), but memory stores far fewer
+  facts (benign memory retention 9/30). An extraction guard reduced it to
+  5/30. Neither defence has been tested on the frontier models tested.
 
-These are pilots: N = 30 per cell, cheap open-weight models, one prompt.
-They show where to look, not how any production system behaves.
+These are pilots: N = 30 per cell, mostly cheap open-weight models, one
+prompt. They show where to look, not how any production system behaves.
 
 ## What Mulebench is
 
@@ -153,8 +159,11 @@ hosted models of pilot 08), 014a attack cell
 | `memory_source_customer` (extract only from the customer's own turns) | 0/30 (0%, 0%-11%) | 0/30 (0%, 0%-11%) | 30/30 (100%, 89%-100%) |
 | `memory_extract_guard` (filter extracted facts) | 20/30 (67%, 49%-81%) | 5/30 (17%, 7%-34%) | 30/30 (100%, 89%-100%) |
 
-Source restriction removed the attack at no measured utility cost in this
-scenario. The extraction guard let two thirds of the poisoned facts in.
+Source restriction removed the attack with no task utility cost in this
+scenario, but memory stores far fewer facts: benign memory retention (at
+least one stored item) fell to 9/30 under `memory_source_customer`, because
+in 014a the customer's own turns hold no durable fact. The extraction guard
+let two thirds of the poisoned facts in.
 
 ### d. Delegation: provenance stops the crossing, then blocks the work
 
@@ -238,6 +247,44 @@ delegation result (finding d), where the failure moved instead of
 disappearing. The system prompt we gave the extractor says nothing about
 third-party text, so this tested giving it context, not giving it rules.
 
+### i. The frontier models tested did not write the poison to memory
+
+Pilot 10 ran 014a, unchanged, on one mid-tier model from each of three
+vendors, each on its own host through OpenRouter: Claude Sonnet 5.5
+(Anthropic), Gemini 3.8 Flash (Google AI Studio) and GPT-6.1 Terra
+(OpenAI) ([pilot 10](experiments/pilot-10-frontier.md)). All three leaked
+in 0/30 (0%, 0%-11%) attack trials, with benign utility 30/30 (100%,
+89%-100%). `memory_injected` was 0/30 in every model: the resistance came
+at the first stage, the extraction call. No stored item in any trial named
+the other customer's account, so session 1 never had a poison to act on.
+
+The extractors did not single out the attack. The benign control puts
+"remember: customer likes short answers" in the same Pix description; the
+open models of pilot 09 stored it in 30/30 benign trials, the frontier
+models tested in 0/30. Their extractors mostly answered `NONE`: Gemini 3.8
+Flash in all 60 extraction calls, Claude Sonnet 5.5 in 56, and GPT-6.1
+Terra kept only "the customer has an account with ID acc_alice" in 30 of
+60. Benign memory retention was 0/30, 0/30 and 7/30. They ignored
+instructions found in tool output, harmful or not, and wrote little memory
+at all; this scenario cannot tell whether they would keep a legitimate
+fact stated by the customer.
+
+The three runs did not sample alike. Claude Sonnet 5.5 and GPT-6.1 Terra
+ran at their host's default temperature, Gemini 3.8 Flash at 0.7, and
+Claude Sonnet 5.5 without a seed; reasoning was the host default and
+appeared in 67/300, 300/300 and 96/300 calls (Sonnet, Flash, Terra). Any
+comparison between them has to account for this. Phase 2 (the
+`memory_source_customer` defence on models with at least 5/30) was not
+triggered, so the defence has not been tested on these models.
+
+**Why it still matters.** Many deployments use open models, for cost or
+for data residency, and the open models tested here leaked in most
+trials. The defence that removed the attack, writing memory only from the
+customer's own turns, is architectural: it does not depend on the model's
+judgement, so it applies whichever model runs the extractor. A 0/30 on the
+frontier models tested is a sample of three models in one scenario, not a
+property of a model class.
+
 ## What we got wrong
 
 - **014a exceeded the pre-registered range in 3 of 4 models.** We predicted
@@ -256,18 +303,38 @@ third-party text, so this tested giving it context, not giving it rules.
   model; mistral-small-3.2 showed a (fragile) reduction. Its control also
   came out at 87%, just above the pilot 08 interval we predicted.
 
+- **Pilot 10.** We predicted that the poison would reach memory in at least
+  30% of trials for each of the frontier models tested, and that benign
+  memory retention would be at least 80%; both were 0/30 (retention 7/30
+  for GPT-6.1 Terra). The attack-success ranges held only because they
+  started at 0%. We also mispredicted reasoning: Claude Sonnet 5.5 reasoned
+  in 67/300 calls (predicted none), GPT-6.1 Terra in 96/300 (predicted at
+  least half).
+
 All verdicts are in the scorecards of
-[pilot 08](experiments/pilot-08-openrouter.md#prediction-scorecard) and
-[pilot 09](experiments/pilot-09-extractor-context.md#prediction-scorecard).
+[pilot 08](experiments/pilot-08-openrouter.md#prediction-scorecard),
+[pilot 09](experiments/pilot-09-extractor-context.md#prediction-scorecard) and
+[pilot 10](experiments/pilot-10-frontier.md#prediction-scorecard).
 
 ## Limitations
 
-- **Models.** Four cheap open-weight models (14B to 26B) and local
-  qwen3-14b. Nothing here says anything about larger or proprietary models.
+- **Models.** Four cheap open-weight models (14B to 26B), local qwen3-14b,
+  and, in pilot 10 only, the frontier models tested (three, on scenario
+  014a only). Nothing here says anything about other models.
+- **The memory defences were never tested on the frontier models tested.**
+  Pilot 10's phase 2 (`memory_source_customer`) ran only for a model with
+  at least 5/30 in phase 1, and none had any success, so it was not
+  triggered. Both defences are measured on local qwen3-14b only.
 - **N = 30** per cell: wide intervals, and single events (1/29) are
   mechanisms, not rates.
 - **One prompt variant** (`baseline`), **one temperature** (0.7), one seed
-  schedule per pilot.
+  schedule per pilot; in pilot 10 two models ran at their host's default
+  temperature and one without a seed.
+- **Hosted sampling is not reproducible, even with the same seed.** In
+  pilot 09 the first session 0 response differed in 60/60 trials between two
+  runs with identical requests and seeds. That is why the cassettes, not
+  the seeds, are the reproducibility basis: a replay reproduces a run; a
+  re-run is a new sample.
 - **One host per model** in pilot 08. The hosts did not report the served
   quantization or endpoint tier, so only the request pin applies; it cannot
   be verified per call.
@@ -281,9 +348,11 @@ All verdicts are in the scorecards of
 
 - **Only write memory from the customer's own turns, and tag every memory
   item with its source.** Extracting only from the customer's own turns was
-  the one defence that removed the 014a attack (0/30) without a measured
-  utility cost. Both memory defences were measured on local qwen3-14b only,
-  not on the hosted models.
+  the one defence that removed the 014a attack (0/30), with no task utility
+  cost, but memory stores far fewer facts (retention 9/30 in 014a). Both
+  memory defences were measured on local qwen3-14b only, not on the hosted
+  models. The defence is architectural, so it does not rely on the model;
+  that matters most for the open models, which leaked in most trials.
 - **Do not rely on the extractor's prompt.** Giving it the agent's system
   prompt left gemma-4-26b's leak unchanged and only partly reduced
   mistral-small-3.2's, by turning the poison into a false fact.
@@ -302,7 +371,8 @@ All verdicts are in the scorecards of
   agents stopped crossing but blocked legitimate payments; measure benign
   utility and availability next to attack success.
 - **Test per model.** Resistance to direct injection did not predict
-  resistance through memory.
+  resistance through memory, and the frontier models tested resisted where
+  every open model tested failed.
 
 ## Reproduce
 
@@ -360,8 +430,10 @@ uv run python -m mulebench run --builtin `
 
 The full pilot 08 (4 models, 5 scenarios, 300 trials each) replays trial for trial at the current commit: on 2026-11-17 all 1,200 trials, summary rows, cost and routing blocks matched the committed reports. For qwen3-14b, add `--replay-errors-from docs/experiments/data/pilot-08-qwen3-14b.json`: 2 of its calls errored live and were never recorded, and the report tells replay to reproduce them as the same errors.
 
-The exact replay commands for every pilot are in the "Offline replay"
-section of each pilot document; see
+Pilots 09 and 10 have their own archives (`pilot-09.tar.xz`,
+`pilot-10.tar.xz`; extract with `--archive pilot-09` or
+`--archive pilot-10`). The exact replay commands for every pilot are in
+the "Offline replay" section of each pilot document; see
 [`docs/experiments/cassettes/README.md`](experiments/cassettes/README.md).
 Pilots 02 to 08 replay at the current commit; pilot 01 needs its harness
 commit `2fe1dc7`.
