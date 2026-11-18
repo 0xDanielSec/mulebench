@@ -210,6 +210,16 @@ def test_scoped_entry_allows_only_metadata_up_to_its_commit(
 
 
 def test_committed_scoped_entries_name_known_commits(pc: ModuleType) -> None:
+    if pc.is_shallow():
+        pytest.fail(pc.SHALLOW_MESSAGE)
     for sha, reason in pc.load_scoped_allowlist().values():
         assert reason
         assert pc.ancestors(sha), sha
+
+
+def test_history_scan_refuses_a_shallow_clone(
+    pc: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(pc, "is_shallow", lambda: True)
+    with pytest.raises(SystemExit, match="fetch-depth: 0"):
+        pc.scan_history(policy(pc))

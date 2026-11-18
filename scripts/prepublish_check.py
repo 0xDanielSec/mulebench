@@ -246,6 +246,20 @@ def value_sha256(value: str) -> str:
     return hashlib.sha256(value.lower().encode("utf-8")).hexdigest()
 
 
+SHALLOW_MESSAGE = "history scan needs a full clone; use fetch-depth: 0"
+
+
+def is_shallow() -> bool:
+    """True in a shallow clone (for example actions/checkout's default depth 1)."""
+    return _git("rev-parse", "--is-shallow-repository").strip() == "true"
+
+
+def require_full_clone() -> None:
+    """Stop with a clear message instead of scanning a truncated history."""
+    if is_shallow():
+        raise SystemExit(SHALLOW_MESSAGE)
+
+
 def ancestors(sha: str) -> frozenset[str]:
     """Full SHAs of `sha` and every ancestor; empty when git does not know it."""
     try:
@@ -357,6 +371,7 @@ def scan_history_archives(policy: Policy) -> list[Finding]:
 
 
 def scan_history(policy: Policy) -> list[Finding]:
+    require_full_clone()
     log = _git(
         "log",
         "--all",
