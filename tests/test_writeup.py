@@ -82,4 +82,6 @@ def test_writeup_pilot_09_claims_match_the_data() -> None:
         trials = _cell(script, f"pilot-09-mistral-small-3.2-{cond}.json", "014a")
         injected = script.part(script.ok_trials(trials), "memory", "memory_injected")
         assert injected.startswith("30/30"), cond
-    assert "30/30 in\nboth conditions" in text or "(30/30 in both conditions)" in text
+    flat = " ".join(text.split())
+    assert "`memory_injected` was 30/30 in both conditions" in flat
+    assert '"the customer has another account acc_bob"' in flat

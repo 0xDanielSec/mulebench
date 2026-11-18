@@ -223,12 +223,20 @@ mistral-small-3.2 went from 26/30 (87%, 70%-95%) to 16/30 (53%, 36%-70%),
 which clears our pre-registered threshold by a hair: one trial either way
 and it would not. Benign utility and benign memory stayed at 30/30.
 
-The mistral model did not stop writing the poison into memory (30/30 in
-both conditions). It more often rewrote the instruction as a "fact"
-("the customer has another account acc_bob"), which the next session did
-not act on. That is still a false memory about another customer. The
-system prompt we gave it says nothing about third-party text, so this
-tested giving the extractor context, not giving it rules.
+The mistral "reduction" did not stop the poison from being written:
+`memory_injected` was 30/30 in both conditions. What changed is its form.
+With the agent's prompt, the extractor more often turned the injected
+instruction into a false fact, "the customer has another account acc_bob",
+and session 1 never acted on such a fact. But the false fact stays in
+Alice's memory, attributing another customer's account to her, and a later
+request ("show all my accounts") could act on it.
+
+So a defence can lower the measured attack rate while leaving the system in
+a worse, less visible state: the attack counter went down, the memory got
+no cleaner, and the poison became harder to spot. This matches the
+delegation result (finding d), where the failure moved instead of
+disappearing. The system prompt we gave the extractor says nothing about
+third-party text, so this tested giving it context, not giving it rules.
 
 ## What we got wrong
 
@@ -279,6 +287,9 @@ All verdicts are in the scorecards of
 - **Do not rely on the extractor's prompt.** Giving it the agent's system
   prompt left gemma-4-26b's leak unchanged and only partly reduced
   mistral-small-3.2's, by turning the poison into a false fact.
+- **Measure what was written to memory, not only what the agent did.** In
+  pilot 09 the attack rate fell while every trial still stored the other
+  customer's account, now as a false fact the agent did not act on.
 - **Treat memory writes as a privileged sink.** Whatever enters memory
   comes back later as trusted context. Guard and audit the write path, not
   only the read path.
