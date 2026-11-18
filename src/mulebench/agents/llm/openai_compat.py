@@ -118,6 +118,12 @@ def parse_completion(body: dict[str, Any], request_id: str | None = None) -> Cha
     completion = usage.get("completion_tokens")
     details = usage.get("completion_tokens_details") or {}
     reasoning_tokens = details.get("reasoning_tokens") if isinstance(details, dict) else None
+    # OpenAI-compatible usage counts reasoning inside completion_tokens, and
+    # OpenRouter bills completion_tokens: in pilot 08, qwen3-14b calls whose
+    # reported reasoning_tokens exceeded completion_tokens were still billed
+    # exactly completion_tokens x price. So output_tokens (and the cost meter)
+    # already include reasoning; reasoning_tokens is recorded, never added.
+    output_tokens = int(completion or 0)
     stop = choice.get("finish_reason")
     if message.get("refusal"):
         stop = "refusal"
@@ -127,7 +133,7 @@ def parse_completion(body: dict[str, Any], request_id: str | None = None) -> Cha
         refusal_category=None,
         usage=TokenUsage(
             input_tokens=int(prompt or 0),
-            output_tokens=int(completion or 0),
+            output_tokens=output_tokens,
         ),
         served_model=str(body.get("model", "")),
         request_id=request_id or body.get("id"),

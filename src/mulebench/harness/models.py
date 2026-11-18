@@ -304,6 +304,11 @@ class LLMConfig(_Model):
     # "agent_system_prompt" (agents.memory_extraction.ExtractorContext); None
     # in reports from before the option existed, which behaved as "none".
     extractor_context: str | None = None
+    # openrouter only: False when the run left seed / temperature out of every
+    # request (--allow-no-seed, --allow-no-temperature) because the pinned
+    # host does not accept it. None in other providers and older reports.
+    seed_supported: bool | None = None
+    temperature_supported: bool | None = None
     # Version of the tool names, descriptions and input schemas the model saw.
     tool_schema_sha256: str | None = None
     # Delegation role prompts: role -> variant when not "default" (None: all
@@ -357,6 +362,10 @@ class RoutingTotals(_Model):
     calls_retried: int = 0
     # Trials errored after exhausted retries, by error kind.
     transient_errored_trials: dict[str, int] = {}
+    # Reasoning tokens the responses reported (already in output tokens and
+    # cost), in total, and calls that reported any.
+    reasoning_tokens: int = 0
+    calls_with_reasoning: int = 0
 
 
 class SummaryRow(_Model):

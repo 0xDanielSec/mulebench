@@ -54,6 +54,9 @@ from mulebench.doctor import (
 )
 
 REQUIRED_PARAMETERS = ("tools", "seed", "temperature")
+# `tools` is always required: a run without tool calling measures nothing.
+# seed and temperature are dropped from the requirement only by
+# --allow-no-seed / --allow-no-temperature (the run then omits them).
 # Prompt of the largest pilot call (about 1.2k tokens) plus max_tokens 4096 fits.
 MIN_CONTEXT = MIN_NUM_CTX
 
@@ -81,20 +84,32 @@ def per_mtok(value: object) -> float | None:
         return None
 
 
-def missing_parameters(endpoint: dict[str, Any]) -> list[str]:
+def required_parameters(
+    require_seed: bool = True, require_temperature: bool = True
+) -> tuple[str, ...]:
+    return tuple(
+        p
+        for p in REQUIRED_PARAMETERS
+        if (p != "seed" or require_seed) and (p != "temperature" or require_temperature)
+    )
+
+
+def missing_parameters(
+    endpoint: dict[str, Any], required: tuple[str, ...] = REQUIRED_PARAMETERS
+) -> list[str]:
     supported = set(endpoint.get("supported_parameters") or [])
-    return [p for p in REQUIRED_PARAMETERS if p not in supported]
+    return [p for p in required if p not in supported]
 
 
-def describe(endpoint: dict[str, Any]) -> str:
+def describe(endpoint: dict[str, Any], required: tuple[str, ...] = REQUIRED_PARAMETERS) -> str:
     pricing = endpoint.get("pricing") or {}
     pin, pout = per_mtok(pricing.get("prompt")), per_mtok(pricing.get("completion"))
     price = "?" if pin is None or pout is None else f"${pin:.3f}/${pout:.3f} per 1M in/out"
-    missing = missing_parameters(endpoint)
+    missing = missing_parameters(endpoint, required)
     return (
         f"{_tag(endpoint)} ({endpoint.get('provider_name')}): {price}, quantization="
         f"{endpoint.get('quantization') or '?'}, context={endpoint.get('context_length') or '?'}, "
-        + ("tools/seed/temperature ok" if not missing else f"missing {', '.join(missing)}")
+        + (f"{'/'.join(required)} ok" if not missing else f"missing {', '.join(missing)}")
     )
 
 
@@ -131,7 +146,11 @@ def run_openrouter_doctor(
     quantization: str | None = None,
     client: httpx.Client | None = None,
     sleep: Callable[[float], None] = time.sleep,
+    require_seed: bool = True,
+    require_temperature: bool = True,
 ) -> list[Check]:
+    required = required_parameters(require_seed, require_temperature)
+    needs = ", ".join(required)
     if not allow_remote:
         return [Check("fail", "remote", "openrouter is a remote host: pass --allow-remote")]
     client = client or httpx.Client(timeout=120.0)
@@ -149,10 +168,18 @@ def run_openrouter_doctor(
         return [*checks, Check("fail", "endpoints", f"listing failed: {exc}")]
     if not listed:
         return [*checks, Check("fail", "endpoints", f"{model!r} is not available on OpenRouter")]
-    usable = [e for e in listed if not missing_parameters(e)]
-    checks += [Check("ok" if e in usable else "warn", "endpoint", describe(e)) for e in listed]
+    if not require_seed:
+        checks.append(Check("warn", "seed", "--allow-no-seed: no seed is sent; recorded"))
+    if not require_temperature:
+        checks.append(
+            Check("warn", "temperature", "--allow-no-temperature: no temperature is sent; recorded")
+        )
+    usable = [e for e in listed if not missing_parameters(e, required)]
+    checks += [
+        Check("ok" if e in usable else "warn", "endpoint", describe(e, required)) for e in listed
+    ]
     if not usable:
-        return [*checks, Check("fail", "endpoints", "no host supports tools, seed and temperature")]
+        return [*checks, Check("fail", "endpoints", f"no host supports {needs}")]
 
     if not host:
         names = ", ".join(sorted({str(e.get("provider_name")) for e in usable}))
@@ -172,12 +199,9 @@ def run_openrouter_doctor(
             Check("fail", "host", f"{host!r} lists no {quantization} endpoint of {model}"),
         ]
     # What require_parameters enforces: only these endpoints can serve a request.
-    eligible = [e for e in candidates if not missing_parameters(e)]
+    eligible = [e for e in candidates if not missing_parameters(e, required)]
     if not eligible:
-        return [
-            *checks,
-            Check("fail", "host", f"{host!r}: no endpoint with tools, seed and temperature"),
-        ]
+        return [*checks, Check("fail", "host", f"{host!r}: no endpoint with {needs}")]
     quants = sorted({str(e.get("quantization") or "?") for e in eligible})
     if not quantization and len(quants) > 1:
         return [
@@ -209,12 +233,14 @@ def run_openrouter_doctor(
         Check(
             "ok",
             "host",
-            f"{len(eligible)} eligible {host}{pinned} endpoint(s) with tools, seed and "
-            f"temperature ({', '.join(_tag(e) for e in eligible)}); any of them may serve",
+            f"{len(eligible)} eligible {host}{pinned} endpoint(s) with {needs} "
+            f"({', '.join(_tag(e) for e in eligible)}); any of them may serve",
         )
     )
     checks.append(_price_check(model, host, eligible, pricing))
-    return checks + _probes(model, host, quantization, client, sleep)
+    return checks + _probes(
+        model, host, quantization, client, sleep, require_seed, require_temperature
+    )
 
 
 def _tag(endpoint: dict[str, Any]) -> str:
@@ -264,8 +290,11 @@ def _probes(
     quantization: str | None,
     client: httpx.Client,
     sleep: Callable[[float], None],
+    send_seed: bool = True,
+    send_temperature: bool = True,
 ) -> list[Check]:
-    """Probe calls retry 429 and 5xx like run calls (retry.py) before failing."""
+    """Probe calls retry 429 and 5xx like run calls (retry.py) before failing.
+    They send seed and temperature exactly when the run will."""
     if os.environ.get(LIVE_ENV) != "1":
         return [Check("skip", "tool calling", f"probe needs {LIVE_ENV}=1 (two chat calls)")]
     try:
@@ -295,6 +324,10 @@ def _probes(
         "stream": False,
         "provider": routing(host, quantization),
     }
+    if not send_seed:
+        params.pop("seed")
+    if not send_temperature:
+        params.pop("temperature")
     try:
         first = parse_completion(transport.send(params, "doctor/probe").body)
     except (ModelCallError, ModelRequestInvalid, ResponseShapeError) as exc:

@@ -117,17 +117,36 @@ def check_routing(
 
 
 class OpenRouterChatModel(OpenAICompatChatModel):
+    """`send_seed` / `send_temperature` False (CLI `--allow-no-seed`,
+    `--allow-no-temperature`) leave that field out of every request, for hosts
+    whose endpoints do not accept it (require_parameters would otherwise find no
+    endpoint). The defaults send both, so requests are unchanged."""
+
     provider = PROVIDER
 
-    def __init__(self, transport: Transport, host: str, quantization: str | None = None) -> None:
+    def __init__(
+        self,
+        transport: Transport,
+        host: str,
+        quantization: str | None = None,
+        *,
+        send_seed: bool = True,
+        send_temperature: bool = True,
+    ) -> None:
         super().__init__(transport, None)
         if not host:
             raise ValueError("openrouter needs a pinned host provider")
         self.host = host
         self.quantization = quantization
+        self.send_seed = send_seed
+        self.send_temperature = send_temperature
 
     def build_params(self, request: ChatRequest) -> dict[str, Any]:
         params = super().build_params(request)
+        if not self.send_seed:
+            params.pop("seed", None)
+        if not self.send_temperature:
+            params.pop("temperature", None)
         params["provider"] = routing(self.host, self.quantization)
         params["usage"] = {"include": True}  # OpenRouter reports usage.cost
         return params

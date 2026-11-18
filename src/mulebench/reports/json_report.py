@@ -178,6 +178,8 @@ def routing_totals(trials: Sequence[TrialResult]) -> RoutingTotals | None:
         retries=sum(c.retries for c in calls),
         calls_retried=sum(c.retries > 0 for c in calls),
         transient_errored_trials=dict(sorted((k or "", v) for k, v in transient.items())),
+        reasoning_tokens=sum(c.reasoning_tokens or 0 for c in calls),
+        calls_with_reasoning=sum(bool(c.reasoning_tokens) for c in calls),
     )
 
 

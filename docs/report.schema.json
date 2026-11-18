@@ -1424,6 +1424,30 @@
           "default": null,
           "title": "Extractor Context"
         },
+        "seed_supported": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seed Supported"
+        },
+        "temperature_supported": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Temperature Supported"
+        },
         "tool_schema_sha256": {
           "anyOf": [
             {
@@ -2097,6 +2121,16 @@
           "default": {},
           "title": "Transient Errored Trials",
           "type": "object"
+        },
+        "reasoning_tokens": {
+          "default": 0,
+          "title": "Reasoning Tokens",
+          "type": "integer"
+        },
+        "calls_with_reasoning": {
+          "default": 0,
+          "title": "Calls With Reasoning",
+          "type": "integer"
         }
       },
       "required": [

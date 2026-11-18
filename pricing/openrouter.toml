@@ -10,7 +10,7 @@
 # pinned endpoint's price.
 
 as_of = "2026-11-16"
-source = "OpenRouter endpoint listings (GET /api/v1/models/{id}/endpoints); highest eligible endpoint price per model and host (DekaLLM entry read 2026-11-17)"
+source = "OpenRouter endpoint listings (GET /api/v1/models/{id}/endpoints); highest eligible endpoint price per model and host (DekaLLM entry read 2026-11-17; pilot 10 entries read 2026-11-18)"
 
 # Not used by pilot 08: DeepInfra rate-limited gpt-oss-20b persistently
 # (HTTP 429 after 6 attempts, twice, 2026-11-17).
@@ -47,3 +47,31 @@ model = "qwen/qwen3-14b"
 host = "DeepInfra"
 input_per_mtok = 0.120
 output_per_mtok = 0.240
+
+# Pilot 10 (listing read 2026-11-18, GET /api/v1/models/{id}/endpoints, no key).
+# The host pin covers every endpoint tier of the host; tiers cannot be pinned by
+# the harness, so each entry is the highest eligible tier's price.
+
+# Anthropic host: one endpoint (tag anthropic); no seed, no temperature.
+[[price]]
+model = "anthropic/claude-sonnet-5.5"
+host = "Anthropic"
+input_per_mtok = 2.0
+output_per_mtok = 10.0
+
+# OpenAI host: tags openai/flex 0.5/2.5, openai 1/5, openai/fast 2/10 (all with
+# tools and seed, none with temperature); priced at openai/fast.
+[[price]]
+model = "openai/gpt-6.1-terra"
+host = "OpenAI"
+input_per_mtok = 2.0
+output_per_mtok = 10.0
+
+# Google AI Studio host: tags google-ai-studio/flex 0.375/1.875,
+# google-ai-studio 0.75/3.75, google-ai-studio/priority 1.35/6.75 (tools, seed
+# and temperature; internal reasoning priced as output); priced at priority.
+[[price]]
+model = "google/gemini-3.8-flash"
+host = "Google AI Studio"
+input_per_mtok = 1.35
+output_per_mtok = 6.75

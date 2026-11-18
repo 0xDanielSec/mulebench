@@ -452,15 +452,32 @@ def _add_openrouter_args(group: argparse._ActionsContainer) -> None:
         metavar="FILE",
         help="openrouter: local price table (default pricing/openrouter.toml)",
     )
+    group.add_argument(
+        "--allow-no-seed",
+        action="store_true",
+        help="openrouter: the host does not accept seed; send none and record seed_supported=false",
+    )
+    group.add_argument(
+        "--allow-no-temperature",
+        action="store_true",
+        help="openrouter: the host does not accept temperature; send none and record "
+        "temperature_supported=false",
+    )
 
 
 def _doctor(args: argparse.Namespace) -> int:
     if args.provider == "openrouter":
         return _doctor_openrouter(args)
-    if args.openrouter_host or args.openrouter_quantization or args.pricing:
+    if (
+        args.openrouter_host
+        or args.openrouter_quantization
+        or args.pricing
+        or args.allow_no_seed
+        or args.allow_no_temperature
+    ):
         return _error(
-            "--openrouter-host, --openrouter-quantization and --pricing only apply to "
-            "--provider openrouter"
+            "--openrouter-host, --openrouter-quantization, --pricing, --allow-no-seed and "
+            "--allow-no-temperature only apply to --provider openrouter"
         )
     try:
         from mulebench.agents.llm.http_transport import RemoteHostRefused
@@ -489,6 +506,8 @@ def _doctor_openrouter(args: argparse.Namespace) -> int:
         quantization=args.openrouter_quantization,
         pricing=args.pricing or DEFAULT_PRICING_FILE,
         allow_remote=args.allow_remote,
+        require_seed=not args.allow_no_seed,
+        require_temperature=not args.allow_no_temperature,
     )
     return print_checks(checks)
 
@@ -892,6 +911,8 @@ def _build_llm(
         "--openrouter-host": args.openrouter_host,
         "--openrouter-quantization": args.openrouter_quantization,
         "--pricing": args.pricing,
+        "--allow-no-seed": args.allow_no_seed or None,
+        "--allow-no-temperature": args.allow_no_temperature or None,
     }
     if args.provider == "openrouter":
         return _build_openrouter(args)
@@ -1159,10 +1180,23 @@ def _build_openrouter(
     else:
         transport = CassetteTransport(args.cassettes, "replay", known_errors=_known_errors(args))
 
-    temperature = 0.0 if args.temperature is None else args.temperature
-    seed = 0 if args.seed is None else args.seed
+    # --allow-no-seed / --allow-no-temperature: the field is left out of every
+    # request and recorded as None (a --seed / --temperature given anyway is
+    # ignored, so one shared argument list can serve every model).
+    temperature: float | None = None
+    if not args.allow_no_temperature:
+        temperature = 0.0 if args.temperature is None else args.temperature
+    seed: int | None = None
+    if not args.allow_no_seed:
+        seed = 0 if args.seed is None else args.seed
     agent = LLMAgent(
-        OpenRouterChatModel(transport, args.openrouter_host, args.openrouter_quantization),
+        OpenRouterChatModel(
+            transport,
+            args.openrouter_host,
+            args.openrouter_quantization,
+            send_seed=not args.allow_no_seed,
+            send_temperature=not args.allow_no_temperature,
+        ),
         model=args.model,
         effort="none",
         max_tokens=args.max_tokens or LOCAL_MAX_TOKENS,
@@ -1185,9 +1219,11 @@ def _build_openrouter(
         base_url=OPENROUTER_BASE_URL,
         temperature=temperature,
         seed=seed,
-        seed_derivation=SEED_DERIVATION,
+        seed_derivation=None if seed is None else SEED_DERIVATION,
         arg_coercion=args.arg_coercion,
         extractor_context=args.extractor_context,
+        seed_supported=not args.allow_no_seed,
+        temperature_supported=not args.allow_no_temperature,
         tool_schema_sha256=tool_schema_sha256(),
         role_prompts=role_prompts or None,
         role_prompt_sha256=role_prompt_hashes(prompts, role_prompts),

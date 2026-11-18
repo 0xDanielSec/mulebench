@@ -93,8 +93,11 @@ def test_malformed_tables_are_rejected(tmp_path: Path, text: str, error: str) ->
 def test_committed_table_is_valid_and_unpinned() -> None:
     table = load_price_table(ROOT / "pricing" / "openrouter.toml")
     assert table.models() == [
+        "anthropic/claude-sonnet-5.5",
+        "google/gemini-3.8-flash",
         "google/gemma-4-26b-a4b-it",
         "mistralai/mistral-small-3.2-24b-instruct",
+        "openai/gpt-6.1-terra",
         "openai/gpt-oss-20b",
         "qwen/qwen3-14b",
     ]
