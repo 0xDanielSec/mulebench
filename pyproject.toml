@@ -102,6 +102,12 @@ strict = true
 files = ["src", "tests", "scripts", "examples"]
 plugins = ["pydantic.mypy"]
 
+# matplotlib is in the optional `chart` group only (scripts/make_chart.py
+# imports it lazily); CI's mypy job runs without it.
+[[tool.mypy.overrides]]
+module = ["matplotlib", "matplotlib.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
