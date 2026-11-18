@@ -40,7 +40,7 @@ in the commit that resolves them.
 - [ ] **Package authors.** `[project]` has no `authors`/`maintainers`. Add a
   name (and an e-mail only if you want it on PyPI), or leave it out.
 - [ ] **What the sdist ships.** It currently includes tests, docs,
-  `CLAUDE.md`, `demo.tape`, `tools/` and `.github/`. Fine for reproducibility;
+  `CLAUDE.md`, `demo/demo.tape`, `tools/` and `.github/`. Fine for reproducibility;
   exclude any of them in `[tool.hatch.build.targets.sdist]` if you prefer a
   smaller archive.
 
@@ -55,7 +55,7 @@ in the commit that resolves them.
   frontier run, delegation finding: typed handoff fields stop injected
   instructions, not poisoned values), limitations (scripted agent, author-
   written scenarios), and regulatory mappings marked "to be reviewed".
-- [ ] **Demo GIF.** Record `demo.tape` (VHS) against the current version and
+- [ ] **Demo GIF.** Record `demo/demo.tape` (VHS) against the current version and
   add it to the README. Check that the run shown matches the current
   catalog.
 - [ ] **README refresh.** The quickstart comment still says "12 scenarios";

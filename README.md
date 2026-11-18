@@ -8,7 +8,11 @@ not by an LLM.**
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](pyproject.toml)
 
-<!-- demo GIF -->
+<p align="center">
+  <img src="docs/assets/demo.gif" width="720"
+       alt="Terminal session: verify the cassette archive's sha256, extract gemma-4-26b's recorded calls, and replay memory scenario 014a offline; the results table shows attack success 28/30.">
+  <br><em>Offline replay of recorded pilot 08 calls: no API key, no network.</em>
+</p>
 
 ## Key findings
 
