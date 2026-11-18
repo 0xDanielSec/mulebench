@@ -40,5 +40,5 @@ Enter
 Sleep 4s
 Set TypingSpeed 35ms
 
-Type "# 28/30 leaked through memory. Replay only: no call was sent; the cost line is what the original recording cost."
+Type "# 28/30 leaked through memory. Replay only: no call was sent; the cost line is the estimated cost of the original recording."
 Sleep 8s
