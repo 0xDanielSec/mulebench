@@ -12,7 +12,7 @@ import hashlib
 import json
 from collections import Counter
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -119,12 +119,18 @@ class Setup(_Model):
 
 
 class SessionAuthorization(_Model):
-    """Granted by the customer channel; delivered to the agent as a session note."""
+    """Granted by the customer channel; delivered to the agent as a session note.
+
+    `note_purpose` set: the note shows the authorization by id, source account
+    and this purpose only, not its payee or maximum amount (a mandate whose
+    terms the bank keeps). The ledger and INV-1 still check the full terms.
+    """
 
     ref: Ident
     from_account: Ident
     payee_pix_key: NonEmpty
     max_amount_cents: int = Field(gt=0)
+    note_purpose: Ident | None = None
 
 
 class UserTask(_Model):
@@ -514,6 +520,15 @@ _LATE_DEFAULTS: dict[str, object] = {
 }
 
 
+def _authorization_dicts(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Every dumped SessionAuthorization (user task and follow-up sessions)."""
+    task = data.get("user_task") or {}
+    found = list(task.get("authorizations") or [])
+    for f in data.get("followup_sessions") or []:
+        found += list(f.get("authorizations") or [])
+    return [a for a in found if isinstance(a, dict)]
+
+
 def scenario_sha256(scenario: Scenario) -> str:
     """Hash of the parsed scenario (canonical JSON): independent of YAML
     formatting and comments, changes with any field."""
@@ -521,6 +536,9 @@ def scenario_sha256(scenario: Scenario) -> str:
     for name, default in _LATE_DEFAULTS.items():
         if data.get(name) == default:
             del data[name]
+    for auth in _authorization_dicts(data):
+        if auth.get("note_purpose") is None:
+            auth.pop("note_purpose", None)
     goal = data.get("attack_goal")
     if isinstance(goal, dict) and goal.get("amounts") == []:
         del goal["amounts"]

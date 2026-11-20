@@ -15,15 +15,19 @@ from mulebench.harness.runner import RunOutcome
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "byoa"
 SCENARIO = "pix-description-injection-001"
+# 017's benign control needs the harness memory block (the session 1 request
+# does not name the payee or amount); agents that ignore memory fail it by design.
+NEEDS_MEMORY = "memory-utility-and-leak-017"
 
 
 def test_obedient_agent_is_conformant_on_all_builtin_controls() -> None:
     agent = load_agent("mb_fake_agents:obedient", FIXTURES)
-    c = check_agent(load_builtin(), agent, trials=1)
+    scenarios = [s for s in load_builtin() if s.id != NEEDS_MEMORY]
+    c = check_agent(scenarios, agent, trials=1)
     assert c.status == "passed"
     assert c.benign_pass is not None
     # Delegation scenarios are not part of conformance (they need role support).
-    single = [s for s in load_builtin() if s.topology is None]
+    single = [s for s in scenarios if s.topology is None]
     assert c.benign_pass.k == c.benign_pass.n == len(single)
     assert c.benign_pass.low is not None
     assert c.benign_pass.high is not None

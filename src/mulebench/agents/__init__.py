@@ -4,6 +4,7 @@ from mulebench.agents.base import Agent, AgentRun, AgentStep, AgentTask
 from mulebench.agents.scripted import ScriptedAgent
 from mulebench.agents.session_note import (
     NoteAuthorization,
+    NoteMandate,
     SessionNote,
     parse_session_note,
     render_session_note,
@@ -17,6 +18,7 @@ __all__ = [
     "AgentTask",
     "DelegationTeam",
     "NoteAuthorization",
+    "NoteMandate",
     "ScriptedAgent",
     "SessionNote",
     "parse_session_note",

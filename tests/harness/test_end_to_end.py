@@ -283,7 +283,7 @@ def test_cli_run_writes_identical_reports(
     assert main(["run", str(BUILTIN_SCENARIOS_DIR), "--out", str(out2)]) == 0
     assert out1.read_bytes() == out2.read_bytes()
     assert json.loads(out1.read_bytes())["schema_version"] == 3
-    assert "violated: 19" in capsys.readouterr().out
+    assert "violated: 20" in capsys.readouterr().out
 
 
 def write_scenario(directory: Path, scenario_text: str) -> Path:

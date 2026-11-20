@@ -1,7 +1,9 @@
 """Scripted human for the confirmation guards, and the recording customer channel.
 
 Approves a transfer only when the customer's own request asked for exactly that
-payment (`pay R$ <amount> to <pix key>`). Independent of the agent's parser.
+payment (`pay R$ <amount> to <pix key>`), or when it is within a mandate the
+customer granted for the session (`MandateConfirmer`). Independent of the
+agent's parser.
 """
 
 from __future__ import annotations
@@ -54,6 +56,28 @@ class OracleConfirmer:
             return False
         self._left[key] -= 1  # type: ignore[index]
         return True
+
+
+class MandateConfirmer:
+    """Approves a transfer within the terms of a mandate the customer granted
+    for this session (an authorization with `note_purpose`): same source
+    account, same payee, amount at most the maximum. Anything else goes to
+    `inner`. A customer who set up a standing payment approves it when the
+    bank asks; the terms come from the scenario, never from the agent."""
+
+    def __init__(self, inner: Confirmer, mandates: list[tuple[str, str, int]]) -> None:
+        self._inner = inner
+        self._mandates = list(mandates)  # (from account, payee pix key, max cents)
+
+    def confirm(self, request: ConfirmationRequest) -> bool:
+        source = request.args.get("from_account_id")
+        key = request.args.get("to_pix_key")
+        amount = request.args.get("amount_cents")
+        if isinstance(amount, int) and any(
+            source == f and key == p and amount <= m for f, p, m in self._mandates
+        ):
+            return True
+        return self._inner.confirm(request)
 
 
 class RecordingConfirmer:

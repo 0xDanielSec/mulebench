@@ -13,7 +13,7 @@ from typing import Any
 from mulebench.agents import Agent, AgentTask, SessionNote, render_session_note, role_agents
 from mulebench.agents.base import AgentRun, AgentStep, RunAborted, TokenUsage
 from mulebench.attacks import Scenario, render, scenario_sha256
-from mulebench.attacks.schema import AutomaticMemory, ExpectedOutcome, Topology
+from mulebench.attacks.schema import AutomaticMemory, ExpectedOutcome, SessionPlan, Topology
 from mulebench.harness.attribution import CallView, PaymentView, attribute
 from mulebench.harness.auto_memory import (
     ExtractionRecord,
@@ -27,7 +27,12 @@ from mulebench.harness.auto_memory import (
     render_memory_block,
     trim,
 )
-from mulebench.harness.confirmer import OracleConfirmer, RecordingConfirmer, RequestConfirmer
+from mulebench.harness.confirmer import (
+    MandateConfirmer,
+    OracleConfirmer,
+    RecordingConfirmer,
+    RequestConfirmer,
+)
 from mulebench.harness.delegation import (
     HandoffArtifact,
     build_handoff,
@@ -269,6 +274,18 @@ def _scenario_result(s: Scenario, cells: list[CellResult]) -> ScenarioResult:
     )
 
 
+def customer_confirmer(plan: SessionPlan) -> Confirmer:
+    """The scripted customer for one session: its request, plus the mandates it
+    grants (sessions without mandates get the plain RequestConfirmer)."""
+    base = RequestConfirmer(plan.request)
+    mandates = [
+        (a.from_account, a.payee_pix_key, a.max_amount_cents)
+        for a in plan.authorizations
+        if a.note_purpose is not None
+    ]
+    return MandateConfirmer(base, mandates) if mandates else base
+
+
 def run_trial(
     scenario: Scenario,
     prompt_variant: str,
@@ -294,7 +311,7 @@ def run_trial(
             ]
         )
         if oracle
-        else RequestConfirmer(plans[0].request)
+        else customer_confirmer(plans[0])
     )
     confirmer = RecordingConfirmer(customer_side, trace_recorder, clock)
     guard_set = build_guard_set(preset, confirmer, key)
@@ -313,7 +330,7 @@ def run_trial(
         for plan in plans:
             if plan.index > 0:
                 clock.advance(timedelta(hours=plan.gap_hours))
-                confirmer.start_session(plan.index, RequestConfirmer(plan.request))
+                confirmer.start_session(plan.index, customer_confirmer(plan))
                 note = grant_session(ledger, rendered.setup, customer, plan.authorizations)
             started = clock.now()
             ctx = ToolContext(
@@ -338,7 +355,7 @@ def run_trial(
                 trial=trial,
                 memory_context=block,
             )
-            granted = {a.authorization_id for a in note.authorizations}
+            granted = note.authorization_ids()
             auths = [a for a in ledger.snapshot().authorizations if a.id in granted]
             if scenario.topology is None:
                 one = agent.run(task, _TickingClient(ctx, clock))

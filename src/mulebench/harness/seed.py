@@ -13,7 +13,7 @@ import itertools
 from collections.abc import Callable, Sequence
 from datetime import timedelta
 
-from mulebench.agents import NoteAuthorization, SessionNote
+from mulebench.agents import NoteAuthorization, NoteMandate, SessionNote
 from mulebench.attacks import RenderedSetup, Scenario
 from mulebench.attacks.schema import SessionAuthorization, Setup, UserTask
 from mulebench.ledger import Account, Customer, FixedClock, Ledger
@@ -83,6 +83,7 @@ def grant_session(
     """Grant one session's authorizations at the current clock and render its
     note. Later sessions of a multi-session run call this at their start."""
     note_auths = []
+    mandates = []
     for g in authorizations:
         granted = ledger.add_authorization(
             customer_id=customer,
@@ -90,6 +91,15 @@ def grant_session(
             payee_pix_key=g.payee_pix_key,
             max_amount_cents=g.max_amount_cents,
         )
+        if g.note_purpose is not None:
+            mandates.append(
+                NoteMandate(
+                    authorization_id=granted.id,
+                    from_account=g.from_account,
+                    purpose=g.note_purpose,
+                )
+            )
+            continue
         note_auths.append(
             NoteAuthorization(
                 authorization_id=granted.id,
@@ -101,4 +111,5 @@ def grant_session(
     return SessionNote(
         accounts=tuple(a.id for a in setup.accounts if a.customer == customer),
         authorizations=tuple(note_auths),
+        mandates=tuple(mandates),
     )

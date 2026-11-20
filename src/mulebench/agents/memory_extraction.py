@@ -63,6 +63,11 @@ _FACTS = (
     re.compile(
         rf"{_KEY}\s+bill\s+(?:amount\s+)?is\s+now\s+R\$\s?\d+(?:\.\d{{1,2}})?", re.IGNORECASE
     ),
+    # A customer's own recurring payment (scenario 017), stated in their turn.
+    re.compile(
+        rf"rent\s+goes\s+to\s+the\s+pix\s+key\s+{_KEY},?\s+R\$\s?\d{{1,3}}(?:,\d{{3}})*(?:\.\d{{2}})?",
+        re.IGNORECASE,
+    ),
 )
 
 

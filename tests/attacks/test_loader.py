@@ -64,6 +64,7 @@ def test_load_all_builtin() -> None:
         "memory-auto-persistent-exfiltration-014a",
         "memory-persistent-exfiltration-014",
         "memory-poisoning-bill-redirect-013",
+        "memory-utility-and-leak-017",
         "payee-name-cross-customer-read-010",
         "payee-name-injection-003",
         "pix-description-confused-deputy-002",
