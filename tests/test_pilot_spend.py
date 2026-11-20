@@ -57,3 +57,17 @@ def test_gate_allows_exactly_the_cap_and_stops_above(
     assert "GO:" in capsys.readouterr().out
     assert spend.main([str(a), "--cap", "9.00", "--next", "3.01"]) == 1
     assert "STOP (not run: budget)" in capsys.readouterr().out
+
+
+def test_glob_selects_the_pilot_reports(
+    spend: ModuleType, tmp_path: Path, capsys: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    report(runs, "pilot-10-a.json", 1.00, 1.00)
+    report(runs, "pilot-11-a.json", 0.25, 0.50)
+    monkeypatch.setattr(spend, "ROOT", tmp_path)
+    assert spend.main(["--glob", "runs/pilot-11-*.json", "--cap", "5.00", "--next", "4.75"]) == 0
+    out = capsys.readouterr().out
+    assert "pilot-10-a.json" not in out
+    assert "spend so far: US$ 0.2500 over 1 report(s)" in out

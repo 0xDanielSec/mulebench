@@ -1,9 +1,10 @@
-"""Real spend so far, from run reports, and the pilot 10 phase-2 budget gate.
+"""Real spend so far, from run reports, and the budget gate of pilots 10 and 11.
 
 Usage:
-    python scripts/pilot_spend.py [--cap 9.00] [--next 1.40] [REPORT ...]
+    python scripts/pilot_spend.py [--cap 9.00] [--next 1.40] [--glob GLOB] [REPORT ...]
 
-With no REPORT, every `runs/pilot-10-*.json` is read. For each report it prints
+With no REPORT, every report matching `--glob` (default `runs/pilot-10-*.json`)
+is read. For each report it prints
 OpenRouter's own cost (`routing.provider_cost_usd`, the real spend); when a
 report has no provider cost (a call without `usage.cost`), its table cost
 (`cost_totals.cost_usd`, never lower than the price paid) is used instead and
@@ -40,8 +41,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("reports", nargs="*", type=Path)
     parser.add_argument("--cap", type=float, default=9.00, help="total real-spend cap (US$)")
     parser.add_argument("--next", type=float, help="the next run's cap (US$): gate on it")
+    parser.add_argument(
+        "--glob", default=DEFAULT_GLOB, help="reports to read when none is given (repo-relative)"
+    )
     args = parser.parse_args(argv)
-    paths = args.reports or sorted(ROOT.glob(DEFAULT_GLOB))
+    paths = args.reports or sorted(ROOT.glob(args.glob))
     paths = [p for p in paths if not p.name.endswith(".checkpoint.jsonl")]
     total = 0.0
     for path in paths:
