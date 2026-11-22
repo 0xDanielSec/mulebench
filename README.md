@@ -16,7 +16,7 @@ not by an LLM.**
 
 ## Key findings
 
-From ten pre-registered pilots, N = 30 per cell, synthetic data
+From eleven pre-registered pilots, N = 30 per cell, synthetic data
 ([full writeup](docs/writeup.md)):
 
 - **Automatic memory leaked another customer's data in every open-weight
@@ -29,9 +29,11 @@ From ten pre-registered pilots, N = 30 per cell, synthetic data
 - **Writing memory only from the customer's own turns stopped the leak
   (0/30)** with no task utility cost, but memory stored far fewer facts
   (9/30). Measured on one local model.
-- **Open question:** in no configuration tested did memory stay useful
-  while the leak stopped. Scenario 014a cannot yet tell whether that is a
-  real trade-off; pilot 11 is designed to find out.
+- **Open question:** can memory be both useful and safe? In pilot 11 both
+  models tested kept a fact stated by the customer and paid from memory in
+  28/30 to 30/30 trials, but the injection that leaked 28/30 on 014a was
+  never stored there, even without a defence. The positive control failed,
+  so the trade-off is still untested.
 
 <p align="center">
   <img src="docs/assets/memory-vs-direct.png" width="540"

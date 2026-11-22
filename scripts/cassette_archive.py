@@ -5,9 +5,10 @@ Usage:
     uv run python scripts/cassette_archive.py verify   # rebuild from runs/cassettes/, compare hash
     uv run python scripts/cassette_archive.py extract  # check hash, then extract to runs/cassettes/
 
-Three archives, chosen with `--archive` (default `pilots-01-08`):
+Four archives, chosen with `--archive` (default `pilots-01-08`):
 `pilots-01-08.tar.xz` (pilots 01 to 08; frozen, its sha256 is cited by the pilot 08
-document), `pilot-09.tar.xz` (pilot 09 only) and `pilot-10.tar.xz` (pilot 10 only).
+document), `pilot-09.tar.xz` (pilot 09 only), `pilot-10.tar.xz` (pilot 10 only) and
+`pilot-11.tar.xz` (pilot 11 only).
 Each archive holds only the cassette directories of its own pilots, so adding a
 pilot never changes the hash of an earlier archive.
 
@@ -45,6 +46,7 @@ ARCHIVES: dict[str, str] = {
     "pilots-01-08": "pilot-0[1-8]-*",
     "pilot-09": "pilot-09-*",
     "pilot-10": "pilot-10-*",
+    "pilot-11": "pilot-11-*",
 }
 DEFAULT_ARCHIVE = "pilots-01-08"
 ARCHIVE = ARCHIVE_DIR / f"{DEFAULT_ARCHIVE}.tar.xz"

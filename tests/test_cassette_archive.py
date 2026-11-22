@@ -207,7 +207,7 @@ def test_prepublish_scans_archive_members(ca: ModuleType, tmp_path: Path) -> Non
     assert rejected.kind == "archive"
 
 
-@pytest.mark.parametrize("name", ["pilot-09", "pilot-10"])
+@pytest.mark.parametrize("name", ["pilot-09", "pilot-10", "pilot-11"])
 def test_separate_archive_matches_its_hash_and_rebuilds(ca: ModuleType, name: str) -> None:
     archive, sha_file = ca.archive_paths(name)
     assert sha_file.read_bytes().endswith(f"  {name}.tar.xz\n".encode())

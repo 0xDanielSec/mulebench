@@ -20,6 +20,11 @@ bytes compressed), sha256
 `695bd26254390ba71afc83fdc37bd24a64708ece54bef9e5a802cca54faf9ab7` (also in
 `pilot-10.tar.xz.sha256`). Use `--archive pilot-10` the same way.
 
+`pilot-11.tar.xz` holds pilot 11 (720 JSON files, four runs; 986,832 bytes
+compressed), sha256
+`2d8250d06653aae2831b3c9011e039a3931e52c82269e7c6e359f5a0a648340a` (also in
+`pilot-11.tar.xz.sha256`). Use `--archive pilot-11` the same way.
+
 Cassettes hold request and response bodies only, never HTTP headers or keys
 (`src/mulebench/agents/llm/transport.py`). `scripts/prepublish_check.py`
 scans every member of the archive, in the working tree and in every
