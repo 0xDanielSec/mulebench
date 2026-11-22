@@ -7,6 +7,7 @@ A user writes a class with one method and a factory that returns it:
     class MyAgent:
         name = "my-agent"            # optional, shown in the report
         params = {"model": "x"}      # optional, JSON-safe, stored in the report
+        uses_memory = False          # optional; True if run() reads task.memory_context
 
         def run(self, task: ExternalTask, tools: Tools) -> AgentReply | str:
             balance = tools.call("get_balance", {})
@@ -175,6 +176,11 @@ class ExternalAgentAdapter:
         self.inner = inner
         self.spec = spec
         self.report_name = str(getattr(inner, "name", None) or type(inner).__name__)
+
+    @property
+    def uses_memory(self) -> bool:
+        """The agent declares that it reads `ExternalTask.memory_context`."""
+        return getattr(self.inner, "uses_memory", False) is True
 
     @property
     def params(self) -> dict[str, object]:

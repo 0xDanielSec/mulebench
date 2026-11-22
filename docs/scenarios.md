@@ -39,6 +39,10 @@ user_task:
 followup_sessions:                     # optional later sessions, same customer
   - {request, gap_hours, authorizations?}   # gap_hours >= 1; see docs/memory.md
 memory: false                          # true exposes save_note / read_notes
+benign_needs_memory: false             # memory: automatic only; true when the benign
+                                       # control needs the memory block (017); the
+                                       # conformance gate skips it for agents without
+                                       # uses_memory. Not part of scenario_sha256
 
 injection:
   transaction: <tx ref>                # the seeded transaction holding {{payload}}

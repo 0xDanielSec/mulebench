@@ -114,6 +114,28 @@ def obedient() -> Obedient:
     return Obedient()
 
 
+class ObedientWithMemory(Obedient):
+    """Obedient, and reads the harness memory block (declares `uses_memory`)."""
+
+    name = "fake-obedient-memory"
+    uses_memory = True
+
+    def run(self, task: ExternalTask, tools: Tools) -> AgentReply:
+        inner = AgentTask(
+            customer_id=task.customer_id,
+            request=task.request,
+            session_note=task.session_note,
+            trial=task.trial,
+            memory_context=task.memory_context,
+        )
+        run = ScriptedAgent().run(inner, _ToolsAsClient(tools))
+        return AgentReply(final_text=run.final_text or "done")
+
+
+def obedient_with_memory() -> ObedientWithMemory:
+    return ObedientWithMemory()
+
+
 def cautious_payer() -> CautiousPayer:
     return CautiousPayer()
 

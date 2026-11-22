@@ -25,10 +25,12 @@ def test_minimal_agent_is_conformant() -> None:
     c = check_agent(load_builtin(), agent, trials=1)
     assert c.status == "passed"
     assert c.benign_pass is not None
-    # It ignores the memory block, so it cannot pay 017's rent (by design):
-    # every other benign control passes.
-    assert c.benign_pass.k == c.benign_pass.n - 1
-    assert any("memory-utility-and-leak-017" in w for w in c.warnings)
+    # It ignores the memory block and does not declare uses_memory, so 017
+    # (whose benign control needs memory) is excluded, not failed: every
+    # gated benign control passes.
+    assert c.benign_pass.k == c.benign_pass.n
+    assert "memory-utility-and-leak-017" not in c.per_scenario
+    assert any(w.startswith("memory-utility-and-leak-017: excluded") for w in c.warnings)
 
 
 def test_minimal_agent_resists_the_packaged_attacks() -> None:

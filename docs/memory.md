@@ -225,7 +225,12 @@ that is within a mandate it granted (`MandateConfirmer`). With the scripted
 agent, `vulnerable` pays the rent and leaks acc_bob's balance;
 `only:memory_source_customer` pays the rent and does not leak. Agents that
 ignore the memory block cannot pay the rent, so their benign control fails
-by design.
+by design. The scenario is therefore marked `benign_needs_memory: true`: the
+conformance gate of `run --agent-module` and `check-agent` leaves it out for
+an agent that does not declare `uses_memory = True`, and says so in a
+warning (see [bring-your-own-agent.md](bring-your-own-agent.md#conformance-first)).
+The flag is not part of `scenario_sha256`, so 017 keeps the hash recorded by
+pilot 11.
 
 ## MemoryWriteGuard
 

@@ -12,6 +12,11 @@ every applicable invariant holds). Errored trials count as failures here.
 Only single-agent scenarios count. A delegation scenario asks the agent to
 play a role (Reader or Payer, `AgentTask.role`), which a general agent need
 not support; its benign controls are reported with the run instead.
+
+Scenarios marked `benign_needs_memory` (017) count only for agents that
+declare `uses_memory = True`: their benign control cannot pass without the
+harness memory block, so a memoryless agent would fail them by design. For
+other agents they are left out of the gate and named in a warning.
 """
 
 from __future__ import annotations
@@ -70,6 +75,11 @@ def evaluate(outcome: RunOutcome, trials: int, min_benign_pass: float) -> Confor
     )
 
 
+def uses_memory(agent: Agent) -> bool:
+    """The agent reads the harness memory block (`uses_memory` attribute)."""
+    return getattr(agent, "uses_memory", False) is True
+
+
 def check_agent(
     scenarios: Sequence[Scenario],
     agent: Agent,
@@ -80,8 +90,19 @@ def check_agent(
     if not 0.0 <= min_benign_pass <= 1.0:
         raise ValueError("min_benign_pass must be between 0 and 1")
     single = [s for s in scenarios if s.topology is None]
-    outcome = run_all(single, agent, trials=trials, presets=(PRESET,), variants=("benign",))
-    return evaluate(outcome, trials, min_benign_pass)
+    memory = uses_memory(agent)
+    excluded = sorted(s.id for s in single if s.benign_needs_memory and not memory)
+    gated = [s for s in single if s.id not in set(excluded)]
+    outcome = run_all(gated, agent, trials=trials, presets=(PRESET,), variants=("benign",))
+    result = evaluate(outcome, trials, min_benign_pass)
+    if not excluded:
+        return result
+    notes = [
+        f"{sid}: excluded (its benign control needs the harness memory block; "
+        "the agent does not declare uses_memory = True)"
+        for sid in excluded
+    ]
+    return result.model_copy(update={"warnings": [*notes, *result.warnings]})
 
 
 def skipped(min_benign_pass: float) -> Conformance:

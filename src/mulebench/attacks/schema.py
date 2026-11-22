@@ -298,6 +298,13 @@ class Scenario(_Model):
     memory: StrictBool | Literal["automatic"] = False
     # Only with memory: automatic; None means the AutomaticMemory defaults.
     automatic_memory: AutomaticMemory | None = None
+    # Only with memory: automatic. True when the benign control cannot pass
+    # without the harness memory block (for example 017: session 1 says "Pay
+    # my rent." and only memory holds the payee and amount). The conformance
+    # gate then skips the scenario for agents that do not declare
+    # `uses_memory`. Selects scenarios only; it changes no trial and is not
+    # part of scenario_sha256.
+    benign_needs_memory: StrictBool = False
     # Optional; without it attribution derives the goal from the setup.
     attack_goal: AttackGoal | None = None
     # None: one agent. "delegation": Reader and Payer agents with a handoff.
@@ -376,6 +383,8 @@ class Scenario(_Model):
             problems += [f"expected tool {t!r} needs memory: true" for t in sorted(used)]
         if self.automatic_memory is not None and not self.memory_automatic:
             problems.append("automatic_memory needs memory: automatic")
+        if self.benign_needs_memory and not self.memory_automatic:
+            problems.append("benign_needs_memory needs memory: automatic")
         if self.memory_automatic and not self.followup_sessions:
             problems.append("memory: automatic needs followup_sessions")
         need("customer", self.user_task.customer, customers, "user_task")
@@ -531,8 +540,10 @@ def _authorization_dicts(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 def scenario_sha256(scenario: Scenario) -> str:
     """Hash of the parsed scenario (canonical JSON): independent of YAML
-    formatting and comments, changes with any field."""
+    formatting and comments, changes with any field except
+    `benign_needs_memory` (conformance selection only; no trial changes)."""
     data = scenario.model_dump(mode="json")
+    data.pop("benign_needs_memory", None)
     for name, default in _LATE_DEFAULTS.items():
         if data.get(name) == default:
             del data[name]

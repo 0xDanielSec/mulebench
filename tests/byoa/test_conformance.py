@@ -21,13 +21,16 @@ NEEDS_MEMORY = "memory-utility-and-leak-017"
 
 
 def test_obedient_agent_is_conformant_on_all_builtin_controls() -> None:
+    # A memoryless agent: the memory-dependent control (017) is excluded, not failed.
     agent = load_agent("mb_fake_agents:obedient", FIXTURES)
-    scenarios = [s for s in load_builtin() if s.id != NEEDS_MEMORY]
+    scenarios = load_builtin()
     c = check_agent(scenarios, agent, trials=1)
     assert c.status == "passed"
     assert c.benign_pass is not None
+    assert NEEDS_MEMORY not in c.per_scenario
+    assert any(w.startswith(f"{NEEDS_MEMORY}: excluded") for w in c.warnings)
     # Delegation scenarios are not part of conformance (they need role support).
-    single = [s for s in scenarios if s.topology is None]
+    single = [s for s in scenarios if s.topology is None and not s.benign_needs_memory]
     assert c.benign_pass.k == c.benign_pass.n == len(single)
     assert c.benign_pass.low is not None
     assert c.benign_pass.high is not None
@@ -142,3 +145,67 @@ def test_viewer_shows_conformance(tmp_path: Path) -> None:
     main([*args, "--skip-conformance", "--out", str(out)])
     site = build_site([("r", load_any(out))])
     assert "skipped (--skip-conformance)" in site["r1/index.html"]
+
+
+def test_builtin_memory_dependent_scenarios_are_marked() -> None:
+    marked = {s.id for s in load_builtin() if s.benign_needs_memory}
+    assert marked == {NEEDS_MEMORY}
+    # 014a's benign control does not need memory: it stays in the gate.
+    assert all(s.memory_automatic for s in load_builtin() if s.benign_needs_memory)
+
+
+def test_agent_that_uses_memory_is_checked_on_017_and_passes() -> None:
+    agent = load_agent("mb_fake_agents:obedient_with_memory", FIXTURES)
+    scenarios = [s for s in load_builtin() if s.id == NEEDS_MEMORY]
+    c = check_agent(scenarios, agent, trials=2)
+    assert c.status == "passed"
+    assert c.per_scenario[NEEDS_MEMORY].k == 2
+    assert not any("excluded" in w for w in c.warnings)
+
+
+def test_memoryless_agent_would_fail_017_if_it_were_gated() -> None:
+    # Why the exclusion exists: without the memory block the rent is never paid.
+    from mulebench.harness import run_all
+
+    agent = load_agent("mb_fake_agents:obedient", FIXTURES)
+    outcome = run_all(
+        [s for s in load_builtin() if s.id == NEEDS_MEMORY],
+        agent,
+        presets=("vulnerable",),
+        variants=("benign",),
+    )
+    trials = [t for s in outcome.results for c in s.cells for t in c.trials]
+    assert trials
+    assert not any(t.benign_pass for t in trials)
+
+
+def test_only_memory_dependent_scenarios_gives_an_empty_failed_gate() -> None:
+    agent = load_agent("mb_fake_agents:obedient", FIXTURES)
+    c = check_agent([s for s in load_builtin() if s.id == NEEDS_MEMORY], agent, trials=1)
+    assert c.status == "failed"
+    assert c.per_scenario == {}
+    assert any("excluded" in w for w in c.warnings)
+
+
+def test_benign_needs_memory_requires_automatic_memory() -> None:
+    from mulebench.attacks.schema import Scenario
+
+    base = next(s for s in load_builtin() if s.id == SCENARIO)
+    data = base.model_dump(mode="json")
+    data["benign_needs_memory"] = True
+    with pytest.raises(ValueError, match="benign_needs_memory needs memory: automatic"):
+        Scenario.model_validate(data)
+
+
+def test_benign_needs_memory_does_not_change_the_scenario_hash() -> None:
+    from mulebench.attacks.schema import Scenario, scenario_sha256
+
+    s017 = next(s for s in load_builtin() if s.id == NEEDS_MEMORY)
+    # Recorded by pilot 11 before the flag existed.
+    assert scenario_sha256(s017) == (
+        "586bf6eae68bba8883f255eaa24c64fe869baebb3acf43cabf419551a12305af"
+    )
+    unflagged = Scenario.model_validate(
+        {**s017.model_dump(mode="json"), "benign_needs_memory": False}
+    )
+    assert scenario_sha256(unflagged) == scenario_sha256(s017)
