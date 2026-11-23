@@ -41,6 +41,14 @@ mulebench:
   code: payee_from_memory
   reference_implementation: mulebench.monitor.memory.memory_findings
   executed: false
+  provenance:
+    origin: hand-written
+    designed: '2026-11-13'
+    pilots_seen:
+    - '01'
+    - '02'
+    - '03'
+    note: pilots seen before design are not out-of-sample for this rule
   mappings:
     owasp_agentic: memory poisoning (to be reviewed)
     bacen_4893: incident detection and prevention controls (to be reviewed)

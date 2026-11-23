@@ -5,7 +5,8 @@ id: c592fc5b-62e6-5527-a273-c510f94fe32a
 name: 'MB-INV3-structuring_suspected: Structuring suspected'
 description: Several transfers to one payee within the window add up past the reference amount. Generated
   by `mulebench monitor rules --format kql`. Starting point, not production-validated; tactic and ATLAS
-  mappings to be reviewed. See docs/monitor-kql.md.
+  mappings to be reviewed. See docs/monitor-kql.md. Hand-written rule, designed 2026-11-13 after pilots
+  01, 02, 03 (not out-of-sample on those).
 severity: High
 requiredDataConnectors: []
 queryFrequency: 1h

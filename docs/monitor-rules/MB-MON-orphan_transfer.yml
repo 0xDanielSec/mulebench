@@ -42,4 +42,12 @@ mulebench:
   code: orphan_transfer
   reference_implementation: mulebench.monitor.engine
   executed: false
+  provenance:
+    origin: hand-written
+    designed: '2026-11-13'
+    pilots_seen:
+    - '01'
+    - '02'
+    - '03'
+    note: pilots seen before design are not out-of-sample for this rule
   mappings: {}

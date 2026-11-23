@@ -38,6 +38,14 @@ mulebench:
   code: exact_dispute_reason
   reference_implementation: mulebench.disclosure.check_disclosure
   executed: false
+  provenance:
+    origin: hand-written
+    designed: '2026-11-13'
+    pilots_seen:
+    - '01'
+    - '02'
+    - '03'
+    note: pilots seen before design are not out-of-sample for this rule
   mappings:
     owasp_agentic: sensitive information disclosure (to be reviewed)
     lgpd: security of personal data, disclosure to third parties (to be reviewed)

@@ -40,6 +40,22 @@ mulebench:
   code: foreign_reference_write
   reference_implementation: mulebench.monitor.memory.memory_findings
   executed: false
+  provenance:
+    origin: hand-written
+    designed: '2026-11-22'
+    pilots_seen:
+    - '01'
+    - '02'
+    - '03'
+    - '04'
+    - '05'
+    - '06'
+    - '07'
+    - 08
+    - 09
+    - '10'
+    - '11'
+    note: pilots seen before design are not out-of-sample for this rule
   mappings:
     owasp_agentic: memory poisoning (to be reviewed)
     bacen_4893: incident detection and prevention controls (to be reviewed)

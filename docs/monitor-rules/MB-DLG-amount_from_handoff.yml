@@ -46,6 +46,14 @@ mulebench:
   code: amount_from_handoff
   reference_implementation: mulebench.monitor.delegation.delegation_findings
   executed: false
+  provenance:
+    origin: hand-written
+    designed: '2026-11-13'
+    pilots_seen:
+    - '01'
+    - '02'
+    - '03'
+    note: pilots seen before design are not out-of-sample for this rule
   mappings:
     owasp_agentic: insecure inter-agent communication; agent goal hijack (to be reviewed)
     bacen_4893: incident detection and prevention controls (to be reviewed)

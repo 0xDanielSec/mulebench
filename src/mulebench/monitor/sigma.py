@@ -277,6 +277,12 @@ def rule_document(rule: Rule) -> dict[str, Any]:
             "code": rule.code,
             "reference_implementation": _IMPL[rule.family],
             "executed": False,
+            "provenance": {
+                "origin": rule.origin,
+                "designed": rule.designed,
+                "pilots_seen": list(rule.pilots_seen),
+                "note": "pilots seen before design are not out-of-sample for this rule",
+            },
             "mappings": _MAPPINGS[rule.family],
         },
     }

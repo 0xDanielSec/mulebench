@@ -5,7 +5,8 @@ id: 76174888-186d-5730-8afd-30a56a37c816
 name: 'MB-INV3-daily_limit_exceeded: Daily limit exceeded'
 description: Agent transfers from one account exceed its daily limit (Sao Paulo calendar day). Generated
   by `mulebench monitor rules --format kql`. Starting point, not production-validated; tactic and ATLAS
-  mappings to be reviewed. See docs/monitor-kql.md.
+  mappings to be reviewed. See docs/monitor-kql.md. Hand-written rule, designed 2026-11-13 after pilots
+  01, 02, 03 (not out-of-sample on those).
 severity: High
 requiredDataConnectors: []
 queryFrequency: 1h

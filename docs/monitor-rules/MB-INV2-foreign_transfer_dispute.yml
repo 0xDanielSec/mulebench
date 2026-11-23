@@ -36,6 +36,14 @@ mulebench:
   code: foreign_transfer_dispute
   reference_implementation: mulebench.invariants.isolation.CustomerIsolation
   executed: false
+  provenance:
+    origin: hand-written
+    designed: '2026-11-13'
+    pilots_seen:
+    - '01'
+    - '02'
+    - '03'
+    note: pilots seen before design are not out-of-sample for this rule
   mappings:
     owasp_agentic: tool misuse; identity and privilege abuse (to be reviewed)
     lgpd: security of personal data, access by unauthorized parties (to be reviewed)
