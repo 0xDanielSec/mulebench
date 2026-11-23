@@ -662,7 +662,7 @@ MbCalls
 | extend CustomerId = SessionCustomer, CallSeq = pack_array(Seq), TransferIds = dynamic([]),
     Accounts = dynamic([]), AmountCents = long(null)
 {_emit("MB-DLG-tainted_handoff")}"""
-    q["MB-DLG-amount_from_handoff"] = f"""{_preamble("MbCalls", "MbSessions")}
+    q["MB-DLG-amount_from_handoff"] = f"""{_preamble("MbAuths", "MbCalls", "MbSessions")}
 let MbPays = MbCalls
     | where Tool == "transfer_pix" and Outcome in ("ok", "denied")
         and gettype(Args.amount_cents) == "long"
@@ -672,11 +672,15 @@ let MbPays = MbCalls
     | extend Pad = iff(Frac < 10, strcat("0", tostring(Frac)), tostring(Frac))
     | extend Dot = strcat(tostring(Amount / 100), ".", Pad),
         Comma = strcat(tostring(Amount / 100), ",", Pad), Raw = tostring(Amount);
+// Number tokens of a text, so a spelling matches only on digit boundaries
+// (1234 does not match inside 12340).
+let MbNumbers = (s: string) {{ extract_all(@"([0-9]+(?:[.,][0-9][0-9])?)", s) }};
+let MbSpelled = (t: dynamic, dot: string, comma: string, raw: string) {{
+    set_has_element(t, dot) or set_has_element(t, comma) or set_has_element(t, raw) }};
 let MbFromHandoff = MbPays
     | join kind=inner ({TABLE} | where EventType == "handoff"
-        | project SessionId, HandoffSeq = Seq, HandoffText = Text) on SessionId
-    | where HandoffSeq < Seq and (HandoffText contains_cs Dot or HandoffText contains_cs Comma
-        or HandoffText contains_cs Raw)
+        | project SessionId, HandoffSeq = Seq, HandoffTokens = MbNumbers(Text)) on SessionId
+    | where HandoffSeq < Seq and MbSpelled(HandoffTokens, Dot, Comma, Raw)
     | summarize TimeGenerated = max(TimeGenerated) by SessionId, Seq, Amount, Dot, Comma, Raw;
 let MbStructured = MbFromHandoff
     | join kind=inner (MbCalls | where Outcome == "ok" and isnotnull(Result)
@@ -687,12 +691,18 @@ let MbStructured = MbFromHandoff
     | distinct SessionId, Seq;
 let MbSaid = MbFromHandoff
     | join kind=inner ({TABLE} | where EventType == "customer_message"
-        | project SessionId, Said = Text) on SessionId
-    | where Said contains_cs Dot or Said contains_cs Comma or Said contains_cs Raw
+        | project SessionId, SaidTokens = MbNumbers(Text)) on SessionId
+    | where MbSpelled(SaidTokens, Dot, Comma, Raw)
+    | distinct SessionId, Seq;
+let MbGranted = MbFromHandoff
+    | join kind=inner MbSessions on SessionId
+    | join kind=inner MbAuths on $left.SessionCustomer == $right.AuthCustomer
+    | where AuthMax == Amount
     | distinct SessionId, Seq;
 MbFromHandoff
 | join kind=leftanti MbStructured on SessionId, Seq
 | join kind=leftanti MbSaid on SessionId, Seq
+| join kind=leftanti MbGranted on SessionId, Seq
 | join kind=leftouter MbSessions on SessionId
 | extend CustomerId = SessionCustomer, CallSeq = pack_array(Seq), TransferIds = dynamic([]),
     Accounts = dynamic([]), AmountCents = long(null)

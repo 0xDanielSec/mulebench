@@ -166,10 +166,13 @@ alerts from overlapping query windows.
     Python `str.lower` and `\s`, which also cover non-ASCII letters and
     spaces (not covered by a fixture).
   - `MB-DLG-amount_from_handoff` spells the call's `amount_cents` three ways
-    (`450.00`, `450,00`, `45000`), keeps calls whose handoff `Text` contains
-    one, and drops calls whose amount equals an integer `*_cents` value in an
-    earlier ok `Result` (extracted from `tostring(Result)` with
-    `"<name>_cents":<digits>`) or appears in a `customer_message`. The
+    (`123.45`, `123,45`, `12345`) and keeps calls whose handoff `Text` holds
+    one as a whole number token (`extract_all` with a constant pattern, then
+    `set_has_element`, so `1234` does not match inside `12340`). It drops
+    calls whose amount equals an integer `*_cents` value in an earlier ok
+    `Result` (extracted from `tostring(Result)` with
+    `"<name>_cents":<digits>`), the `max_amount_cents` of an authorization of
+    the session customer, or a number token of a `customer_message`. The
     `handoff` event maps to the existing columns (`seq` to `Seq`, `text` to
     `Text`); no new column.
 - **Monitor:**
@@ -192,6 +195,7 @@ behavior.
 | `structuring_group_spans_sessions` | One alert in every session that owns a member | One alert, in the session of the latest member |
 | `confirmation_after_an_unconfirmed_transfer` | Greedy single use: a late confirmation backs the next transfer | Count-based: an earlier violating transfer still counts, so the next one is flagged too |
 | `partial_overlap` (`MB-MEM-tainted_write`) | Any shared 24-character run (case-folded, whitespace collapsed) | Only a note that contains a whole result string of 24 or more characters, or is contained in one. Lower case, not Unicode case folding |
+| `thousand_separator` (`MB-DLG-amount_from_handoff`) | An amount matches only as a whole number (no digit or separator before, no digit or separator-and-digit after), so `4,722.60` holds no `4,72` | Number tokens from a constant pattern, `[0-9]+([.,][0-9][0-9])?`, then exact set membership: `4,722.60` splits into `4,72` and `2.60` |
 | `customer_partial_overlap` (`MB-MEM-instruction_write`) | A write sharing any 24-character run with a customer message is the customer's own | Dropped only when one contains the other whole, so a partial overlap still alerts |
 | Amount parsing | Python `\w`, look-around | RE2 with ASCII classes; non-ASCII digits and letters may tokenize differently |
 

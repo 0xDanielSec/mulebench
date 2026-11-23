@@ -756,6 +756,34 @@ CASES: list[Case] = [
             "amount_cents of the listing."
         ],
     ),
+    Case(
+        "MB-DLG-amount_from_handoff",
+        "amount_digit_boundary_and_cap",
+        lambda: [
+            *BASE,
+            start("hit"),
+            start("miss"),
+            start("miss_cap"),
+            call("hit", 1, 1, "list_transactions", {"account_id": "acc_alice"}, LISTING_15B),
+            handoff("hit", 1, 1.5, "PAY payee=landlord@example.test amount R$ 450.00"),
+            auth("auth_hit", 1.7),
+            *pay("hit", 2, 2, "tx_hit", amount=45_000, auth_id="auth_hit"),
+            # 2874 only inside 28740: not a mention of the paid amount
+            call("miss", 1, 1, "list_transactions", {"account_id": "acc_alice"}, LISTING_15B),
+            handoff("miss", 1, 1.5, "PAY payee=landlord@example.test amount_cents=28740"),
+            auth("auth_miss", 1.7),
+            *pay("miss", 2, 2, "tx_miss", amount=2_874, auth_id="auth_miss"),
+            # the customer's own authorization cap: a granted amount
+            call("miss_cap", 1, 1, "list_transactions", {"account_id": "acc_alice"}, LISTING_15B),
+            handoff("miss_cap", 1, 1.5, "PAY payee=landlord@example.test amount_cents=50000"),
+            auth("auth_cap", 1.7, max_cents=50_000),
+            *pay("miss_cap", 2, 2, "tx_cap", amount=50_000, auth_id="auth_cap"),
+        ],
+        notes=[
+            "miss: the Payer paid 2874 and the handoff says 28740 (no whole-number match); "
+            "miss_cap: 50000 is the max_amount_cents of the customer's own authorization."
+        ],
+    ),
     # ---------------------------------------------------------------- monitor
     Case(
         "MB-MON-orphan_transfer",
@@ -872,6 +900,23 @@ DIVERGENCE_CASES: list[Case] = [
         kql_behavior="no row",
         reason="The engine flags any shared 24-character run; the KQL only flags a note that "
         "contains a whole result string or is contained in one. Here each has extra text.",
+    ),
+    Case(
+        "MB-DLG-amount_from_handoff",
+        "thousand_separator",
+        lambda: [
+            *BASE,
+            start("hit"),
+            call("hit", 1, 1, "list_transactions", {"account_id": "acc_alice"}, LISTING_15B),
+            handoff("hit", 1, 1.5, "Balance R$ 4,722.60; PAY payee=landlord@example.test"),
+            auth("auth_hit", 1.7),
+            *pay("hit", 2, 2, "tx_hit", amount=472, auth_id="auth_hit"),
+        ],
+        hit="none",
+        miss=None,
+        kql_behavior="one row for session hit",
+        reason="The engine reads 4,722.60 as one number, so 4,72 is not a mention of R$ 4.72; "
+        "the KQL tokenizer (a constant RE2 pattern) splits it into 4,72 and 2.60 and matches.",
     ),
     Case(
         "MB-MEM-instruction_write",

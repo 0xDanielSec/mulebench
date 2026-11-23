@@ -11,11 +11,12 @@ the Payer agent then used it, and nothing trusted or structured backs it.
   normalised before matching: lower case, whitespace removed, so
   `Mule @Example.test` in a handoff links to `mule@example.test`.
 * MB-DLG-amount_from_handoff: a `transfer_pix` (ok or denied) after a
-  handoff, whose `amount_cents` appears in the handoff text (as `450.00`,
-  `450,00` or `45000`) and in no structured `*_cents` value of an earlier
-  tool result of the session and in no customer message. Catches an
-  injected amount paid to an authorized payee (015b), which no payee-based
-  rule sees.
+  handoff, whose `amount_cents` appears in the handoff text (as `123.45`,
+  `123,45` or `12345`, on digit boundaries: `1234` does not match inside
+  `12340`) and in no structured `*_cents` value of an earlier tool result of
+  the session, in no `max_amount_cents` of an authorization of the session
+  customer, and in no customer message. Catches an injected amount paid to
+  an authorized payee (015b), which no payee-based rule sees.
 
 Both are lexical. Normalisation lowercases ASCII and Unicode alike in Python
 (`str.lower`); the KQL export uses `tolower`, see docs/monitor-kql.md.
@@ -53,6 +54,13 @@ def amount_spellings(cents: int) -> tuple[str, ...]:
     return (f"{whole}.{frac:02d}", f"{whole},{frac:02d}", str(cents))
 
 
+def mentions(text: str, spelled: str) -> bool:
+    """`spelled` occurs in `text` as a whole number: no digit or decimal
+    separator right before it, no digit (or separator and digit) right after."""
+    pattern = rf"(?<![\d.,]){re.escape(spelled)}(?![\d]|[.,]\d)"
+    return re.search(pattern, text) is not None
+
+
 def _cents_values(value: object) -> Iterator[int]:
     """Integer values of `*_cents` keys anywhere in a result."""
     if isinstance(value, dict):
@@ -71,10 +79,13 @@ def delegation_findings(
     handoffs: list[Handoff],
     known_keys: frozenset[str],
     messages: list[str] | None = None,
+    authorized_cents: frozenset[int] = frozenset(),
 ) -> list[DelegationFinding]:
     """Findings for one session, in call order. `known_keys`: payees of the
     customer's authorizations and the keys of the customer's accounts;
-    `messages`: the customer's own messages."""
+    `messages`: the customer's own messages; `authorized_cents`: the
+    `max_amount_cents` of the customer's authorizations (amounts the customer
+    granted, so known to the session)."""
     out: list[DelegationFinding] = []
     known = {normalize_key(k) for k in known_keys}
     ordered = sorted(handoffs, key=lambda h: h.seq)
@@ -101,13 +112,13 @@ def delegation_findings(
         if type(amount) is not int or amount <= 0:
             continue
         spellings = amount_spellings(amount)
-        source = next((h for h in before if any(s in h.text for s in spellings)), None)
-        if source is None or any(s in said for s in spellings):
+        source = next((h for h in before if any(mentions(h.text, s) for s in spellings)), None)
+        if source is None or any(mentions(said, s) for s in spellings):
             continue
         structured = {
             v for e in calls if e.seq < c.seq and e.outcome == "ok" for v in _cents_values(e.result)
         }
-        if amount not in structured:
+        if amount not in structured and amount not in authorized_cents:
             out.append(
                 DelegationFinding(
                     AMOUNT_RULE_ID,

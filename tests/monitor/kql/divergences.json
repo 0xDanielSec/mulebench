@@ -113,6 +113,13 @@
     "reason": "The engine flags any shared 24-character run; the KQL only flags a note that contains a whole result string or is contained in one. Here each has extra text."
   },
   {
+    "fixture": "MB-DLG-amount_from_handoff--thousand_separator.jsonl",
+    "rule_id": "MB-DLG-amount_from_handoff",
+    "engine_rows": [],
+    "kql_behavior": "one row for session hit",
+    "reason": "The engine reads 4,722.60 as one number, so 4,72 is not a mention of R$ 4.72; the KQL tokenizer (a constant RE2 pattern) splits it into 4,72 and 2.60 and matches."
+  },
+  {
     "fixture": "MB-MEM-instruction_write--customer_partial_overlap.jsonl",
     "rule_id": "MB-MEM-instruction_write",
     "engine_rows": [],

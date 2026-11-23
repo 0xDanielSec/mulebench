@@ -134,7 +134,17 @@ def _delegation_alerts(state: MonitorState, s: SessionState, fallback_ts: dateti
             evidence=Evidence(call_seq=[f.call_seq], fields=list(RULES_BY_ID[f.rule_id].fields)),
             detail=f.detail,
         )
-        for f in delegation_findings(s.ordered_calls(), s.handoffs, known, list(s.messages))
+        for f in delegation_findings(
+            s.ordered_calls(),
+            s.handoffs,
+            known,
+            list(s.messages),
+            frozenset(
+                a.max_amount_cents
+                for a in state.authorizations.values()
+                if a.customer_id == s.customer_id
+            ),
+        )
     ]
 
 
