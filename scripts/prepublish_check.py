@@ -30,6 +30,12 @@ scoped: it allows the value whose lowercased sha256 is <hex> only in the commit
 metadata (author, committer, message) of that commit and its ancestors, never
 in files, diffs or later commits. The value is stored as a hash so the
 allowlist itself does not contain it.
+An entry `sha256:<hex> [file <path>] -- <justification>` allows the finding
+whose exact raw value (not lowercased, not masked) has sha256 <hex>, only in
+the file <path> (an archive member is `<archive>!<member>`), in the working
+tree or in any committed version of it. Secret findings are allowed ONLY by
+such an entry: an unscoped entry never matches a secret, because its printed
+value is masked and would allow every secret sharing the prefix.
 
 Usage:
     uv run python scripts/prepublish_check.py            # tree + history
@@ -50,7 +56,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import ModuleType
 
@@ -59,6 +65,9 @@ TERMS_FILE = ROOT / ".prepublish-terms"
 ALLOW_FILE = ROOT / "scripts" / "prepublish_allow.txt"
 ALLOW_SEP = " -- "
 SCOPE = re.compile(r"^sha256:(?P<value>[0-9a-f]{64}) \[metadata-until (?P<sha>[0-9a-f]{7,40})\]$")
+FILE_SCOPE = re.compile(r"^sha256:(?P<value>[0-9a-f]{64}) \[file (?P<path>[^\]\s]+)\]$")
+# "<file>:<line>", optionally prefixed by "<commit or blob> " in the history scan
+_WHERE_FILE = re.compile(r"^(?:[0-9a-f]{7,40} )?(?P<path>.+):\d+$")
 
 # Infrastructure domains that legitimately appear in this repo.
 DEFAULT_ALLOWED_DOMAINS = frozenset(
@@ -107,6 +116,9 @@ class Finding:
     kind: str  # domain | email | term | secret:<type>
     value: str
     where: str  # "<file>:<line>" or "<commit> <file>" or "<commit> metadata"
+    # Secrets only: the unmasked match, for exact-value file-scoped entries.
+    # Never printed.
+    raw: str = field(default="", repr=False)
 
 
 @dataclass(frozen=True)
@@ -150,7 +162,7 @@ def scan_text(text: str, where: str, policy: Policy) -> list[Finding]:
                 found.add(Finding("domain", domain, where))
     for name, pattern in SECRET_PATTERNS:
         for m in pattern.finditer(text):
-            found.add(Finding(f"secret:{name}", mask(m.group(0)), where))
+            found.add(Finding(f"secret:{name}", mask(m.group(0)), where, raw=m.group(0)))
     lowered = text.lower()
     for term in policy.terms:
         if term.lower() in lowered:
@@ -203,14 +215,19 @@ def load_policy() -> Policy:
     )
 
 
+FileScoped = dict[tuple[str, str], str]
+
+
 def _parse_allowlist(
     path: Path,
-) -> tuple[dict[str, str], dict[str, tuple[str, str]]]:
-    """(value -> justification, scoped value sha256 -> (commit sha, justification))."""
+) -> tuple[dict[str, str], dict[str, tuple[str, str]], FileScoped]:
+    """(value -> justification, scoped value sha256 -> (commit sha, justification),
+    (exact value sha256, file) -> justification)."""
     allow: dict[str, str] = {}
     scoped: dict[str, tuple[str, str]] = {}
+    files: FileScoped = {}
     if not path.exists():
-        return allow, scoped
+        return allow, scoped, files
     for n, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
         line = raw.strip()
         if not line or line.startswith("#"):
@@ -219,15 +236,19 @@ def _parse_allowlist(
         if not sep or not value.strip() or not reason.strip():
             raise SystemExit(f"{path.name}:{n}: expected '<value>{ALLOW_SEP}<justification>'")
         m = SCOPE.match(value.strip())
+        fm = FILE_SCOPE.match(value.strip())
         if m:
             scoped[m["value"]] = (m["sha"], reason.strip())
+        elif fm:
+            files[(fm["value"], fm["path"])] = reason.strip()
         elif "[" in value:
             raise SystemExit(
                 f"{path.name}:{n}: scope must be 'sha256:<hex> [metadata-until <sha>]'"
+                " or 'sha256:<hex> [file <path>]'"
             )
         else:
             allow[value.strip()] = reason.strip()
-    return allow, scoped
+    return allow, scoped, files
 
 
 def load_allowlist(path: Path = ALLOW_FILE) -> dict[str, str]:
@@ -239,6 +260,31 @@ def load_scoped_allowlist(path: Path = ALLOW_FILE) -> dict[str, tuple[str, str]]
     """Value sha256 -> (commit sha, justification): allowed only in that commit's and
     its ancestors' metadata."""
     return _parse_allowlist(path)[1]
+
+
+def load_file_scoped_allowlist(path: Path = ALLOW_FILE) -> FileScoped:
+    """(exact value sha256, file) -> justification: allowed only in that file."""
+    return _parse_allowlist(path)[2]
+
+
+def exact_sha256(value: str) -> str:
+    """Key of a file-scoped entry: sha256 of the exact (unmasked) value."""
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def file_of(where: str) -> str | None:
+    """The file a finding is in (archive members as `<archive>!<member>`), else None."""
+    m = _WHERE_FILE.match(where)
+    return None if m is None else m["path"]
+
+
+def file_scoped_reason(f: Finding, files: FileScoped) -> str | None:
+    """Justification when a file-scoped entry allows `f`, else None."""
+    value = f.raw or f.value
+    path = file_of(f.where)
+    if path is None:
+        return None
+    return files.get((exact_sha256(value), path))
 
 
 def value_sha256(value: str) -> str:
@@ -287,10 +333,13 @@ def scoped_reason(
 def split_allowed(
     findings: list[Finding], allow: dict[str, str]
 ) -> tuple[list[Finding], list[Finding]]:
-    """(blocking findings, allowlisted findings)."""
-    blocking = [f for f in findings if f.value not in allow]
-    allowed = [f for f in findings if f.value in allow]
-    return blocking, allowed
+    """(blocking findings, allowlisted findings). Secrets are never allowed here:
+    their value is masked, so an exact entry would allow a whole prefix."""
+
+    def ok(f: Finding) -> bool:
+        return f.value in allow and not f.kind.startswith("secret:")
+
+    return [f for f in findings if not ok(f)], [f for f in findings if ok(f)]
 
 
 def scan_tree(policy: Policy) -> list[Finding]:
@@ -406,10 +455,11 @@ def main(argv: list[str] | None = None) -> int:
     policy = load_policy()
     allow = load_allowlist()
     scoped = load_scoped_allowlist()
+    files = load_file_scoped_allowlist()
     lineage: dict[str, frozenset[str]] = {}
     print(
         f"forbidden terms loaded: {len(policy.terms)}; allowlist entries: {len(allow)}"
-        f" (+{len(scoped)} scoped to commit metadata)"
+        f" (+{len(scoped)} scoped to commit metadata, +{len(files)} scoped to one file)"
     )
     if not policy.author:
         print("note: git user.email is not set; no email is allowlisted by authorship")
@@ -422,7 +472,7 @@ def main(argv: list[str] | None = None) -> int:
         unique, allowed = split_allowed(sorted(set(findings)), allow)
         reasons = {f: allow[f.value] for f in allowed}
         for f in list(unique):
-            why = scoped_reason(f, scoped, lineage)
+            why = scoped_reason(f, scoped, lineage) or file_scoped_reason(f, files)
             if why is not None:
                 unique.remove(f)
                 allowed.append(f)

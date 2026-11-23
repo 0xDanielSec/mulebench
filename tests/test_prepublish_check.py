@@ -11,6 +11,7 @@ import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 
@@ -223,3 +224,90 @@ def test_history_scan_refuses_a_shallow_clone(
     monkeypatch.setattr(pc, "is_shallow", lambda: True)
     with pytest.raises(SystemExit, match="fetch-depth: 0"):
         pc.scan_history(policy(pc))
+
+
+# The one file-scoped secret entry (pilot 11): an sk- match inside an encrypted
+# reasoning blob of one gpt-6.1-terra cassette, inside the pilot-11 archive.
+P11_ARCHIVE = "docs/experiments/cassettes/pilot-11.tar.xz"
+P11_MEMBER = f"{P11_ARCHIVE}!pilot-11-gpt-6.1-terra-vulnerable/a7c3f35e2842fcd9.json"
+
+
+def _p11_blob_finding(pc: ModuleType) -> Any:
+    root = SCRIPT.parents[1]
+    found = pc.scan_archive(root / P11_ARCHIVE, P11_ARCHIVE, policy(pc))
+    secrets = [f for f in found if f.kind.startswith("secret:")]
+    assert len(secrets) == 1
+    assert secrets[0].where.startswith(P11_MEMBER + ":")
+    assert secrets[0].raw.startswith("sk-")
+    assert len(secrets[0].raw) > 32
+    return secrets[0]
+
+
+def test_file_scoped_blob_passes_only_in_its_cassette(pc: ModuleType) -> None:
+    files = pc.load_file_scoped_allowlist()
+    blob = _p11_blob_finding(pc)
+    assert pc.file_scoped_reason(blob, files)
+    # the same member in a committed archive version (history scan form)
+    hist = pc.Finding(blob.kind, blob.value, f"0b8e0a5e6ea4 {blob.where}", raw=blob.raw)
+    assert pc.file_scoped_reason(hist, files)
+
+
+def test_same_blob_value_in_any_other_file_is_flagged(pc: ModuleType) -> None:
+    files = pc.load_file_scoped_allowlist()
+    blob = _p11_blob_finding(pc)
+    others = [
+        "README.md:1",
+        f"{P11_ARCHIVE}!pilot-11-gpt-6.1-terra-vulnerable/0000000000000000.json:1",
+        "docs/experiments/cassettes/pilot-10.tar.xz!pilot-10-x/a7c3f35e2842fcd9.json:484",
+        f"abc1234 {P11_MEMBER}",  # a diff line, not the archive member
+        "abc1234 metadata",
+    ]
+    for where in others:
+        (f,) = [x for x in pc.scan_text(blob.raw, where, policy(pc)) if x.kind == blob.kind]
+        assert pc.file_scoped_reason(f, files) is None, where
+        blocking, _ = pc.split_allowed([f], pc.load_allowlist())
+        assert blocking == [f], where
+
+
+def test_other_value_with_the_same_prefix_is_flagged_everywhere(pc: ModuleType) -> None:
+    files = pc.load_file_scoped_allowlist()
+    allow = pc.load_allowlist()
+    blob = _p11_blob_finding(pc)
+    other = blob.raw[:6] + "Z" * (len(blob.raw) - 6)
+    assert other != blob.raw
+    assert pc.mask(other) == blob.value
+    for where in (f"{P11_MEMBER}:484", f"0b8e0a5e6ea4 {P11_MEMBER}:484", "README.md:1"):
+        (f,) = [x for x in pc.scan_text(other, where, policy(pc)) if x.kind == blob.kind]
+        assert pc.file_scoped_reason(f, files) is None, where
+        assert pc.scoped_reason(f, pc.load_scoped_allowlist(), {}) is None, where
+        blocking, _ = pc.split_allowed([f], allow)
+        assert blocking == [f], where
+
+
+def test_unscoped_entry_never_allows_a_masked_secret(pc: ModuleType) -> None:
+    raw = "sk-" + "Ab" * 20
+    (f,) = pc.scan_text(raw, "x.txt:1", policy(pc))
+    blocking, allowed = pc.split_allowed([f], {pc.mask(raw): "prefix entry"})
+    assert blocking == [f]
+    assert allowed == []
+    assert not any(v.startswith("sk-") for v in pc.load_allowlist())
+
+
+def test_file_scoped_entry_parses_and_needs_the_exact_value(pc: ModuleType, tmp_path: Path) -> None:
+    raw = "sk-" + "Cd" * 20
+    f = tmp_path / "allow.txt"
+    f.write_text(
+        f"sha256:{pc.exact_sha256(raw)} [file a.tar.xz!m/0123456789abcdef.json] -- why\n",
+        encoding="utf-8",
+    )
+    files = pc.load_file_scoped_allowlist(f)
+    assert files == {(pc.exact_sha256(raw), "a.tar.xz!m/0123456789abcdef.json"): "why"}
+    (hit,) = pc.scan_text(raw, "a.tar.xz!m/0123456789abcdef.json:9", policy(pc))
+    assert pc.file_scoped_reason(hit, files) == "why"
+    swapped = "sk-" + raw[3:].swapcase()
+    (upper,) = pc.scan_text(swapped, "a.tar.xz!m/0123456789abcdef.json:9", policy(pc))
+    assert pc.file_scoped_reason(upper, files) is None  # exact, not lowercased
+    bad = tmp_path / "bad.txt"
+    bad.write_text("sha256:" + "0" * 64 + " [file ] -- why\n", encoding="utf-8")
+    with pytest.raises(SystemExit, match="scope must be"):
+        pc.load_file_scoped_allowlist(bad)
