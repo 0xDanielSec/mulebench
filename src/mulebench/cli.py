@@ -326,7 +326,54 @@ def _parser() -> argparse.ArgumentParser:
     mon_eval.add_argument(
         "--doc", type=Path, help="replace the generated block of this markdown document"
     )
+
+    detect = sub.add_parser("detect", help="detection engineering over rules and traces")
+    dsub = detect.add_subparsers(dest="detect_command", required=True)
+    lint = dsub.add_parser(
+        "lint",
+        help="reject rules that depend on scenario tells (canaries, synthetic ids, "
+        "scenario domains, payload text, scenario amounts)",
+    )
+    lint.add_argument(
+        "paths",
+        nargs="*",
+        type=Path,
+        default=[Path("docs/monitor-rules"), Path("docs/monitor-kql")],
+        help="rule files or directories (default: docs/monitor-rules docs/monitor-kql)",
+    )
+    lint.add_argument(
+        "--scenarios",
+        dest="scenario_dirs",
+        action="append",
+        type=Path,
+        default=[],
+        help="extra scenario directory whose tells also count (repeatable)",
+    )
     return parser
+
+
+def _detect_lint(paths: list[Path], scenario_dirs: list[Path]) -> int:
+    from mulebench.attacks import load_all, load_builtin
+    from mulebench.monitor.lint import lint_paths, rule_paths, tells_from
+
+    scenarios = load_builtin()
+    for d in scenario_dirs:
+        scenarios += load_all(d)
+    missing = [p for p in paths if not p.exists()]
+    if missing:
+        print(f"error: not found: {', '.join(map(str, missing))}", file=sys.stderr)
+        return 2
+    findings = lint_paths(paths, tells_from(scenarios))
+    for f in findings:
+        print(f"{f.path}:{f.line}: {f.kind}: {f.tell}")
+    files = len(rule_paths(paths))
+    if findings:
+        print(
+            f"{len(findings)} tell(s) in {len({f.path for f in findings})} of {files} rule file(s)"
+        )
+        return 1
+    print(f"ok: {files} rule file(s), no scenario tells ({len(scenarios)} scenarios)")
+    return 0
 
 
 def _add_llm_args(parser: argparse.ArgumentParser) -> None:
@@ -754,6 +801,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         from mulebench.harness.monitor_eval import main as eval_main
 
         return eval_main(args.reports, args.out, args.markdown, args.doc)
+
+    if args.command == "detect":
+        return _detect_lint(args.paths, args.scenario_dirs)
 
     if args.command == "monitor":
         from mulebench.monitor.cli import main as monitor_main

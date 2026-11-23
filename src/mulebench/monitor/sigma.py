@@ -232,7 +232,7 @@ def _detection(rule: Rule) -> tuple[dict[str, Any], str]:
                 "condition": "selection and not filter_outcome",
             },
             "Join to handoff events of the same session with handoff.seq < tool_call.seq; "
-            "fire when args.amount_cents, written as 450.00, 450,00 or 45000, appears in "
+            "fire when args.amount_cents, written as 123.45, 123,45 or 12345, appears in "
             "handoff.text, equals no integer value of a *_cents key in an earlier ok "
             "tool_call result of the session, and appears in no customer_message text.",
         )

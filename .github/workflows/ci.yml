@@ -38,6 +38,9 @@ jobs:
       - name: Mypy
         run: uv run mypy
 
+      - name: Rule tell lint
+        run: uv run mulebench detect lint
+
       - name: Pytest
         env:
           HYPOTHESIS_PROFILE: ci # derandomized: fixed seed

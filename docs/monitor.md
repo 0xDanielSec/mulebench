@@ -135,6 +135,27 @@ each file has a `detection` part for the triggering event and a
 `correlation` part, in prose plus join keys. They may not compile with Sigma
 tooling as-is. Each file names its reference implementation.
 
+### Tell lint
+
+`mulebench detect lint [PATHS...]` (default `docs/monitor-rules docs/monitor-kql`,
+run in CI) rejects any rule file that depends on a scenario-specific tell, so
+a rule detects the attack class and not the lab scenario. Every tell is read
+from the scenario files, so a new scenario is covered without editing the
+lint (`--scenarios DIR` adds a directory):
+
+| tell | rejected |
+|---|---|
+| canary | `MB-CANARY-*` by pattern, and every canary a scenario names |
+| identifier | account ids, customer ids, pix keys, transaction refs and other identifier-shaped values from setups, injections and attack goals (whole tokens) |
+| domain | every domain in scenario text, `example.test`, any `attacker.` host |
+| payload | any 16-character run of two or more words (case-folded, whitespace collapsed) of an injection payload, benign-control payload or seeded transaction text, unless it is shared vocabulary (the trace schema, the tool API) |
+| amount | a scenario amount of R$ 20.00 or more, as cents or `123.45` / `123,45`, outside a `let Name = N;` parameter line |
+
+It exits 0 when clean, 1 on a tell (one line per finding:
+`file:line: kind: tell`), 2 on a missing path. It is lexical: a rule can still
+encode a scenario structurally (a call sequence only one setup produces);
+per-scenario evaluation is the check for that.
+
 Regulatory mappings in the rule files (OWASP Top 10 for Agentic
 Applications, LGPD, BACEN Res. 4.893) are indicative and **to be reviewed**.
 
