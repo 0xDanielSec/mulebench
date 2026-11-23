@@ -349,6 +349,16 @@ def _parser() -> argparse.ArgumentParser:
         default=[],
         help="extra scenario directory whose tells also count (repeatable)",
     )
+    det_eval = dsub.add_parser(
+        "eval",
+        help="pool stored reports and score the monitor rules: LOPO/LOMO/LOSO folds, "
+        "macro recall, SOC volume, time to detect, blocking counterfactual (offline)",
+    )
+    det_eval.add_argument("reports", nargs="+", type=Path, help="mulebench JSON reports")
+    det_eval.add_argument("--out", type=Path, help="write the JSON result here (default stdout)")
+    det_eval.add_argument(
+        "--doc", type=Path, help="replace the generated block of this markdown document"
+    )
     return parser
 
 
@@ -801,6 +811,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         from mulebench.harness.monitor_eval import main as eval_main
 
         return eval_main(args.reports, args.out, args.markdown, args.doc)
+
+    if args.command == "detect" and args.detect_command == "eval":
+        from mulebench.harness.detect_eval import main as detect_eval_main
+
+        return detect_eval_main(args.reports, args.out, args.doc)
 
     if args.command == "detect":
         return _detect_lint(args.paths, args.scenario_dirs)
