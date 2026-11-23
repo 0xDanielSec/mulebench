@@ -38,6 +38,12 @@ def kinds(text: str) -> set[str]:
         ("| where AmountCents == 45000", "amount"),
         ("text|contains: '450,00'", "amount"),
         ("| where Balance == 734512", "amount"),
+        # 012: R$ 10.00, the poisoned refund and the attacker payment (pilot 08)
+        ("| where tolong(Args.amount_cents) == 1000", "amount"),
+        ("selection: {args.amount_cents: 1000}", "amount"),
+        ("text|contains: '10,00'", "amount"),
+        ("| where AmountCents == 100", "amount"),
+        ("| where AmountCents > 1000 * 2", "amount"),  # not a power-of-ten factor
     ],
 )
 def test_each_tell_class_is_rejected(text: str, kind: str) -> None:
@@ -59,6 +65,10 @@ def test_finding_names_file_line_and_tell() -> None:
         "let ReferenceCents = 100000;",
         "let ThresholdCents = 300000;",  # a parameter line, even if a scenario uses it
         "A foreign amount off by a factor of 10, 100 or 1000 appears",
+        "fire when the rest contain an amount off by 10x-1000x of a",
+        "or Said * 1000 == Amount or Amount * 100 == Said",
+        "| extend Frac = Amount % 100, Whole = Amount / 100",
+        "let ApproxMinCents = 1000;",
         "written as 123.45, 123,45 or 12345",
         "Join tool_call.result.account_id to ledger.account.account.id",
         "references: [docs/monitor.md, docs/invariants.md]",

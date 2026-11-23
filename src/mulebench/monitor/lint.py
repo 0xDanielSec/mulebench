@@ -14,9 +14,12 @@ scenario is covered without editing the lint:
 * payload: any run of PAYLOAD_NGRAM characters (case-folded, whitespace
   collapsed) of an injection payload, benign-control payload or seeded
   transaction text;
-* amount: an amount (cents >= MIN_AMOUNT_CENTS) from a scenario setup or
-  payload, as digits or as `123.45` / `123,45`, outside a `let Name = N;`
-  parameter line.
+* amount: any amount from a scenario setup or payload, as digits or as
+  `123.45` / `123,45`, outside a `let Name = N;` parameter line. The only
+  other exemption is the approximate-disclosure power-of-ten factors in
+  their exact contexts (`* 1000`, `1000x`, "a factor of 10, 100 or 1000"),
+  and cents-to-reais conversion (`/ 100`, `% 100`), so 1000 or 100 as a
+  scenario amount is still rejected.
 
 It reads rule files as plain text (Sigma-like YAML and Sentinel KQL YAML), so
 prose that cites a scenario value fails too.
@@ -32,10 +35,10 @@ from pathlib import Path
 from typing import Literal
 
 from mulebench.attacks import Scenario
+from mulebench.disclosure import APPROX_FACTORS
 from mulebench.monitor.events import trace_json_schema
 
 PAYLOAD_NGRAM = 16
-MIN_AMOUNT_CENTS = 2000  # 1000 is a factor of ten in rule prose
 # The agent tool API and the trace event names: vocabulary every rule shares
 # with every scenario.
 SHARED_TERMS = (
@@ -59,6 +62,18 @@ _IDENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.@-]*[_@-][A-Za-z0-9_.@-]*$")
 _PARAM_LINE = re.compile(r"^\s*let\s+\w+\s*=\s*-?[0-9.]+\s*;")
 _AMOUNT_IN_TEXT = re.compile(r"(?<![\d.,])(\d{1,9})[.,](\d{2})(?![\d])")
 _RULE_SUFFIXES = (".yml", ".yaml", ".kql")
+# Numbers that are not amounts, only in these exact contexts: the
+# approximate-disclosure power-of-ten factors, and cents-to-reais conversion
+# (`Amount / 100`, `Amount % 100`).
+_FACTORS = "|".join(str(f) for f in APPROX_FACTORS)
+_FACTOR_CONTEXTS = re.compile(
+    rf"\*\s*(?:{_FACTORS})(?!\d)"  # Said * 1000
+    rf"|(?<!\d)(?:{_FACTORS})x\b"  # 10x-1000x
+    r"|factor of "
+    + ", ".join(str(f) for f in APPROX_FACTORS[:-1])
+    + f" or {APPROX_FACTORS[-1]}"
+    + r"|[/%]\s*100(?!\d)"  # cents to reais
+)
 
 TellKind = Literal["canary", "identifier", "domain", "payload", "amount"]
 
@@ -149,7 +164,7 @@ def tells_from(scenarios: Iterable[Scenario]) -> Tells:
         identifiers=frozenset(identifiers),
         domains=frozenset(domains),
         payloads=tuple(sorted(set(payloads))),
-        amounts=frozenset(a for a in amounts if a >= MIN_AMOUNT_CENTS),
+        amounts=frozenset(a for a in amounts if a > 0),
         shared=_shared_vocabulary(),
     )
 
@@ -200,9 +215,10 @@ def lint_text(text: str, path: str, tells: Tells) -> list[LintFinding]:
         if gram is not None:
             out.add(LintFinding(path, n, "payload", gram))
         if not _PARAM_LINE.match(line):
+            bare = _FACTOR_CONTEXTS.sub(" ", line)
             for cents in tells.amounts:
                 for spelled in _amount_spellings(cents):
-                    if re.search(rf"(?<![\d.,]){re.escape(spelled)}(?![\d]|[.,]\d)", line):
+                    if re.search(rf"(?<![\d.,]){re.escape(spelled)}(?![\d]|[.,]\d)", bare):
                         out.add(LintFinding(path, n, "amount", spelled))
     return sorted(out)
 

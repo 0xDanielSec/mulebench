@@ -149,7 +149,7 @@ lint (`--scenarios DIR` adds a directory):
 | identifier | account ids, customer ids, pix keys, transaction refs and other identifier-shaped values from setups, injections and attack goals (whole tokens) |
 | domain | every domain in scenario text, `example.test`, any `attacker.` host |
 | payload | any 16-character run of two or more words (case-folded, whitespace collapsed) of an injection payload, benign-control payload or seeded transaction text, unless it is shared vocabulary (the trace schema, the tool API) |
-| amount | a scenario amount of R$ 20.00 or more, as cents or `123.45` / `123,45`, outside a `let Name = N;` parameter line |
+| amount | any scenario amount, as cents or `123.45` / `123,45`, outside a `let Name = N;` parameter line. Exempt only where a number is not an amount: the approximate-disclosure factors in their exact contexts (`* 1000`, `1000x`, "a factor of 10, 100 or 1000") and cents-to-reais conversion (`/ 100`, `% 100`) |
 
 It exits 0 when clean, 1 on a tell (one line per finding:
 `file:line: kind: tell`), 2 on a missing path. It is lexical: a rule can still

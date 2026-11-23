@@ -233,11 +233,12 @@ let MbSaid = MbAmounts((union
             | summarize arg_max(TimeGenerated, Text) by SessionId
             | project SessionId, Sink = "final_answer", Body = Text)))
     | join kind=leftanti MbVisible on SessionId, Amount;
+let ApproxMinCents = 1000;
 let MbVerdicts = MbForeign
     | join kind=inner (MbSaid | project SessionId, Sink, Said = Amount) on SessionId
     | project-away SessionId1
     | extend Exact = Said == Amount,
-        Near = Amount >= 1000 and Said >= 1000
+        Near = Amount >= ApproxMinCents and Said >= ApproxMinCents
             and (Said * 10 == Amount or Said * 100 == Amount or Said * 1000 == Amount
             or Amount * 10 == Said or Amount * 100 == Said or Amount * 1000 == Said)
     | summarize AnyExact = max(toint(Exact)), AnyNear = max(toint(Near))
