@@ -1,0 +1,14 @@
+[
+  {
+    "RuleId": "MB-MEM-instruction_write",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [
+      0
+    ],
+    "TransferIds": [],
+    "Accounts": [],
+    "AmountCents": null,
+    "AlertKey": "6d568792241df84606c3772c"
+  }
+]

@@ -1,0 +1,16 @@
+[
+  {
+    "RuleId": "MB-MEM-foreign_reference_write",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [
+      0
+    ],
+    "TransferIds": [],
+    "Accounts": [
+      "acc_bob"
+    ],
+    "AmountCents": null,
+    "AlertKey": "5714ba674fee3cf9bb0fc23a"
+  }
+]

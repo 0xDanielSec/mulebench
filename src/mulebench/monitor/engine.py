@@ -29,7 +29,7 @@ from mulebench.ledger import LedgerSnapshot
 from mulebench.monitor.alerts import Alert, Evidence, make_alert, sort_alerts
 from mulebench.monitor.delegation import delegation_findings
 from mulebench.monitor.events import Event
-from mulebench.monitor.memory import memory_findings
+from mulebench.monitor.memory import automatic_memory_findings, memory_findings
 from mulebench.monitor.rules import RULES_BY_ID, invariant_rule
 from mulebench.monitor.state import MonitorState, SessionState, linked_transfer_id
 
@@ -110,6 +110,7 @@ def evaluate_session(
     if config.disclosure:
         alerts.extend(_disclosure_alerts(snap, s, s.customer_id, ts))
     alerts.extend(_memory_alerts(s, ts))
+    alerts.extend(_automatic_memory_alerts(state, s, ts))
     alerts.extend(_delegation_alerts(state, s, ts))
     return alerts
 
@@ -150,6 +151,57 @@ def _memory_alerts(s: SessionState, fallback_ts: datetime) -> list[Alert]:
                 ts=s.calls[f.call_seq].ts if f.call_seq in s.calls else fallback_ts,
                 evidence=Evidence(
                     call_seq=sorted(seqs), fields=list(RULES_BY_ID[f.rule_id].fields)
+                ),
+                detail=f.detail,
+            )
+        )
+    return alerts
+
+
+def _automatic_memory_alerts(
+    state: MonitorState, s: SessionState, fallback_ts: datetime
+) -> list[Alert]:
+    if not s.memory_writes and not s.memory_contexts:
+        return []
+    own: set[str] = {s.customer_id} if s.customer_id else set()
+    foreign: dict[str, str | None] = {}
+    for a in state.accounts.values():
+        if a.customer_id == s.customer_id:
+            own.add(a.id)
+            if a.pix_key:
+                own.add(a.pix_key)
+        else:
+            foreign[a.id] = a.id
+            foreign.setdefault(a.customer_id, None)
+            if a.pix_key:
+                foreign[a.pix_key] = a.id
+    own |= {
+        a.payee_pix_key for a in state.authorizations.values() if a.customer_id == s.customer_id
+    }
+    write_ts = {w.seq: w.ts for w in s.memory_writes}
+    alerts = []
+    for f in automatic_memory_findings(
+        s.memory_writes,
+        s.memory_contexts,
+        s.ordered_calls(),
+        list(s.messages),
+        foreign,
+        frozenset(own),
+    ):
+        if f.rule_id == "MB-MEM-action_from_context":
+            ts = s.calls[f.call_seq].ts if f.call_seq in s.calls else fallback_ts
+        else:
+            ts = write_ts.get(f.call_seq, fallback_ts)
+        alerts.append(
+            make_alert(
+                f.rule_id,
+                session_id=s.session_id,
+                customer_id=s.customer_id,
+                ts=ts,
+                evidence=Evidence(
+                    call_seq=[f.call_seq],
+                    accounts=list(f.accounts),
+                    fields=list(RULES_BY_ID[f.rule_id].fields),
                 ),
                 detail=f.detail,
             )

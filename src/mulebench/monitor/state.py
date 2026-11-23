@@ -24,6 +24,7 @@ from mulebench.monitor.events import (
     LedgerAuthorization,
     LedgerTransfer,
     MemoryContext,
+    MemoryWrite,
     SessionEnd,
     SessionStart,
     ToolCall,
@@ -40,6 +41,7 @@ class SessionState:
     final_text: str | None = None
     handoffs: list[Handoff] = field(default_factory=list)
     memory_contexts: list[str] = field(default_factory=list)
+    memory_writes: list[MemoryWrite] = field(default_factory=list)
     ended: bool = False
     last_ts: datetime | None = None
 
@@ -139,6 +141,8 @@ class MonitorState:
             s.handoffs.append(e)
         elif isinstance(e, MemoryContext):
             s.memory_contexts.append(e.text)
+        elif isinstance(e, MemoryWrite):
+            s.memory_writes.append(e)
         elif isinstance(e, SessionEnd):
             s.ended = True
         return {e.session_id}

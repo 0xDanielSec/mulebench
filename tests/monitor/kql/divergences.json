@@ -111,5 +111,12 @@
     ],
     "kql_behavior": "no row",
     "reason": "The engine flags any shared 24-character run; the KQL only flags a note that contains a whole result string or is contained in one. Here each has extra text."
+  },
+  {
+    "fixture": "MB-MEM-instruction_write--customer_partial_overlap.jsonl",
+    "rule_id": "MB-MEM-instruction_write",
+    "engine_rows": [],
+    "kql_behavior": "one row for session hit",
+    "reason": "The engine treats a write that shares any 24-character run with a customer message as the customer's own instruction; the KQL drops it only when one contains the other whole. Here each has extra text, so only the KQL alerts."
   }
 ]

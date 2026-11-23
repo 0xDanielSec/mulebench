@@ -1,0 +1,14 @@
+[
+  {
+    "RuleId": "MB-MEM-action_from_context",
+    "SessionId": "hit",
+    "CustomerId": "cust_alice",
+    "CallSeq": [
+      1
+    ],
+    "TransferIds": [],
+    "Accounts": [],
+    "AmountCents": null,
+    "AlertKey": "7e4f93451f25bb0c7e65e913"
+  }
+]

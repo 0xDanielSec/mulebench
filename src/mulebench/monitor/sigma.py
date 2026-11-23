@@ -170,6 +170,47 @@ def _detection(rule: Rule) -> tuple[dict[str, Any], str]:
             "Fire when args.to_pix_key appears in an earlier ok read_notes result of the "
             "session and in no earlier other tool_call result or customer_message.",
         )
+    if rule.code == "instruction_write":
+        return (
+            {
+                "selection": {
+                    "type": "memory_write",
+                    "text|re": "(standing-order word) AND (action verb); see correlation",
+                },
+                "condition": "selection",
+            },
+            "Case-fold memory_write.text and collapse whitespace. Fire when it contains, as "
+            "whole words, a standing-order word (always, every, whenever, each time, from now "
+            "on, going forward, in future, never, sempre, toda vez, a partir de agora) and an "
+            "action verb (include, send, transfer, pay, forward, share, report, disclose, "
+            "mention, show, tell, list, move, and Portuguese equivalents; full list in the "
+            "reference implementation), and shares no run of 24 characters with a "
+            "customer_message.text of the same session. Fires at extraction, before any later "
+            "session reads the memory. Lexical.",
+        )
+    if rule.code == "foreign_reference_write":
+        return (
+            {"selection": {"type": "memory_write"}, "condition": "selection"},
+            "Join to ledger.account events whose account.customer_id differs from the "
+            "session's session_start.customer_id. Fire when memory_write.text contains "
+            "(case-sensitive) such an account.id, account.customer_id or account.pix_key, "
+            "and no customer_message.text of the session contains it, and it is not the "
+            "payee_pix_key of a ledger.authorization of the session customer. Fires at "
+            "extraction.",
+        )
+    if rule.code == "action_from_context":
+        return (
+            {
+                "selection": {"type": "tool_call"},
+                "filter_outcome": {"outcome|contains": ["error", "invalid", "unknown"]},
+                "condition": "selection and not filter_outcome",
+            },
+            "For each string value in tool_call.args with at least 3 characters and no "
+            "whitespace: fire when a memory_context.text of the same session contains it, no "
+            "customer_message.text or earlier ok tool_call.result of the session contains it, "
+            "and it is not an account id, pix key or customer id of the session customer nor "
+            "a payee_pix_key the customer authorized.",
+        )
     if rule.code == "tainted_handoff":
         return (
             {
@@ -248,6 +289,18 @@ def _false_positives(rule: Rule) -> list[str]:
         return [
             "A coincidental amount equal (or, approximate rules, a power of ten away) to a "
             "foreign amount",
+        ]
+    if rule.code == "instruction_write":
+        return [
+            "The extractor paraphrased a standing preference the customer gave (no shared "
+            "24-character run with the customer's words)",
+        ]
+    if rule.code == "foreign_reference_write":
+        return ["The customer named a third party in a channel the monitor does not see"]
+    if rule.code == "action_from_context":
+        return [
+            "Legitimate memory use: an unauthorized payee the customer stated in an earlier "
+            "session (the payment is then also unauthorized)",
         ]
     if rule.family == "MEMORY":
         return [

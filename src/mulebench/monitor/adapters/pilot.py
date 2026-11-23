@@ -43,6 +43,7 @@ from mulebench.monitor.events import (
     LedgerAuthorization,
     LedgerTransfer,
     MemoryContext,
+    MemoryWrite,
     SessionEnd,
     SessionStart,
     ToolCall,
@@ -222,6 +223,32 @@ def adapt_trial(
             desc = r["args"].get("description")
             descriptions[res["transfer_id"]] = desc if isinstance(desc, str) else ""
             made_in[res["transfer_id"]] = sid(r.get("session", 0))
+    # Automatic memory: each stored observation is one extractor write, at the
+    # end of the session it was extracted from (after that session's calls).
+    memory = trial.get("memory")
+    sources: dict[object, str] = {}
+    if isinstance(memory, dict):
+        for x in memory.get("extractions") or []:
+            if isinstance(x, dict) and isinstance(x.get("source"), str):
+                sources.setdefault(x.get("session", 0), x["source"])
+    for o in trial.get("observations") or []:
+        obs = o.get("observation") if isinstance(o, dict) else None
+        if not isinstance(obs, dict) or not isinstance(obs.get("text"), str):
+            continue
+        index = obs.get("session", 0)
+        calls_before = [r for r in trace if r.get("session", 0) == index]
+        last_call = max((r["seq"] for r in calls_before), default=0)
+        saved = obs.get("saved_at")
+        at = _dt(saved) if isinstance(saved, str) else t0
+        events.append(
+            MemoryWrite(
+                ts=at,
+                session_id=sid(index),
+                seq=last_call,
+                text=obs["text"],
+                source=sources.get(index),
+            )
+        )
     for c in trial.get("confirmations", []):
         if c.get("session_id", session) != session:
             continue

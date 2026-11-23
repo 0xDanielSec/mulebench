@@ -427,6 +427,63 @@
       "title": "MemoryContext",
       "type": "object"
     },
+    "MemoryWrite": {
+      "additionalProperties": false,
+      "description": "One entry the application's memory extractor wrote for the session\n(harness-managed automatic memory), before any later session reads it.\nThis is where a poisoned memory is decided. `seq` is the seq of the last\ntool call of the session before the write (0 if none). `source` names what\nthe extractor read (e.g. \"conversation\"), when known. The text is\nextractor-written and may carry injected content.",
+      "properties": {
+        "seq": {
+          "minimum": 0,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "session_id": {
+          "minLength": 1,
+          "title": "Session Id",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "type": {
+          "const": "memory_write",
+          "default": "memory_write",
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ts",
+        "session_id",
+        "seq",
+        "text"
+      ],
+      "title": "MemoryWrite",
+      "type": "object"
+    },
     "SessionEnd": {
       "additionalProperties": false,
       "properties": {
@@ -701,6 +758,7 @@
       "ledger.authorization": "#/$defs/LedgerAuthorization",
       "ledger.transfer": "#/$defs/LedgerTransfer",
       "memory_context": "#/$defs/MemoryContext",
+      "memory_write": "#/$defs/MemoryWrite",
       "session_end": "#/$defs/SessionEnd",
       "session_start": "#/$defs/SessionStart",
       "tool_call": "#/$defs/ToolCall"
@@ -728,6 +786,9 @@
     },
     {
       "$ref": "#/$defs/MemoryContext"
+    },
+    {
+      "$ref": "#/$defs/MemoryWrite"
     },
     {
       "$ref": "#/$defs/SessionEnd"

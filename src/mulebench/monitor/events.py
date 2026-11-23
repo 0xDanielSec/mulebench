@@ -100,6 +100,20 @@ class MemoryContext(_SessionEvent):
     text: str
 
 
+class MemoryWrite(_SessionEvent):
+    """One entry the application's memory extractor wrote for the session
+    (harness-managed automatic memory), before any later session reads it.
+    This is where a poisoned memory is decided. `seq` is the seq of the last
+    tool call of the session before the write (0 if none). `source` names what
+    the extractor read (e.g. "conversation"), when known. The text is
+    extractor-written and may carry injected content."""
+
+    type: Literal["memory_write"] = "memory_write"
+    seq: int = Field(ge=0)
+    text: str
+    source: str | None = None
+
+
 class SessionEnd(_SessionEvent):
     type: Literal["session_end"] = "session_end"
 
@@ -132,6 +146,7 @@ SessionEventT = (
     | FinalAnswer
     | Handoff
     | MemoryContext
+    | MemoryWrite
     | SessionEnd
 )
 LedgerEventT = LedgerAccount | LedgerAuthorization | LedgerTransfer
