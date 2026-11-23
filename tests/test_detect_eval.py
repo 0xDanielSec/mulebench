@@ -95,8 +95,9 @@ def test_benign_only_folds_report_no_recall_and_every_split_is_design_informed()
     assert "not out-of-sample" in result.label_note
     md = de.render_markdown(result)
     for scheme in ("LOPO", "LOMO", "LOSO"):
-        assert f"### {scheme}: " in md
-    assert md.count("(design-informed held-out)") == 6  # heading and column, per split
+        assert f"#### {scheme}: " in md
+    # heading and column, per split, for the independent and label-coupled groups
+    assert md.count("(design-informed held-out)") == 12
     assert "| held-out" not in md  # no column is labelled plain held-out
 
 
@@ -171,14 +172,17 @@ def test_stored_pilots_end_to_end(tmp_path: Path) -> None:
     out = tmp_path / "eval.json"
     assert main(["detect", "eval", *map(str, REPORTS), "--out", str(out)]) == 0
     result = de.DetectEval.model_validate(json.loads(out.read_text(encoding="utf-8")))
-    lopo = next(s for s in result.splits if s.scheme == "LOPO")
+    ind = next(g for g in result.groups if g.group == "independent")
+    lopo = next(s for s in ind.splits if s.scheme == "LOPO")
     p09, p11 = lopo.folds
     assert p09.fold == "09"
     assert p09.detection.positives == 27
     assert p11.benign_only
     assert p11.detection.fp_benign == 0
-    assert result.time_to_detect.stages.get("pre-action (extraction)", 0) >= 20
-    assert result.false_positives.no_policy_violation == 0
+    assert ind.time_to_detect.stages.get("pre-action (extraction)", 0) >= 20
+    assert ind.false_positives.no_policy_violation == 0
+    assert result.label_coupled_pre_action == 0
+    assert [g.group for g in result.groups] == ["independent", "label-coupled", "all"]
 
 
 def test_doc_block_is_replaced_in_place(tmp_path: Path) -> None:
@@ -203,3 +207,25 @@ def test_doc_block_is_replaced_in_place(tmp_path: Path) -> None:
     assert text.endswith(f"{de.DOC_END}\noutro\n")
     assert "\nold\n" not in text
     assert "LOPO" in text
+
+
+def test_groups_split_label_coupled_from_independent_rules() -> None:
+    assert de.rule_group(READ) == "label-coupled"
+    assert de.rule_group("MB-DISC-exact-final_answer") == "label-coupled"
+    assert de.rule_group(WRITE) == "independent"
+    assert de.rule_group("MB-DLG-tainted_handoff") == "independent"
+    rows = [
+        row(positive=True, alerts=((READ, 5),)),  # caught only by a label-coupled rule
+        row(positive=True, alerts=((WRITE, 1), (READ, 5))),
+    ]
+    result = de.evaluate_rows(rows, ["r"])
+    by = {g.group: g for g in result.groups}
+    assert by["independent"].headline.pooled_recall.k == 1
+    assert by["label-coupled"].headline.pooled_recall.k == 2
+    assert by["all"].headline.pooled_recall.k == 2
+    assert by["independent"].time_to_detect.stages == {"missed": 1, "pre-action (extraction)": 1}
+    assert by["label-coupled"].time_to_detect.stages == {"at action": 2}
+    assert result.label_coupled_pre_action == 0
+    md = de.render_markdown(result)
+    assert md.index("Independent heuristic rules") < md.index("Label-coupled rules (agreement")
+    assert "agreement check" in md
